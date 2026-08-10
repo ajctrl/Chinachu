@@ -32,16 +32,23 @@ const zlib = require('zlib');
 const events = require('events');
 const http = require('http');
 const https = require('https');
+const net = require('net');
 const auth = require('http-auth');
 const { Server } = require('socket.io');
 const chinachu = require('chinachu-common');
-const ip = require("ip");
 const geoip = require('geoip-lite');
 const mdns = require('mdns-js');
 const mirakurun = new (require("mirakurun").default)();
 const { log } = require('./lib/logger');
 const { configureMirakurunClient } = require('./lib/mirakurun-client');
 const { createBasicAuthMiddleware } = require('./lib/socket-auth');
+
+const privateIPv4 = new net.BlockList();
+privateIPv4.addSubnet('10.0.0.0', 8, 'ipv4');
+privateIPv4.addSubnet('172.16.0.0', 12, 'ipv4');
+privateIPv4.addSubnet('192.168.0.0', 16, 'ipv4');
+privateIPv4.addSubnet('127.0.0.0', 8, 'ipv4');
+privateIPv4.addSubnet('169.254.0.0', 16, 'ipv4');
 
 // Directory Checking
 if (!fs.existsSync('./data/') || !fs.existsSync('./log/') || !fs.existsSync('./web/')) {
@@ -234,7 +241,7 @@ if (openServerEnabled) {
 					return (
 						a.family === "IPv4" &&
 						a.internal === false &&
-						ip.isPrivate(a.address) === true
+						privateIPv4.check(a.address, 'ipv4') === true
 					);
 				})
 				.forEach(a => addresses.push(a.address));

@@ -10,7 +10,7 @@
 var fs         = require('fs');
 var path       = require('path');
 var crypto     = require('crypto');
-var dateFormat = require('dateformat');
+var dateFormat = require('dateformat').default;
 var child_process = require('child_process');
 var string = require('@chezearth/string');
 

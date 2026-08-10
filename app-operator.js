@@ -38,12 +38,11 @@ process.on('uncaughtException', (err) => {
 });
 
 // 追加モジュールのロード
-const dateFormat = require('dateformat');
+const { default: dateFormat } = require('dateformat');
 const mkdirp = require('mkdirp');
 const Mtwitter = require('mtwitter');
 const disk = require('diskusage');
 const nodemailer = require("nodemailer");
-const sendmail = require("nodemailer-sendmail-transport");
 const chinachu = require('chinachu-common');
 const mirakurun = new (require("mirakurun").default)();
 
@@ -94,7 +93,7 @@ mirakurun.priority = recordingPriority;
 console.info(mirakurun);
 
 // sendmail
-const transporter = nodemailer.createTransport(sendmail());
+const transporter = nodemailer.createTransport({ sendmail: true });
 
 // 録画中リストをクリア
 fs.writeFileSync(RECORDING_DATA_FILE, '[]');

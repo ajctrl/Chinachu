@@ -27,7 +27,7 @@ if (!fs.existsSync('./data/') || !fs.existsSync('./log/') || !fs.existsSync('./w
 
 // 追加モジュールのロード
 const opts = require('opts');
-const dateFormat = require('dateformat');
+const { default: dateFormat } = require('dateformat');
 const chinachu = require('chinachu-common');
 const mirakurun = new (require("mirakurun").default)();
 
