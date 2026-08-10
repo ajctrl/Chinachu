@@ -14,11 +14,10 @@ const RESERVES_DATA_FILE = __dirname + '/data/reserves.json';
 const SCHEDULE_DATA_FILE = __dirname + '/data/schedule.json';
 
 // 標準モジュールのロード
-const path = require('path');
-const url = require("url");
 const fs = require('fs');
-const util = require('util');
 const child_process = require('child_process');
+const { log } = require('./lib/logger');
+const { configureMirakurunClient } = require('./lib/mirakurun-client');
 
 // ディレクトリチェック
 if (!fs.existsSync('./data/') || !fs.existsSync('./log/') || !fs.existsSync('./web/')) {
@@ -52,24 +51,7 @@ let tuners = null;
 
 // Mirakurun Client
 const mirakurunPath = config.mirakurunPath || config.schedulerMirakurunPath || "http+unix://%2Fvar%2Frun%2Fmirakurun.sock/";
-
-if (/(?:\/|\+)unix:/.test(mirakurunPath) === true) {
-	const standardFormat = /^http\+unix:\/\/([^\/]+)(\/?.*)$/;
-	const legacyFormat = /^http:\/\/unix:([^:]+):?(.*)$/;
-
-	if (standardFormat.test(mirakurunPath) === true) {
-		mirakurun.socketPath = mirakurunPath.replace(standardFormat, "$1").replace(/%2F/g, "/");
-		mirakurun.basePath = path.join(mirakurunPath.replace(standardFormat, "$2"), mirakurun.basePath);
-	} else {
-		mirakurun.socketPath = mirakurunPath.replace(legacyFormat, "$1");
-		mirakurun.basePath = path.join(mirakurunPath.replace(legacyFormat, "$2"), mirakurun.basePath);
-	}
-} else {
-	const urlObject = url.parse(mirakurunPath);
-	mirakurun.host = urlObject.hostname;
-	mirakurun.port = urlObject.port;
-	mirakurun.basePath = path.join(urlObject.pathname, mirakurun.basePath);
-}
+configureMirakurunClient(mirakurun, mirakurunPath);
 
 mirakurun.userAgent = `Chinachu/${pkg.version} (scheduler)`;
 
@@ -82,11 +64,11 @@ if (fs.existsSync(SCHEDULE_DATA_FILE)) {
 		schedule = JSON.parse(fs.readFileSync(SCHEDULE_DATA_FILE, { encoding: 'utf8' }));
 
 		if (schedule instanceof Array === false) {
-			util.log('WARNING: `' + SCHEDULE_DATA_FILE + '`の内容が不正です');
+			log('WARNING: `' + SCHEDULE_DATA_FILE + '`の内容が不正です');
 			schedule = [];
 		}
 	} catch (e) {
-		util.log('WARNING: `' + SCHEDULE_DATA_FILE + '`のロードに失敗しました');
+		log('WARNING: `' + SCHEDULE_DATA_FILE + '`のロードに失敗しました');
 		schedule = [];
 	}
 }
@@ -125,7 +107,7 @@ function isRunning(callback) {
 
 // (function) remake reserves
 function outputReserves() {
-	util.log('WRITE: ' + RESERVES_DATA_FILE);
+	log('WRITE: ' + RESERVES_DATA_FILE);
 
 	var array = [];
 
@@ -144,13 +126,13 @@ function scheduler() {
 	var i, j, k, l, a;
 	var commandProcess;
 
-	util.log('RUNNING SCHEDULER.');
+	log('RUNNING SCHEDULER.');
 
 	// schedulerStartフック
 	if (!opts.get('s')) {
 		if (config.schedulerStartCommand) {
 			commandProcess = child_process.spawnSync(config.schedulerStartCommand, [process.pid, RULES_FILE, RESERVES_DATA_FILE, SCHEDULE_DATA_FILE]);
-			util.log('SPAWN: ' + config.schedulerStartCommand + ' (pid=' + commandProcess.pid + ')');
+			log('SPAWN: ' + config.schedulerStartCommand + ' (pid=' + commandProcess.pid + ')');
 		}
 	}
 
@@ -159,7 +141,7 @@ function scheduler() {
 	schedule.forEach(function (ch) {
 		ch.programs.forEach(function (p) {
 			if (idMap[p.id]) {
-				util.log('**WARNING**: ' + p.id + ' is duplicated!');
+				log('**WARNING**: ' + p.id + ' is duplicated!');
 				console.log(JSON.stringify(idMap[p.id], null, '  '), JSON.stringify(p, null, '  '));
 			} else {
 				idMap[p.id] = p;
@@ -181,7 +163,7 @@ function scheduler() {
 		});
 	});
 
-	util.log('TUNERS: ' + JSON.stringify(typeNum));
+	log('TUNERS: ' + JSON.stringify(typeNum));
 
 	// matching
 	var matches = [];
@@ -201,7 +183,7 @@ function scheduler() {
 				for (i = 0, l = matches.length; i < l; i++) {
 					if (matches[i].id === reserve.id) {
 						// ルールと重複していた場合、ルール予約が手動予約に優先するよう、matchesにpushせずreturnする
-						util.log('OVERRIDEBYRULE: ' + reserve.id + ' ' + dateFormat(new Date(reserve.start), 'isoDateTime') + ' [' + reserve.channel.name + '] ' + reserve.title);
+						log('OVERRIDEBYRULE: ' + reserve.id + ' ' + dateFormat(new Date(reserve.start), 'isoDateTime') + ' [' + reserve.channel.name + '] ' + reserve.title);
 						return;
 					}
 				}
@@ -251,7 +233,7 @@ function scheduler() {
 			// 最終的にsidの若い方を選択させる
 			if (parseInt(a.channel.sid, 10) < parseInt(b.channel.sid, 10)) { continue; }
 
-			util.log('DUPLICATE: ' + a.id + ' ' + dateFormat(new Date(a.start), 'isoDateTime') + ' [' + a.channel.name + '] ' + a.title);
+			log('DUPLICATE: ' + a.id + ' ' + dateFormat(new Date(a.start), 'isoDateTime') + ' [' + a.channel.name + '] ' + a.title);
 			a.isDuplicate = true;
 
 			++duplicateCount;
@@ -294,13 +276,13 @@ function scheduler() {
 		if (!a.isConflict) {
 			continue;
 		} else {
-			util.log('!CONFLICT: ' + a.id + ' ' + dateFormat(new Date(a.start), 'isoDateTime') + ' [' + a.channel.name + '] ' + a.title);
+			log('!CONFLICT: ' + a.id + ' ' + dateFormat(new Date(a.start), 'isoDateTime') + ' [' + a.channel.name + '] ' + a.title);
 
 			++conflictCount;
 			// conflict フック
 			if (config.conflictCommand) {
 				commandProcess = child_process.spawn(config.conflictCommand, [process.pid, a.id, dateFormat(new Date(a.start), 'isoDateTime'), a.channel.name, a.title, JSON.stringify(a)]);
-				util.log('SPAWN: ' + config.conflictCommand + ' (pid=' + commandProcess.pid + ')');
+				log('SPAWN: ' + config.conflictCommand + ' (pid=' + commandProcess.pid + ')');
 			}
 		}
 	}
@@ -316,10 +298,10 @@ function scheduler() {
 			reserves.push(a);
 
 			if (a.isSkip) {
-				util.log('!!!SKIP: ' + a.id + ' ' + dateFormat(new Date(a.start), 'isoDateTime') + ' [' + a.channel.name + '] ' + a.title);
+				log('!!!SKIP: ' + a.id + ' ' + dateFormat(new Date(a.start), 'isoDateTime') + ' [' + a.channel.name + '] ' + a.title);
 				++skipCount;
 			} else if (!a.isConflict) {
-				util.log('RESERVE: ' + a.id + ' ' + dateFormat(new Date(a.start), 'isoDateTime') + ' [' + a.channel.name + '] ' + a.title);
+				log('RESERVE: ' + a.id + ' ' + dateFormat(new Date(a.start), 'isoDateTime') + ' [' + a.channel.name + '] ' + a.title);
 				++reservedCount;
 			} else {
 				// 競合したときのログは既に出力済み
@@ -337,18 +319,18 @@ function scheduler() {
 	});
 
 	// results
-	util.log('MATCHES: ' + matches.length.toString(10));
-	util.log('DUPLICATES: ' + duplicateCount.toString(10));
-	util.log('CONFLICTS: ' + conflictCount.toString(10));
-	util.log('SKIPS: ' + skipCount.toString(10));
-	util.log('RESERVES: ' + reservedCount.toString(10));
+	log('MATCHES: ' + matches.length.toString(10));
+	log('DUPLICATES: ' + duplicateCount.toString(10));
+	log('CONFLICTS: ' + conflictCount.toString(10));
+	log('SKIPS: ' + skipCount.toString(10));
+	log('RESERVES: ' + reservedCount.toString(10));
 
 	if (!opts.get('s')) {
 		outputReserves();
 		// schedulerEnd フック
 		if (config.schedulerEndCommand) {
 			commandProcess = child_process.spawn(config.schedulerEndCommand, [process.pid, RULES_FILE, RESERVES_DATA_FILE, SCHEDULE_DATA_FILE, matches.length.toString(10), duplicateCount.toString(10), conflictCount.toString(10), skipCount.toString(10), reservedCount.toString(10)]);
-			util.log('SPAWN: ' + config.schedulerEndCommand + ' (pid=' + commandProcess.pid + ')');
+			log('SPAWN: ' + config.schedulerEndCommand + ' (pid=' + commandProcess.pid + ')');
 		}
 	}
 
@@ -515,7 +497,7 @@ function writeOut(s, callback) {
 
 	if (!opts.get('s')) {
 		fs.writeFileSync(SCHEDULE_DATA_FILE, JSON.stringify(schedule));
-		util.log('WRITE: ' + SCHEDULE_DATA_FILE);
+		log('WRITE: ' + SCHEDULE_DATA_FILE);
 	}
 
 	callback();
@@ -526,7 +508,7 @@ function getEpgFromMirakurun(path) {
 
 	child_process.execSync('renice -n 19 -p ' + process.pid);
 
-	util.log('GETTING EPG from Mirakurun.');
+	log('GETTING EPG from Mirakurun.');
 
 	// new schedule
 	const s = [];
@@ -536,8 +518,8 @@ function getEpgFromMirakurun(path) {
 	mirakurun.getServices()
 		.then(services => {
 
-			util.log('Mirakurun is OK.');
-			util.log('Mirakurun -> services: ' + services.length);
+			log('Mirakurun is OK.');
+			log('Mirakurun -> services: ' + services.length);
 
 			const excludeServices = config.excludeServices || [];
 			for (let i = 0; i < services.length; i++) {
@@ -547,7 +529,7 @@ function getEpgFromMirakurun(path) {
 				}
 			}
 
-			util.log('Mirakurun -> services: ' + services.length + ' (excluded)');
+			log('Mirakurun -> services: ' + services.length + ' (excluded)');
 
 			const serviceOrder = config.serviceOrder || [];
 			let insertCount = 0;
@@ -560,7 +542,7 @@ function getEpgFromMirakurun(path) {
 				}
 			});
 
-			util.log('Mirakurun -> sorted services: ' + insertCount);
+			log('Mirakurun -> sorted services: ' + insertCount);
 
 			channels = services.map((service, i) => {
 				return {
@@ -582,7 +564,7 @@ function getEpgFromMirakurun(path) {
 		})
 		.then(programs => {
 
-			util.log('Mirakurun -> programs: ' + programs.length);
+			log('Mirakurun -> programs: ' + programs.length);
 
 			channels.forEach(channel => {
 				mirakurunProgramsToLegacyPrograms(channel, programs);
@@ -594,13 +576,13 @@ function getEpgFromMirakurun(path) {
 
 			tuners = _tuners;
 
-			util.log('Mirakurun -> tuners: ' + tuners.length);
+			log('Mirakurun -> tuners: ' + tuners.length);
 
 			writeOut(channels, scheduler);
 		})
 		.catch(e => {
 
-			util.log('Mirakurun -> Error:');
+			log('Mirakurun -> Error:');
 			console.error(e);
 		});
 }
@@ -672,14 +654,14 @@ isRunning(running => {
 		// EPGデータを取得または番組表を読み込む
 		if (config.epgStartCommand) {
 			const commandProcess = child_process.spawnSync(config.epgStartCommand, [process.pid, RULES_FILE, RESERVES_DATA_FILE, SCHEDULE_DATA_FILE]);
-			util.log('SPAWN: ' + config.epgStartCommand + ' (pid=' + commandProcess.pid + ')');
+			log('SPAWN: ' + config.epgStartCommand + ' (pid=' + commandProcess.pid + ')');
 		}
 
 		getEpgFromMirakurun(mirakurunPath);
 
 		if (config.epgEndCommand) {
 			const commandProcess = child_process.spawn(config.epgEndCommand, [process.pid, RULES_FILE, RESERVES_DATA_FILE, SCHEDULE_DATA_FILE]);
-			util.log('SPAWN: ' + config.epgEndCommand + ' (pid=' + commandProcess.pid + ')');
+			log('SPAWN: ' + config.epgEndCommand + ' (pid=' + commandProcess.pid + ')');
 		}
 	}
 });

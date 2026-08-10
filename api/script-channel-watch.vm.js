@@ -23,7 +23,7 @@ Usushio では使わない
 			var ext    = request.query.ext || 'm2ts';
 			var prefix = request.query.prefix || '';
 
-			var target = prefix + 'watch.' + ext  + url.parse(request.url).search;
+			var target = prefix + 'watch.' + ext + new URL(request.url, 'http://localhost').search;
 
 			response.write('<?xml version="1.0" encoding="UTF-8"?>\n');
 			response.write('<playlist version="1" xmlns="http://xspf.org/ns/0/">\n');
@@ -134,20 +134,31 @@ Usushio では使わない
 
 			args.push('-y', '-f', d.f, 'pipe:1');
 
-			let stream = null;;
+			let stream = null;
+			const abortController = new AbortController();
 
 			request.once('close', () => {
 
 				if (stream) {
 					stream.unpipe();
-					stream.req.abort();
 				}
+				abortController.abort();
 			});
 
 			// get stream
-			mirakurun.getServiceStream(parseInt(channel.id, 36), true)
+			mirakurun.getServiceStream({
+				id: parseInt(channel.id, 36),
+				decode: true,
+				signal: abortController.signal
+			})
 				.then(_stream => {
 					stream = _stream;
+					stream.once('error', err => {
+						if (!abortController.signal.aborted) {
+							log('[streamer] Mirakurun stream error:', err);
+							response.end();
+						}
+					});
 
 					response.head(200);
 
@@ -158,7 +169,7 @@ Usushio では使わない
 					} else {
 						var ffmpeg = child_process.spawn('ffmpeg', args);
 						children.push(ffmpeg.pid);
-						util.log('SPAWN: ffmpeg ' + args.join(' ') + ' (pid=' + ffmpeg.pid + ')');
+						log('SPAWN: ffmpeg ' + args.join(' ') + ' (pid=' + ffmpeg.pid + ')');
 
 						request.on('close', function() {
 							ffmpeg.stdout.removeAllListeners('data');
@@ -174,8 +185,8 @@ Usushio では使わない
 
 						ffmpeg.stderr.on('data', function(data) {
 							data = data.toString();
-							util.log(data);
-							util.log('#ffmpeg: ' + data.replace(/\n/g, ' ').trim());
+							log(data);
+							log('#ffmpeg: ' + data.replace(/\n/g, ' ').trim());
 						});
 
 						ffmpeg.on('exit', function(code) {
@@ -184,6 +195,9 @@ Usushio では使わない
 					}
 				})
 				.catch(err => {
+					if (abortController.signal.aborted) {
+						return;
+					}
 
 					if (stream) {
 						// 既に録画開始

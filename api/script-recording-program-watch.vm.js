@@ -13,7 +13,7 @@
 	if (!fs.existsSync(program.recorded)) return response.error(410);
 
 	if (request.query.debug) {
-		util.log(JSON.stringify(request.headers, null, '  '));
+		log(JSON.stringify(request.headers, null, '  '));
 	}
 
 	switch (request.type) {
@@ -24,7 +24,7 @@
 			var ext    = request.query.ext || 'm2ts';
 			var prefix = request.query.prefix || '';
 
-			var target = prefix + 'watch.' + ext  + url.parse(request.url).search;
+			var target = prefix + 'watch.' + ext + new URL(request.url, 'http://localhost').search;
 			var title = program.title
 				.replace(/</g, "&lt;")
 				.replace(/>/g, "&gt;")
@@ -46,7 +46,7 @@
 		case 'mp4':
 			response.head(200);
 
-			util.log('[streamer] streaming: ' + program.recorded);
+			log('[streamer] streaming: ' + program.recorded);
 
 			var d = {
 				ss   : request.query.ss     || null, //start(seconds)
@@ -172,7 +172,7 @@
 			} else {
 				var ffmpeg = child_process.spawn('ffmpeg', args);
 				children.push(ffmpeg.pid);
-				util.log('SPAWN: ffmpeg ' + args.join(' ') + ' (pid=' + ffmpeg.pid + ')');
+				log('SPAWN: ffmpeg ' + args.join(' ') + ' (pid=' + ffmpeg.pid + ')');
 
 				if (!d.ss) {
 					var tailf = child_process.spawn('tail', ['-f', program.recorded]);
@@ -189,7 +189,7 @@
 				ffmpeg.stdout.pipe(response);
 
 				ffmpeg.stderr.on('data', function(d) {
-					util.log(d);
+					log(d);
 				});
 
 				ffmpeg.on('exit', function(code) {

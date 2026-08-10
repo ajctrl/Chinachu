@@ -6,7 +6,9 @@ var should = require('should');
 
 var chinachu = require('chinachu-common');
 
-var testDataPath = os.tmpDir() + '/chinachu-test-' + new Date().getTime() + '.json';
+var testDataPath = os.tmpdir() + '/chinachu-test-' + new Date().getTime() + '.json';
+var watcher = null;
+var onUpdate = function() {};
 
 describe('(init)', function() {
 	
@@ -32,15 +34,16 @@ describe('jsonWatcher', function() {
 	var test = null;
 	
 	it('read', function(done) {
-		
-		chinachu.jsonWatcher(testDataPath, function(err, data, msg) {
+		onUpdate = function(err, data) {
+			onUpdate = function() {};
 			should.strictEqual(null, err);
-			
 			test = data;
-			
 			should.exist(test);
-			
 			done();
+		};
+
+		watcher = chinachu.jsonWatcher(testDataPath, function(err, data, msg) {
+			onUpdate(err, data, msg);
 		}, { now: true });
 	});
 	
@@ -53,12 +56,21 @@ describe('jsonWatcher', function() {
 		should.strictEqual(test.e, null);
 	});
 	
-	it('watch');
+	it('watch', function(done) {
+		onUpdate = function(err, data) {
+			onUpdate = function() {};
+			should.strictEqual(null, err);
+			should.strictEqual(data.a, 2);
+			done();
+		};
+		fs.writeFileSync(testDataPath, JSON.stringify({ a: 2 }));
+	});
 });
 
 describe('(clean up)', function() {
 	
 	it('remove test data file', function() {
+		watcher.close();
 		fs.unlinkSync(testDataPath);
 	});
 });

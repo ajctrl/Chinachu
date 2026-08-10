@@ -17,7 +17,7 @@ function init() {
 	child_process.exec('ffprobe -v 0 -show_format -of json "' + program.recorded + '"', function (err, std) {
 
 		if (err) {
-			util.log("error", err);
+			log("error", err);
 			return response.error(500);
 		}
 
@@ -32,8 +32,8 @@ function init() {
 function main(avinfo) {
 
 	if (request.query.debug) {
-		util.log(JSON.stringify(avinfo, null, '  '));
-		util.log(JSON.stringify(request.headers, null, '  '));
+		log(JSON.stringify(avinfo, null, '  '));
+		log(JSON.stringify(request.headers, null, '  '));
 	}
 
 	switch (request.type) {
@@ -44,7 +44,7 @@ function main(avinfo) {
 			var ext    = request.query.ext || 'm2ts';
 			var prefix = request.query.prefix || '';
 
-			var target = prefix + 'watch.' + ext  + url.parse(request.url).search;
+			var target = prefix + 'watch.' + ext + new URL(request.url, 'http://localhost').search;
 			var title = program.title
 				.replace(/</g, "&lt;")
 				.replace(/>/g, "&gt;")
@@ -64,7 +64,7 @@ function main(avinfo) {
 
 		case 'm2ts':
 		case 'mp4':
-			util.log('STREAMING: ' + request.url);
+			log('STREAMING: ' + request.url);
 
 			var d = {
 				ss   : request.query.ss     || '2',  //start(seconds)
@@ -266,14 +266,14 @@ function main(avinfo) {
 			} else {
 				var ffmpeg = child_process.spawn('ffmpeg', args);
 				children.push(ffmpeg.pid);
-				util.log('SPAWN: ffmpeg ' + args.join(' ') + ' (pid=' + ffmpeg.pid + ')');
+				log('SPAWN: ffmpeg ' + args.join(' ') + ' (pid=' + ffmpeg.pid + ')');
 
 				ffmpeg.stdout.pipe(response);
 
 				readStream.pipe(ffmpeg.stdin);
 
 				ffmpeg.stderr.on('data', function(d) {
-					util.log('#ffmpeg: ' + d);
+					log('#ffmpeg: ' + d);
 				});
 
 				ffmpeg.on('exit', function() {

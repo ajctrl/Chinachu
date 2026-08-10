@@ -25,7 +25,6 @@ const path = require('path');
 const fs = require('fs');
 const util = require('util');
 const child_process = require('child_process');
-const url = require('url');
 const querystring = require('querystring');
 const vm = require('vm');
 const os = require('os');
@@ -34,12 +33,15 @@ const events = require('events');
 const http = require('http');
 const https = require('https');
 const auth = require('http-auth');
-const socketio = require('socket.io');
+const { Server } = require('socket.io');
 const chinachu = require('chinachu-common');
 const ip = require("ip");
 const geoip = require('geoip-lite');
 const mdns = require('mdns-js');
 const mirakurun = new (require("mirakurun").default)();
+const { log } = require('./lib/logger');
+const { configureMirakurunClient } = require('./lib/mirakurun-client');
+const { createBasicAuthMiddleware } = require('./lib/socket-auth');
 
 // Directory Checking
 if (!fs.existsSync('./data/') || !fs.existsSync('./log/') || !fs.existsSync('./web/')) {
@@ -77,7 +79,7 @@ process.on('SIGQUIT', () => {
 process.on('uncaughtException', err => {
 
 	if (err.toString() === 'Error: read ECONNRESET') {
-		util.log('ECONNRESET');
+		log('ECONNRESET');
 		return;
 	}
 
@@ -103,24 +105,7 @@ if (process.platform !== "win32") {
 
 // Mirakurun Client
 const mirakurunPath = config.mirakurunPath || config.schedulerMirakurunPath || "http+unix://%2Fvar%2Frun%2Fmirakurun.sock/";
-
-if (/(?:\/|\+)unix:/.test(mirakurunPath) === true) {
-	const standardFormat = /^http\+unix:\/\/([^\/]+)(\/?.*)$/;
-	const legacyFormat = /^http:\/\/unix:([^:]+):?(.*)$/;
-
-	if (standardFormat.test(mirakurunPath) === true) {
-		mirakurun.socketPath = mirakurunPath.replace(standardFormat, "$1").replace(/%2F/g, "/");
-		mirakurun.basePath = path.join(mirakurunPath.replace(standardFormat, "$2"), mirakurun.basePath);
-	} else {
-		mirakurun.socketPath = mirakurunPath.replace(legacyFormat, "$1");
-		mirakurun.basePath = path.join(mirakurunPath.replace(legacyFormat, "$2"), mirakurun.basePath);
-	}
-} else {
-	const urlObject = url.parse(mirakurunPath);
-	mirakurun.host = urlObject.hostname;
-	mirakurun.port = urlObject.port;
-	mirakurun.basePath = path.join(urlObject.pathname, mirakurun.basePath);
-}
+configureMirakurunClient(mirakurun, mirakurunPath);
 
 mirakurun.userAgent = `Chinachu/${pkg.version} (wui)`;
 mirakurun.priority = 0;
@@ -213,7 +198,7 @@ if (config.wuiPort) {
 	server.timeout = 240000;
 
 	server.listen(config.wuiPort, config.wuiHost || '0.0.0.0', function () {
-		util.log((tlsEnabled ? 'HTTPS' : 'HTTP') + ' Server Listening on ' + util.inspect(server.address()));
+		log((tlsEnabled ? 'HTTPS' : 'HTTP') + ' Server Listening on ' + util.inspect(server.address()));
 		if (config.wuiMdnsAdvertisement === true) {
 			// Start mDNS advertisement
 			serverMdns = mdns.createAdvertisement(mdns.tcp(tlsEnabled ? '_https' : '_http'), config.wuiPort, {
@@ -226,7 +211,7 @@ if (config.wuiPort) {
 				}
 			});
 			serverMdns.start();
-			util.log((tlsEnabled ? 'HTTPS' : 'HTTP') + ' Server mDNS advertising started.');
+			log((tlsEnabled ? 'HTTPS' : 'HTTP') + ' Server mDNS advertising started.');
 		}
 	});
 
@@ -265,7 +250,7 @@ if (openServerEnabled) {
 	}
 
 	openServer.listen(config.wuiOpenPort || 20772, hostIp, () => {
-		util.log('HTTP Open Server Listening on ' + util.inspect(openServer.address()));
+		log('HTTP Open Server Listening on ' + util.inspect(openServer.address()));
 		if (config.wuiMdnsAdvertisement === true) {
 			// Start mDNS advertisement
 			openServerMdns = mdns.createAdvertisement(mdns.tcp('_http'), config.wuiOpenPort || 20772, {
@@ -278,7 +263,7 @@ if (openServerEnabled) {
 				}
 			});
 			openServerMdns.start();
-			util.log('HTTP Open Server mDNS advertising started.');
+			log('HTTP Open Server mDNS advertising started.');
 		}
 	});
 }
@@ -292,7 +277,7 @@ function httpServer(req, res) {
 	case 'GET':
 	case 'HEAD':
 
-		q = url.parse(req.url, false).query || '';
+		q = new URL(req.url, 'http://localhost').search.slice(1);
 
 		if (q.match(/^\{.*\}$/) === null) {
 			q = querystring.parse(q);
@@ -338,7 +323,7 @@ function httpServer(req, res) {
 
 		res.writeHead(400, {'content-type': 'text/plain'});
 		res.end('400 Bad Request\n');
-		util.log('400');
+		log('400');
 	}
 }
 
@@ -354,8 +339,8 @@ function httpServerMain(req, res, query) {
 	}
 
 	// http request logging
-	var log = function (statusCode) {
-		util.log([
+	var logRequest = function (statusCode) {
+		log([
 			statusCode,
 			req.method + ':' + req.url,
 			remoteAddress,
@@ -369,7 +354,7 @@ function httpServerMain(req, res, query) {
 		if (geo !== null && config.wuiAllowCountries.indexOf(geo.country) === -1) {
 			res.writeHead(403, {'content-type': 'text/plain'});
 			res.end('403 Forbidden\n');
-			log(403);
+			logRequest(403);
 			console.warn('Non-allowed Country IP Blocked', remoteAddress, JSON.stringify(geo));
 		}
 	}
@@ -479,9 +464,9 @@ function httpServerMain(req, res, query) {
 					break;
 				}
 			}
-			log(code);
+			logRequest(code);
 		} else {
-			log(res.statusCode + '(!' + code + ')');
+			logRequest(res.statusCode + '(!' + code + ')');
 		}
 		res.end();
 	};
@@ -543,7 +528,7 @@ function httpServerMain(req, res, query) {
 
 		if (req.headers['if-modified-since'] && req.headers['if-modified-since'] === new Date(fstat.mtime).toUTCString()) {
 			writeHead(304);
-			log(304);
+			logRequest(304);
 			return res.end();
 		}
 
@@ -561,12 +546,12 @@ function httpServerMain(req, res, query) {
 			res.setHeader('Content-Length', range.end - range.start + 1);
 
 			writeHead(206);
-			log(206);
+			logRequest(206);
 		} else {
 			res.setHeader('Content-Length', fstat.size);
 
 			writeHead(200);
-			log(200);
+			logRequest(200);
 		}
 
 		if (req.method === 'GET') {
@@ -655,8 +640,10 @@ function httpServerMain(req, res, query) {
 				response     : res,
 				path         : path,
 				fs           : fs,
-				url          : url,
+				URL          : URL,
+				AbortController: AbortController,
 				util         : util,
+				log          : log,
 				child_process: child_process,
 				Buffer       : Buffer,
 				zlib         : zlib,
@@ -711,12 +698,12 @@ function httpServerMain(req, res, query) {
 			// DEPRECATED
 			sandbox.response.exit = function (data, encoding) {
 
-				util.log('response.exit is DEPRECATED: ' + scriptFile);
+				log('response.exit is DEPRECATED: ' + scriptFile);
 
 				try {
 					res.end(data, encoding);
 				} catch (e) {
-					util.log(e);
+					log(e);
 				}
 			};
 
@@ -725,7 +712,7 @@ function httpServerMain(req, res, query) {
 				if (!isClosed) {
 					isClosed = true;
 
-					log(res.statusCode);
+					logRequest(res.statusCode);
 				}
 
 				cleanup();
@@ -737,7 +724,7 @@ function httpServerMain(req, res, query) {
 
 					sandbox.children.forEach(function (pid) {
 
-						util.log('child process killing: PID=' + pid);
+						log('child process killing: PID=' + pid);
 
 						try {
 							process.kill(pid, 'SIGKILL');
@@ -803,7 +790,11 @@ function iosAddEventListner(io, eventName) {
 }
 
 function ioAddListener(server, isOpen) {
-	var io = socketio(server);
+	var io = new Server(server);
+
+	if (basicAuthEnabled && !isOpen) {
+		io.use(createBasicAuthMiddleware(config.wuiUsers || []));
+	}
 
 	io.on('connection', isOpen ? ioOpenServer : ioServer);
 
@@ -829,32 +820,6 @@ function ioOpenServer(socket) {
 }
 
 function ioServer(socket) {
-	if (basicAuthEnabled && !socket.isOpen) {
-		// ヘッダを確認
-		if (!socket.handshake.headers.authorization || (socket.handshake.headers.authorization.match(/^Basic .+$/) === null)) {
-			socket.disconnect();
-			return;
-		}
-
-		// Base64文字列を取り出す
-		var auth = socket.handshake.headers.authorization.split(' ')[1];
-
-		// Base64デコード
-		try {
-			auth = new Buffer(auth, 'base64').toString('ascii');
-		} catch (e) {
-			socket.disconnect();
-			return;
-		}
-
-		// 認証
-		if (config.wuiUsers && config.wuiUsers.indexOf(auth) === -1) {
-			socket.disconnect();
-			return;
-		}
-	}
-
-	// 通ってよし
 	ioServerMain(socket);
 }
 
@@ -889,7 +854,7 @@ chinachu.jsonWatcher(
 
 		rules = data;
 		ios.emit('notify-rules');
-		util.log(mes);
+		log(mes);
 	},
 	{ create: [], now: true }
 );
@@ -905,7 +870,7 @@ chinachu.jsonWatcher(
 
 		schedule = data;
 		ios.emit('notify-schedule');
-		util.log(mes);
+		log(mes);
 	},
 	{ create: [], now: true }
 );
@@ -921,7 +886,7 @@ chinachu.jsonWatcher(
 
 		reserves = data;
 		ios.emit('notify-reserves');
-		util.log(mes);
+		log(mes);
 	},
 	{ create: [], now: true }
 );
@@ -937,7 +902,7 @@ chinachu.jsonWatcher(
 
 		recording = data;
 		ios.emit('notify-recording');
-		util.log(mes);
+		log(mes);
 	},
 	{ create: [], now: true }
 );
@@ -953,7 +918,7 @@ chinachu.jsonWatcher(
 
 		recorded = data;
 		ios.emit('notify-recorded');
-		util.log(mes);
+		log(mes);
 	},
 	{ create: [], now: true }
 );

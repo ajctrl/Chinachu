@@ -14,13 +14,13 @@ var RECORDED_DATA_FILE  = __dirname + '/data/recorded.json';
 
 // 標準モジュールのロード
 var fs            = require('fs');
-var util          = require('util');
 var net           = require('net');
 var child_process = require('child_process');
+var log           = require('./lib/logger').log;
 
 // ディレクトリチェック
 if (!fs.existsSync('./data/') || !fs.existsSync('./log/') || !fs.existsSync('./web/')) {
-	util.error('必要なディレクトリが存在しないか、カレントワーキングディレクトリが不正です。');
+	console.error('必要なディレクトリが存在しないか、カレントワーキングディレクトリが不正です。');
 	process.exit(1);
 }
 
@@ -406,12 +406,12 @@ function chinachuReserve() {
 	var target = chinachu.getProgramById(opts.get('id'), schedule);
 
 	if (target === null) {
-		util.error('見つかりません');
+		console.error('見つかりません');
 		process.exit(1);
 	}
 
 	if (chinachu.getProgramById(opts.get('id'), reserves) !== null) {
-		util.error('既に予約されています');
+		console.error('既に予約されています');
 		process.exit(1);
 	}
 
@@ -446,12 +446,12 @@ function chinachuUnreserve() {
 	var target = chinachu.getProgramById(opts.get('id'), reserves);
 
 	if (target === null) {
-		util.error('見つかりません');
+		console.error('見つかりません');
 		process.exit(1);
 	}
 
 	if (!target.isManualReserved) {
-		util.error('自動予約された番組は解除できません。自動予約ルールを編集してください');
+		console.error('自動予約された番組は解除できません。自動予約ルールを編集してください');
 		process.exit(1);
 	}
 
@@ -482,17 +482,17 @@ function chinachuSkip() {
 	var target = chinachu.getProgramById(opts.get('id'), reserves);
 
 	if (target === null) {
-		util.error('見つかりません');
+		console.error('見つかりません');
 		process.exit(1);
 	}
 
 	if (target.isManualReserved) {
-		util.error('手動予約された番組はスキップできません。予約を解除してください。');
+		console.error('手動予約された番組はスキップできません。予約を解除してください。');
 		process.exit(1);
 	}
 
 	if (target.isSkip) {
-		util.error('既にスキップが有効になっています');
+		console.error('既にスキップが有効になっています');
 		process.exit(1);
 	}
 
@@ -523,12 +523,12 @@ function chinachuUnskip() {
 	var target = chinachu.getProgramById(opts.get('id'), reserves);
 
 	if (target === null) {
-		util.error('見つかりません');
+		console.error('見つかりません');
 		process.exit(1);
 	}
 
 	if (!target.isSkip) {
-		util.error('既にスキップは解除されています');
+		console.error('既にスキップは解除されています');
 		process.exit(1);
 	}
 
@@ -559,7 +559,7 @@ function chinachuStop() {
 	var target = chinachu.getProgramById(opts.get('id'), recording);
 
 	if (target === null) {
-		util.error('見つかりません');
+		console.error('見つかりません');
 		process.exit(1);
 	}
 
@@ -626,9 +626,9 @@ function chinachuRule() {
 
 	if (JSON.stringify(r) === '{}') {
 		if (opts.get('enable') || opts.get('disable') || opts.get('remove')) {
-			util.error('見つかりません');
+			console.error('見つかりません');
 		} else {
-			util.error('ルールが空です。一つ以上の条件が必要です。');
+			console.error('ルールが空です。一つ以上の条件が必要です。');
 		}
 		process.exit(1);
 	}
@@ -845,8 +845,8 @@ function chinachuCleanup() {
 // IRC bot
 function chinachuIrcbot() {
 	if (!opts.get('host') || !opts.get('ch')) {
-		util.error('require: -host, -ch');
-		util.error('option : -port');
+		console.error('require: -host, -ch');
+		console.error('option : -port');
 		process.exit(1);
 	}
 
@@ -860,7 +860,7 @@ function chinachuIrcbot() {
 	irc.socket = new net.Socket();
 
 	irc.socket.on('connect', function() {
-		util.log('接続されました...');
+		log('接続されました...');
 		setTimeout(function() {
 			irc.raw('NICK ' + irc.nick);
 			irc.raw('USER chinachu 8 * :Chinachu IRC bot (Node)');
@@ -872,7 +872,7 @@ function chinachuIrcbot() {
 		data = data.split('\n');
 		for (var i = 0; i < data.length; i++) {
 			if (data[i] !== '') {
-				//util.log(data[i]);
+				//log(data[i]);
 				irc.handle(data[i].slice(0, -1));
 			}
 		}
@@ -903,7 +903,7 @@ function chinachuIrcbot() {
 
 	irc.raw = function(data) {
 		irc.socket.write(data + '\n', 'utf-8', function() {
-			util.log('SENT -' + data);
+			log('SENT -' + data);
 		});
 	};
 
@@ -912,7 +912,7 @@ function chinachuIrcbot() {
 	});
 
 	irc.on(/^:.+ PRIVMSG .+ :chinachu (.+)$/i, function(msg) {
-		util.log('CHII -' + msg[1]);
+		log('CHII -' + msg[1]);
 
 		var args = msg[1].split(' ');
 

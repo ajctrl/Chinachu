@@ -753,7 +753,7 @@
 			var url        = opt.url     || null;
 			if (url === null) return;
 
-			var ext        = opt.ext        || url.match(/\.([^\.]+)$/)[1];
+			var ext        = opt.ext        || url.match(/\.([^\.?]+)(?:\?[^#]*)?(?:#.*)?$/)[1];
 			var callback   = opt.callback   || null;
 			var onCreate   = opt.onCreate   || function(){};
 			var onComplete = opt.onComplete || function(){};

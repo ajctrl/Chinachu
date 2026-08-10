@@ -16,7 +16,7 @@
 			
 			child_process.exec('df --block-size=512 ' + config.recordedDir , function(err, stdout, stderr) {
 				if (err) {
-					util.log(stderr);
+					log(stderr);
 					return response.error(500);
 				}
 				

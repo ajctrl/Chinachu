@@ -1,10 +1,17 @@
-Chinachu [![Build Status](https://secure.travis-ci.org/Chinachu/Chinachu.svg)](http://travis-ci.org/Chinachu/Chinachu) [![tip for next commit](http://tip4commit.com/projects/689.svg)](http://tip4commit.com/projects/689)
+Chinachu [![Test](https://github.com/Chinachu/Chinachu/actions/workflows/test.yml/badge.svg)](https://github.com/Chinachu/Chinachu/actions/workflows/test.yml) [![tip for next commit](http://tip4commit.com/projects/689.svg)](http://tip4commit.com/projects/689)
 ========
 
-- This software is no longer under development.
-- Node.js v14 is the last supported version.
-- Node.js v14 will become [END-OF-LIFE on 2023-04-30](https://nodejs.org/en/about/releases/).
-- Please stop using this software by the above date and consider using a different software.
+Requirements
+------------
+
+- Linux
+- Node.js 24.x (the bundled installer and CI use 24.18.0)
+- The npm version bundled with Node.js 24
+- Mirakurun 4.1.3
+- Socket.IO 4.8.3 clients (Engine.IO protocol 4)
+
+Install dependencies with `npm ci`. Both TCP and Unix socket connections to
+Mirakurun are supported. Socket.IO 2.x clients are not supported.
 
 Stay in touch on Discord Community: <https://discord.gg/X7KU5W9>
 

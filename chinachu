@@ -16,7 +16,7 @@ fi
 shopt -s extglob
 
 # variables
-NODE_VER=14.18.3
+NODE_VER=24.18.0
 
 main () {
   local SELF_PATH DIR SYM
@@ -155,8 +155,7 @@ chinachu_installer_node_modules () {
 
   echo "Installing Node Modules using NPM..."
 
-  npm install
-  npm update
+  npm ci
 
   echo "done."
 

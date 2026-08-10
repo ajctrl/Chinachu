@@ -43,7 +43,7 @@
 	//
 	var REQUIRES = [
 		/* socket.io */
-		'./socket.io/socket.io.js',
+		'./socket.io/socket.io.js?v=4.8.3',
 		
 		/* hypers */
 		'./lib/hyperform.js',

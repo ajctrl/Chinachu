@@ -27,7 +27,7 @@
 
 	fs.readFile(filename, function(err, data) {
 		if (err) {
-			util.log(err);
+			log(err);
 			return response.error(500);
 		}
 

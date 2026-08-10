@@ -15,8 +15,8 @@
 		apiRoot: app.def.apiRoot
 	});
 
-	app.socket = io.connect(window.location.protocol + '//' + window.location.host, {
-		connectTimeout: 3000,
+	app.socket = io(window.location.protocol + '//' + window.location.host, {
+		timeout: 3000,
 		path: window.location.pathname.replace(/[^\/]*$/g, '') + 'socket.io',
 	});
 

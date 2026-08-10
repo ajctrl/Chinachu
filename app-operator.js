@@ -14,11 +14,10 @@ const RECORDING_DATA_FILE = __dirname + '/data/recording.json';
 const RECORDED_DATA_FILE  = __dirname + '/data/recorded.json';
 
 // 標準モジュールのロード
-const path = require('path');
-const url = require('url');
 const fs = require('fs');
-const util = require('util');
 const child_process = require('child_process');
+const { log } = require('./lib/logger');
+const { configureMirakurunClient } = require('./lib/mirakurun-client');
 
 // ディレクトリチェック
 if (!fs.existsSync('./data/') || !fs.existsSync('./log/') || !fs.existsSync('./web/')) {
@@ -87,24 +86,7 @@ if (process.platform !== "win32") {
 
 // Mirakurun Client
 const mirakurunPath = config.mirakurunPath || config.schedulerMirakurunPath || "http+unix://%2Fvar%2Frun%2Fmirakurun.sock/";
-
-if (/(?:\/|\+)unix:/.test(mirakurunPath) === true) {
-	const standardFormat = /^http\+unix:\/\/([^\/]+)(\/?.*)$/;
-	const legacyFormat = /^http:\/\/unix:([^:]+):?(.*)$/;
-
-	if (standardFormat.test(mirakurunPath) === true) {
-		mirakurun.socketPath = mirakurunPath.replace(standardFormat, "$1").replace(/%2F/g, "/");
-		mirakurun.basePath = path.join(mirakurunPath.replace(standardFormat, "$2"), mirakurun.basePath);
-	} else {
-		mirakurun.socketPath = mirakurunPath.replace(legacyFormat, "$1");
-		mirakurun.basePath = path.join(mirakurunPath.replace(legacyFormat, "$2"), mirakurun.basePath);
-	}
-} else {
-	const urlObject = url.parse(mirakurunPath);
-	mirakurun.host = urlObject.hostname;
-	mirakurun.port = urlObject.port;
-	mirakurun.basePath = path.join(urlObject.pathname, mirakurun.basePath);
-}
+configureMirakurunClient(mirakurun, mirakurunPath);
 
 mirakurun.userAgent = `Chinachu/${pkg.version} (operator)`;
 mirakurun.priority = recordingPriority;
@@ -119,7 +101,7 @@ fs.writeFileSync(RECORDING_DATA_FILE, '[]');
 
 // 保存先ディレクトリが存在しない場合には作成
 if (!fs.existsSync(config.recordedDir)) {
-	util.log('MKDIR: ' + config.recordedDir);
+	log('MKDIR: ' + config.recordedDir);
 	mkdirp.sync(config.recordedDir);
 }
 
@@ -139,9 +121,9 @@ if (config.operTweeter && config.operTweeterAuth && config.operTweeterFormat) {
 			{ status: status },
 			(err, item) => {
 				if (err) {
-					util.log('[Tweeter] Error: ' + JSON.stringify(err));
+					log('[Tweeter] Error: ' + JSON.stringify(err));
 				} else {
-					util.log('[Tweeter] Updated: ' + status);
+					log('[Tweeter] Updated: ' + status);
 				}
 			}
 		);
@@ -247,7 +229,7 @@ function stopScheduler() {
 	if (scheduler === null) { return; }
 
 	scheduler.kill('SIGQUIT');
-	util.log('KILL: SIGQUIT -> Scheduler (pid=' + scheduler.pid + ')');
+	log('KILL: SIGQUIT -> Scheduler (pid=' + scheduler.pid + ')');
 }
 
 // スケジューラーを開始
@@ -257,15 +239,15 @@ function startScheduler() {
 	var output, finalize;
 
 	scheduler = child_process.spawn('./chinachu', [ 'update' ]);
-	util.log('SPAWN: ./chinachu update (pid=' + scheduler.pid + ')');
+	log('SPAWN: ./chinachu update (pid=' + scheduler.pid + ')');
 
 	// ログ用
 	output = fs.createWriteStream('./log/scheduler', { flags: 'a' });
-	util.log('STREAM: ./log/scheduler');
+	log('STREAM: ./log/scheduler');
 
 	finalize = function () {
 
-		util.log('EXIT: node app-scheduler.js (pid=' + scheduler.pid + ')');
+		log('EXIT: node app-scheduler.js (pid=' + scheduler.pid + ')');
 
 		try {
 			process.removeListener('SIGINT', stopScheduler);
@@ -282,7 +264,7 @@ function startScheduler() {
 		try {
 			output.write(data);
 		} catch (e) {
-			util.log('ERROR: Scheduler -> Abort (' + e + ')');
+			log('ERROR: Scheduler -> Abort (' + e + ')');
 			finalize();
 		}
 	});
@@ -306,13 +288,25 @@ function prepRecord(program) {
 		return;
 	}
 
-	util.log('PREPARE: ' + printProgram(program));
+	log('PREPARE: ' + printProgram(program));
 
 	// set priority
 	mirakurun.priority = program.priority = program.priority || (program.isConflict ? conflictedPriority : recordingPriority);
 
+	const abortController = new AbortController();
+	Object.defineProperty(program, "_abortController", {
+		configurable: true,
+		enumerable: false,
+		value: abortController
+	});
+
 	// get stream
-	mirakurun.getProgramStream(parseInt(program.id, 36), true)
+	mirakurun.getProgramStream({
+		id: parseInt(program.id, 36),
+		decode: true,
+		priority: program.priority,
+		signal: abortController.signal
+	})
 		.then(stream => doRecord(program, stream))
 		.catch(err => {
 
@@ -321,28 +315,35 @@ function prepRecord(program) {
 				return;
 			}
 
-			if (err.req) {
-				util.log("ERROR: " + printProgram(program), err.req.path, err.statusCode, err.statusMessage);
+			if (abortController.signal.aborted) {
+				log('ABORT: ' + printProgram(program));
+			} else if (err.req) {
+				log("ERROR: " + printProgram(program), err.req.path, err.statusCode, err.statusMessage);
 			} else {
-				util.log("ERROR: " + printProgram(program), err.address, err.code);
+				log("ERROR: " + printProgram(program), err);
 			}
 
 			// リトライ
 			setTimeout(() => {
-				recording.splice(recording.indexOf(program), 1);
+				const index = recording.indexOf(program);
+				if (index !== -1) {
+					recording.splice(index, 1);
+				}
+				delete program._abortController;
 				fs.writeFileSync(RECORDING_DATA_FILE, JSON.stringify(recording));
 			}, 5000);
 		});
 
 	recording.push(program);
 	fs.writeFileSync(RECORDING_DATA_FILE, JSON.stringify(recording));
-	util.log('WRITE: ' + RECORDING_DATA_FILE);
+	log('WRITE: ' + RECORDING_DATA_FILE);
 }
 
 // 録画実行
 function doRecord(program, stream) {
+	const abortController = program._abortController;
 
-	util.log('RECORD: ' + printProgram(program));
+	log('RECORD: ' + printProgram(program));
 
 	// dummy
 	program.tuner = {
@@ -360,17 +361,29 @@ function doRecord(program, stream) {
 	// 保存先ディレクトリ
 	const recDirPath = recPath.replace(/^(.+)\/.+$/, '$1');
 	if (!fs.existsSync(recDirPath)) {
-		util.log('MKDIR: ' + recDirPath);
+		log('MKDIR: ' + recDirPath);
 		mkdirp.sync(recDirPath);
 	}
 
 	// 保存ストリーム
 	const recFile = fs.createWriteStream(recPath, { flags: 'a' });
-	util.log('STREAM: ' + recPath);
+	log('STREAM: ' + recPath);
+	Object.defineProperty(program, "_stream", {
+		configurable: true,
+		enumerable: false,
+		value: stream
+	});
 	stream.pipe(recFile);
 
 	// 録画プロセス終了時処理
 	stream.once('end', finalize);
+	stream.once('close', finalize);
+	stream.once('error', err => {
+		if (!abortController.signal.aborted) {
+			log('ERROR: ' + printProgram(program), err);
+		}
+		finalize();
+	});
 
 	// 終了シグナル時処理
 	process.on('SIGINT', finalize);
@@ -379,13 +392,7 @@ function doRecord(program, stream) {
 
 	// 状態更新
 	fs.writeFileSync(RECORDING_DATA_FILE, JSON.stringify(recording));
-	util.log('WRITE: ' + RECORDING_DATA_FILE);
-
-	// 内部用
-	Object.defineProperty(program, "_stream", {
-		enumerable: false,
-		value: stream
-	});
+	log('WRITE: ' + RECORDING_DATA_FILE);
 
 	// Tweeter (Experimental)
 	if (tweeter && config.operTweeterFormat.start) {
@@ -404,10 +411,17 @@ function doRecord(program, stream) {
 	}
 
 	// お片付け
+	let finalized = false;
 	function finalize() {
+		if (finalized) {
+			return;
+		}
+		finalized = true;
 
 		stream.unpipe();
-		stream.req.abort();
+		if (!abortController.signal.aborted) {
+			abortController.abort();
+		}
 
 		process.removeListener('SIGINT', finalize);
 		process.removeListener('SIGQUIT', finalize);
@@ -429,17 +443,22 @@ function doRecord(program, stream) {
 			}
 		}
 		recorded.push(program);
-		recording.splice(recording.indexOf(program), 1);
+		const recordingIndex = recording.indexOf(program);
+		if (recordingIndex !== -1) {
+			recording.splice(recordingIndex, 1);
+		}
+		delete program._stream;
+		delete program._abortController;
 		fs.writeFileSync(RECORDED_DATA_FILE, JSON.stringify(recorded));
 		fs.writeFileSync(RECORDING_DATA_FILE, JSON.stringify(recording));
-		util.log('WRITE: ' + RECORDED_DATA_FILE);
-		util.log('WRITE: ' + RECORDING_DATA_FILE);
+		log('WRITE: ' + RECORDED_DATA_FILE);
+		log('WRITE: ' + RECORDING_DATA_FILE);
 		if (program.isManualReserved) {
 			for (let i = 0, l = reserves.length; i < l; i++) {
 				if (reserves[i].id === program.id) {
 					reserves.splice(i, 1);
 					fs.writeFileSync(RESERVES_DATA_FILE, JSON.stringify(reserves));
-					util.log('WRITE: ' + RESERVES_DATA_FILE);
+					log('WRITE: ' + RESERVES_DATA_FILE);
 					break;
 				}
 			}
@@ -448,7 +467,7 @@ function doRecord(program, stream) {
 		// ポストプロセス
 		if (config.recordedCommand) {
 			const postProcess = child_process.spawn(config.recordedCommand, [recPath, JSON.stringify(program)]);
-			util.log('SPAWN: ' + config.recordedCommand + ' (pid=' + postProcess.pid + ')');
+			log('SPAWN: ' + config.recordedCommand + ' (pid=' + postProcess.pid + ')');
 		}
 
 		// Tweeter (Experimental)
@@ -467,9 +486,7 @@ function doRecord(program, stream) {
 			);
 		}
 
-		finalize = null;
-
-		util.log('FIN: ' + printProgram(program));
+		log('FIN: ' + printProgram(program));
 	}
 }
 
@@ -478,8 +495,8 @@ function stopRecording(programId) {
 
 	const program = recording.find(program => program.id === programId);
 
-	if (program && program._stream) {
-		program._stream.req.abort();
+	if (program && program._abortController) {
+		program._abortController.abort();
 	}
 }
 
@@ -494,12 +511,12 @@ function storageChecker() {
 		const freeMB = info.available / 1024 / 1024;
 		if (freeMB < storageLowSpaceThresholdMB) {
 			stChecked = 0;// すぐに再チェックするため
-			util.log(`ALERT: Storage Low Space! (${freeMB} MB < ${storageLowSpaceThresholdMB} MB)`);
+			log(`ALERT: Storage Low Space! (${freeMB} MB < ${storageLowSpaceThresholdMB} MB)`);
 
 			// 1. 指定コマンド実行
 			if (storageLowSpaceCommand) {
 				const command = child_process.spawn(storageLowSpaceCommand);
-				util.log('SPAWN: ' + storageLowSpaceCommand + ' (pid=' + command.pid + ')');
+				log('SPAWN: ' + storageLowSpaceCommand + ' (pid=' + command.pid + ')');
 			}
 
 			// 2. アクション
@@ -514,7 +531,7 @@ function storageChecker() {
 						fs.unlinkSync(program.recorded);
 					}
 					fs.writeFileSync(RECORDED_DATA_FILE, JSON.stringify(recorded));
-					util.log('WRITE: ' + RECORDED_DATA_FILE);
+					log('WRITE: ' + RECORDED_DATA_FILE);
 				}
 			}
 
@@ -547,13 +564,13 @@ chinachu.jsonWatcher(
 		}
 
 		reserves = data;
-		util.log(mes);
+		log(mes);
 
 		if (recording.length > 0) {
 			reserves.forEach(recordingUpdater);
 
 			fs.writeFileSync(RECORDING_DATA_FILE, JSON.stringify(recording));
-			util.log('WRITE: ' + RECORDING_DATA_FILE);
+			log('WRITE: ' + RECORDING_DATA_FILE);
 		}
 	},
 	{ create: [], now: true }
@@ -569,7 +586,7 @@ chinachu.jsonWatcher(
 		}
 
 		recorded = data;
-		util.log(mes);
+		log(mes);
 	},
 	{ create: [], now: true }
 );
