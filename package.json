@@ -24,12 +24,12 @@
   },
   "dependencies": {
     "chinachu-common": "file:common",
+    "bonjour-service": "1.4.4",
     "dateformat": "^5.0.3",
     "diskusage": "^1.2.0",
     "easy-table": "~0.2.0",
     "geoip-lite": "2.0.3",
     "http-auth": "^2.2.8",
-    "mdns-js": "^0.5.0",
     "mirakurun": "4.1.3",
     "mkdirp": "~0.3.5",
     "mtwitter": "^1.6.4",

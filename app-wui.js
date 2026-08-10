@@ -35,9 +35,9 @@ const https = require('https');
 const net = require('net');
 const auth = require('http-auth');
 const { Server } = require('socket.io');
+const { Bonjour } = require('bonjour-service');
 const chinachu = require('chinachu-common');
 const geoip = require('geoip-lite');
-const mdns = require('mdns-js');
 const mirakurun = new (require("mirakurun").default)();
 const { log } = require('./lib/logger');
 const { configureMirakurunClient } = require('./lib/mirakurun-client');
@@ -73,12 +73,15 @@ const OPERATOR_PID_FILE = (() => {
 // SIGQUIT
 process.on('SIGQUIT', () => {
 	setTimeout(() => {
-		serverMdns && serverMdns.stop()
-		openServerMdns && openServerMdns.stop()
-		// Wait stopping mDNS service
-		setTimeout(() => {
+		if (!bonjour) {
 			process.exit(0);
-		}, 1000);
+			return;
+		}
+
+		bonjour.unpublishAll(() => {
+			bonjour.destroy();
+			process.exit(0);
+		});
 	}, 0);
 });
 
@@ -185,7 +188,17 @@ var recorded  = [];
 
 // Init HTTP Server
 let server, openServer, httpOpenServer;
-let serverMdns, openServerMdns;
+let bonjour;
+
+function publishMdns(options) {
+	if (!bonjour) {
+		bonjour = new Bonjour({}, err => {
+			console.error('mDNS error:', err);
+		});
+	}
+
+	return bonjour.publish(options);
+}
 
 if (tlsEnabled) {
 	if (basicAuthEnabled) {
@@ -208,16 +221,18 @@ if (config.wuiPort) {
 		log((tlsEnabled ? 'HTTPS' : 'HTTP') + ' Server Listening on ' + util.inspect(server.address()));
 		if (config.wuiMdnsAdvertisement === true) {
 			// Start mDNS advertisement
-			serverMdns = mdns.createAdvertisement(mdns.tcp(tlsEnabled ? '_https' : '_http'), config.wuiPort, {
+			publishMdns({
 				name: 'Chinachu on ' + os.hostname(),
 				host: os.hostname(),
+				type: tlsEnabled ? 'https' : 'http',
+				protocol: 'tcp',
+				port: config.wuiPort,
 				txt: {
 					txtvers: '1',
 					'Version': 'gamma',
 					'Password': basicAuthEnabled
 				}
 			});
-			serverMdns.start();
 			log((tlsEnabled ? 'HTTPS' : 'HTTP') + ' Server mDNS advertising started.');
 		}
 	});
@@ -260,16 +275,18 @@ if (openServerEnabled) {
 		log('HTTP Open Server Listening on ' + util.inspect(openServer.address()));
 		if (config.wuiMdnsAdvertisement === true) {
 			// Start mDNS advertisement
-			openServerMdns = mdns.createAdvertisement(mdns.tcp('_http'), config.wuiOpenPort || 20772, {
+			publishMdns({
 				name: 'Chinachu Open Server on ' + os.hostname(),
 				host: os.hostname(),
+				type: 'http',
+				protocol: 'tcp',
+				port: config.wuiOpenPort || 20772,
 				txt: {
 					txtvers: '1',
 					'Version': 'gamma',
 					'Password': false
 				}
 			});
-			openServerMdns.start();
 			log('HTTP Open Server mDNS advertising started.');
 		}
 	});
