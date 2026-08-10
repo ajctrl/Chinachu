@@ -47,5 +47,16 @@
   "storageLowSpaceThresholdMB": 3000,
   "storageLowSpaceAction": "remove",
   "storageLowSpaceNotifyTo": null,
-  "storageLowSpaceCommand": ""
+  "storageLowSpaceCommand": "",
+
+  "operGotify": false,
+  "operGotifyUrl": "http://localhost:8008",
+  "operGotifyToken": null,
+  "operGotifyTitle": "Chinachu",
+  "operGotifyPriority": 5,
+  "operGotifyTimeout": 10000,
+  "operGotifyFormat": {
+    "start": "Recording started: <title> [<channelname>] <starttime>-<endtime>",
+    "end": "Recording finished: <title> [<channelname>] <starttime>-<endtime>"
+  }
 }

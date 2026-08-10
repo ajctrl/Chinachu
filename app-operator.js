@@ -17,6 +17,7 @@ const RECORDED_DATA_FILE  = __dirname + '/data/recorded.json';
 const fs = require('fs');
 const child_process = require('child_process');
 const { log } = require('./lib/logger');
+const { createGotifyNotifier } = require('./lib/gotify-notifier');
 const { configureMirakurunClient } = require('./lib/mirakurun-client');
 
 // ディレクトリチェック
@@ -40,7 +41,6 @@ process.on('uncaughtException', (err) => {
 // 追加モジュールのロード
 const { default: dateFormat } = require('dateformat');
 const mkdirp = require('mkdirp');
-const Mtwitter = require('mtwitter');
 const disk = require('diskusage');
 const nodemailer = require("nodemailer");
 const chinachu = require('chinachu-common');
@@ -104,29 +104,22 @@ if (!fs.existsSync(config.recordedDir)) {
 	mkdirp.sync(config.recordedDir);
 }
 
-// Tweeter (Experimental)
-let tweeter, tweeterUpdater;
-if (config.operTweeter && config.operTweeterAuth && config.operTweeterFormat) {
-	tweeter = new Mtwitter({
-		consumer_key       : config.operTweeterAuth.consumerKey,
-		consumer_secret    : config.operTweeterAuth.consumerSecret,
-		access_token_key   : config.operTweeterAuth.accessToken,
-		access_token_secret: config.operTweeterAuth.accessTokenSecret
+// Gotify
+let gotifyNotifier;
+if (config.operGotify && config.operGotifyUrl && config.operGotifyToken && config.operGotifyFormat) {
+	gotifyNotifier = createGotifyNotifier({
+		url: config.operGotifyUrl,
+		token: config.operGotifyToken,
+		title: config.operGotifyTitle,
+		priority: config.operGotifyPriority,
+		timeout: config.operGotifyTimeout
 	});
+}
 
-	tweeterUpdater = (status) => {
-		tweeter.post(
-			'/statuses/update',
-			{ status: status },
-			(err, item) => {
-				if (err) {
-					log('[Tweeter] Error: ' + JSON.stringify(err));
-				} else {
-					log('[Tweeter] Updated: ' + status);
-				}
-			}
-		);
-	};
+function notifyGotify(message) {
+	gotifyNotifier(message)
+		.then(() => log('[Gotify] Sent: ' + message))
+		.catch(err => log('[Gotify] Error: ' + err.message));
 }
 
 let clock = Date.now();
@@ -393,10 +386,10 @@ function doRecord(program, stream) {
 	fs.writeFileSync(RECORDING_DATA_FILE, JSON.stringify(recording));
 	log('WRITE: ' + RECORDING_DATA_FILE);
 
-	// Tweeter (Experimental)
-	if (tweeter && config.operTweeterFormat.start) {
-		tweeterUpdater(
-			config.operTweeterFormat.start
+	// Gotify
+	if (gotifyNotifier && config.operGotifyFormat.start) {
+		notifyGotify(
+			config.operGotifyFormat.start
 				.replace('<id>', program.id)
 				.replace('<type>', program.channel.type)
 				.replace('<channel>', ((program.channel.type === 'CS') ? program.channel.sid : program.channel.channel))
@@ -469,10 +462,10 @@ function doRecord(program, stream) {
 			log('SPAWN: ' + config.recordedCommand + ' (pid=' + postProcess.pid + ')');
 		}
 
-		// Tweeter (Experimental)
-		if (tweeter && config.operTweeterFormat.end) {
-			tweeterUpdater(
-				config.operTweeterFormat.end
+		// Gotify
+		if (gotifyNotifier && config.operGotifyFormat.end) {
+			notifyGotify(
+				config.operGotifyFormat.end
 					.replace('<id>', program.id)
 					.replace('<type>', program.channel.type)
 					.replace('<channel>', ((program.channel.type === 'CS') ? program.channel.sid : program.channel.channel))
