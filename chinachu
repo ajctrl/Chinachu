@@ -15,9 +15,6 @@ fi
 
 shopt -s extglob
 
-# variables
-NODE_VER=24.18.0
-
 main () {
   local SELF_PATH DIR SYM
   # get the absolute path of the executable
@@ -41,19 +38,11 @@ main () {
 
   # path
   CHINACHU_DIR=$(dirname -- "$SELF_PATH")
-  NAVE_DIR=${CHINACHU_DIR}/.nave
-  NODE_PATH=${NAVE_DIR}/installed/${NODE_VER}/bin/node
-  NPM_PATH=${NAVE_DIR}/installed/${NODE_VER}/bin/npm
   USR_DIR=${CHINACHU_DIR}/usr
-
-  export PATH=$USR_DIR/bin:${NAVE_DIR}/installed/${NODE_VER}/bin:$PATH
-  export LD_LIBRARY_PATH=$USR_DIR/lib:$LD_LIBRARY_PATH
-  export PKG_CONFIG_PATH=$USR_DIR/lib/pkgconfig
 
   cd $CHINACHU_DIR
 
   export CHINACHU_DIR
-  export NAVE_DIR
 
   local cmd="$1"
   shift
@@ -88,7 +77,7 @@ chinachu_installer () {
   local PS3 item cmd
   PS3="what do you install? > "
   select item in \
-    "Auto (full)" "submodule" "Node.js Environment" "Node.js Modules" "ffmpeg"
+    "Auto (full)" "submodule" "Node.js Modules"
   do
     echo "selected: ${item}"
     case $item in
@@ -98,14 +87,8 @@ chinachu_installer () {
       "submodule" )
         cmd="chinachu_installer_submodule"
         ;;
-      "Node.js Environment" )
-        cmd="chinachu_installer_node"
-        ;;
       "Node.js Modules" )
         cmd="chinachu_installer_node_modules"
-        ;;
-      "ffmpeg" )
-        cmd="chinachu_installer_ffmpeg"
         ;;
       * )
         cmd="chinachu_installer"
@@ -118,10 +101,9 @@ chinachu_installer () {
 }
 
 chinachu_installer_auto_full () {
+  chinachu_check_ffmpeg
   chinachu_installer_submodule
-  chinachu_installer_node
   chinachu_installer_node_modules
-  chinachu_installer_ffmpeg
 
   return 0
 }
@@ -133,74 +115,41 @@ chinachu_installer_submodule () {
   return 0
 }
 
-chinachu_installer_node () {
-  remove_dir "$NAVE_DIR"
-  ensure_dir "$NAVE_DIR"
-
-  echo "Installing Node using Nave..."
-  wget -O $NAVE_DIR/nave.sh https://raw.githubusercontent.com/isaacs/nave/v3.2.2/nave.sh
-  chmod a+x $NAVE_DIR/nave.sh
-  ${NAVE_DIR}/nave.sh install $NODE_VER
-  rm -fv ${NAVE_DIR}/node
-  ln -sv $NODE_PATH ${NAVE_DIR}/node
-  ln -sv $NPM_PATH ${NAVE_DIR}/npm
-
-  echo "done."
-
-  return 0
-}
-
 chinachu_installer_node_modules () {
+  if ! command -v node > /dev/null 2>&1; then
+    fail "Node.js 24.x is required. Install it before running the installer."
+  fi
+
+  local chinachu_node_major
+  chinachu_node_major=$(node -p 'process.versions.node.split(".")[0]') || \
+    fail "couldn't determine the Node.js version"
+  if [ "$chinachu_node_major" != "24" ]; then
+    fail "Node.js 24.x is required (current: $(node --version))."
+  fi
+
+  if ! command -v npm > /dev/null 2>&1; then
+    fail "npm is required. Install the npm version bundled with Node.js 24."
+  fi
+
   remove_dir node_modules
 
   echo "Installing Node Modules using NPM..."
 
-  npm ci
+  npm ci || fail "couldn't install Node.js modules"
 
   echo "done."
 
   return 0
 }
 
-chinachu_installer_ffmpeg () {
-  remove_dir "$USR_DIR/src/ffmpeg"
-  ensure_dir "$USR_DIR/src/ffmpeg"
-
-  cd $USR_DIR
-
-  MACHINE=`uname -m`
-  if [ ${MACHINE} == "aarch64" ] || [ ${MACHINE} == "arm64" ] || [ ${MACHINE} == "armv8l" ]; then
-    local FFMPEG_FN="ffmpeg-4.1.4-arm64-static"
-  elif [ ${MACHINE} == "armhf" ] || [ ${MACHINE} == "armv7l" ]; then
-    local FFMPEG_FN="ffmpeg-4.1.4-armhf-static"
-  elif [ `echo ${MACHINE} | grep 'arm'` ]; then
-    local FFMPEG_FN="ffmpeg-4.1.4-armel-static"
-  elif [ ${MACHINE} == "x86_64" ]; then
-    local FFMPEG_FN="ffmpeg-4.1.4-amd64-static"
-  else
-    local FFMPEG_FN="ffmpeg-4.1.4-i686-static"
+chinachu_check_ffmpeg () {
+  if ! command -v ffmpeg > /dev/null 2>&1; then
+    fail "ffmpeg is required. Install it system-wide before running the installer."
   fi
 
-  local FFMPEG_XZ="https://johnvansickle.com/ffmpeg/old-releases/${FFMPEG_FN}.tar.xz"
-
-  wget -O ${FFMPEG_FN}.tar.xz $FFMPEG_XZ
-  xz -dv "${FFMPEG_FN}.tar.xz"
-
-  tar -xvf "${FFMPEG_FN}.tar" -C bin --strip-components 1
-  rm -v "${FFMPEG_FN}.tar"
-
-  cd $CHINACHU_DIR
-
-  echo "Creating libav aliases..."
-
-  rm -rfv "$USR_DIR/bin/avconv"
-  rm -rfv "$USR_DIR/bin/avprobe"
-  ln -sv "$USR_DIR/bin/ffmpeg" "$USR_DIR/bin/avconv"
-  ln -sv "$USR_DIR/bin/ffprobe" "$USR_DIR/bin/avprobe"
-
-  echo "ffmpeg --> done."
-
-  return 0
+  if ! command -v ffprobe > /dev/null 2>&1; then
+    fail "ffprobe is required. Install it system-wide before running the installer."
+  fi
 }
 
 chinachu_updater () {

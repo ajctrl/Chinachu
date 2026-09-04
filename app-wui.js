@@ -6,8 +6,6 @@
 **/
 'use strict';
 
-process.env.PATH = `${__dirname}/usr/bin:${process.env.PATH}`;
-
 const CONFIG_FILE = __dirname + '/config.json';
 const RULES_FILE = __dirname + '/rules.json';
 const RESERVES_DATA_FILE = __dirname + '/data/reserves.json';
