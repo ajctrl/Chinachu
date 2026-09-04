@@ -143,10 +143,23 @@ P = Class.create(P, {
 							new chinachu.ui.CreateRuleByProgram(program.id);
 						}
 					},
+					'------------------------------------------',
 					{
 						label   : 'タイトルをコピー...',
 						onSelect: function() {
 							chinachu.ui.copyStr(program.title);
+						}
+					},
+					{
+						label   : '説明をコピー...',
+						onSelect: function() {
+							chinachu.ui.copyStr(program.detail);
+						}
+					},
+					{
+						label   : 'IDをコピー...',
+						onSelect: function() {
+							chinachu.ui.copyStr(program.id);
 						}
 					}
 					// 追加メニューはここに配置

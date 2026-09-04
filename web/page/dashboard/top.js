@@ -282,32 +282,6 @@ P = Class.create(P, {
 				},
 				'------------------------------------------',
 				{
-					label   : 'ツイート...',
-					onSelect: function () {
-						var left = (screen.width - 640) / 2;
-						var top  = (screen.height - 265) / 2;
-
-						var tweetWindow = window.open(
-							'https://twitter.com/share?url=&text=' + encodeURIComponent(chinachu.util.scotify(program)),
-							'chinachu-tweet-' + program.id,
-							'width=640,height=265,left=' + left + ',top=' + top + ',menubar=no'
-						);
-					}
-				},
-				'------------------------------------------',
-				{
-					label   : 'SCOT形式でコピー...',
-					onSelect: function (e) {
-						chinachu.ui.copyStr(chinachu.util.scotify(program));
-					}
-				},
-				{
-					label   : 'IDをコピー...',
-					onSelect: function () {
-						chinachu.ui.copyStr(program.id);
-					}
-				},
-				{
 					label   : 'タイトルをコピー...',
 					onSelect: function () {
 						chinachu.ui.copyStr(program.title);
@@ -319,26 +293,10 @@ P = Class.create(P, {
 						chinachu.ui.copyStr(program.detail);
 					}
 				},
-				'------------------------------------------',
 				{
-					label   : '関連サイト',
-					icon    : './icons/document-page-next.png',
+					label   : 'IDをコピー...',
 					onSelect: function () {
-						window.open("https://www.google.com/search?btnI=I'm+Feeling+Lucky&q=" + program.title);
-					}
-				},
-				{
-					label   : 'Google検索',
-					icon    : './icons/ui-search-field.png',
-					onSelect: function () {
-						window.open("https://www.google.com/search?q=" + program.title);
-					}
-				},
-				{
-					label   : 'Wikipedia',
-					icon    : './icons/book-open-text-image.png',
-					onSelect: function () {
-						window.open("https://ja.wikipedia.org/wiki/" + program.title);
+						chinachu.ui.copyStr(program.id);
 					}
 				}
 			];
