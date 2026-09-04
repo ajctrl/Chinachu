@@ -814,49 +814,18 @@
 					title: 'エラー',
 					text : '番組が見つかりませんでした'
 				});
+				this.modal.show();
 			} else {
-				this.modal = new flagrate.Modal({
-					title   : 'スキップ',
-					subtitle: this.program.title + ' #' + this.program.id,
-					text    : '自動予約された今回の番組をスキップしますか？',
-					buttons: [
-						{
-							label   : 'スキップ',
-							color   : '@red',
-							onSelect: function (e, modal) {
-								e.targetButton.disable();
-
-								var dummy = new Ajax.Request('./api/reserves/' + this.program.id + '/skip.json', {
-									method    : 'put',
-									onComplete: function () {
-										modal.close();
-									},
-									onSuccess: function () {
-										new flagrate.Modal({
-											title: '成功',
-											text : 'スキップを有効にしました。'
-										}).show();
-									},
-									onFailure: function (t) {
-										new flagrate.Modal({
-											title: '失敗',
-											text : 'スキップに失敗しました (' + t.status + ')'
-										}).show();
-									}
-								});
-							}.bind(this)
-						},
-						{
-							label   : 'キャンセル',
-							onSelect: function (e, modal) {
-								modal.close();
-							}
-						}
-					]
+				new Ajax.Request('./api/reserves/' + this.program.id + '/skip.json', {
+					method   : 'put',
+					onFailure: function (t) {
+						new flagrate.Modal({
+							title: '失敗',
+							text : 'スキップに失敗しました (' + t.status + ')'
+						}).show();
+					}
 				});
 			}
-
-			this.modal.show();
 
 			return this;
 		}
