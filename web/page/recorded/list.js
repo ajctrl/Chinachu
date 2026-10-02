@@ -15,6 +15,8 @@ P = Class.create(P, {
 	,
 	deinit: function() {
 
+		if (this.grid) this.grid.destroy();
+
 		document.stopObserving('chinachu:recorded', this.onNotify);
 
 		return this;
@@ -74,10 +76,11 @@ P = Class.create(P, {
 		this.view.content.className = '';
 		this.view.content.update();
 
-		this.grid = new flagrate.Grid({
+		this.grid = new ChinachuVirtualGrid({
 			multiSelect  : false,
 			disableSelect: true,
-			pagination   : true,
+			stateKey: 'recorded',
+			legacyPage: parseInt(this.self.query.page, 10) || 0,
 			fill         : true,
 			cols: [
 				{
@@ -115,16 +118,8 @@ P = Class.create(P, {
 			],
 			onClick: function(e, row) {
 				window.location.href = '#!/program/view/id=' + row.data.id + '/';
-			},
-			onRendered: function() {
-				this.app.pm._lastHash = '!/recorded/list/page=' + this.grid._pagePosition + '/';
-				history.replaceState(null, null, '#' + this.app.pm._lastHash);
-			}.bind(this)
+			}
 		}).insertTo(this.view.content);
-
-		if (this.self.query.page) {
-			this.grid._pagePosition = parseInt(this.self.query.page, 10);
-		}
 
 		this.drawMain();
 

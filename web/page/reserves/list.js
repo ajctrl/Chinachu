@@ -16,6 +16,8 @@ P = Class.create(P, {
 	,
 	deinit: function() {
 
+		if (this.grid) this.grid.destroy();
+
 		document.stopObserving('chinachu:reserves', this.onNotify);
 		this.closed = true;
 		this.descriptionSwitch.destroy();
@@ -60,10 +62,11 @@ P = Class.create(P, {
 		this.view.content.className = '';
 		this.view.content.update();
 
-		this.grid = new flagrate.Grid({
+		this.grid = new ChinachuVirtualGrid({
 			multiSelect  : false,
 			disableSelect: true,
-			pagination   : true,
+			stateKey: 'reserves',
+			legacyPage: parseInt(this.self.query.page, 10) || 0,
 			fill         : true,
 			cols: [
 				{
@@ -112,16 +115,8 @@ P = Class.create(P, {
 					width: 60
 				}
 			],
-			onClick: this.onRowClick.bind(this),
-			onRendered: function() {
-				this.app.pm._lastHash = '!/reserves/list/page=' + this.grid._pagePosition + '/';
-				history.replaceState(null, null, '#' + this.app.pm._lastHash);
-			}.bind(this)
+			onClick: this.onRowClick.bind(this)
 		}).insertTo(this.view.content);
-
-		if (this.self.query.page) {
-			this.grid._pagePosition = parseInt(this.self.query.page, 10);
-		}
 
 		this.drawMain();
 
@@ -237,12 +232,14 @@ P = Class.create(P, {
 				]
 			};
 
-			var details = document.createElement('a');
-			details.className = 'reserve-details';
-			details.href = '#!/program/view/id=' + encodeURIComponent(program.id) + '/';
-			details.textContent = '詳細';
-			details.addEventListener('click', function(event) { event.stopPropagation(); });
-			row.cell.details = { element: details };
+			row.cell.details = { createElement: function() {
+				var details = document.createElement('a');
+				details.className = 'reserve-details';
+				details.href = '#!/program/view/id=' + encodeURIComponent(program.id) + '/';
+				details.textContent = '詳細';
+				details.addEventListener('click', function(event) { event.stopPropagation(); });
+				return { entity: details, remove: function() { details.remove(); } };
+			} };
 			if (ChinachuReservationActions.isPending(program.id)) row.className += ' reserve-pending';
 
 			row.cell.type = {
@@ -342,11 +339,13 @@ P = Class.create(P, {
 
 			row.cell.datetime = {
 				sortAlt    : program.start,
-				element    : new chinachu.ui.DynamicTime({
-					tagName: 'div',
-					type   : 'full',
-					time   : program.start
-				}).entity
+				createElement: function() {
+					return new chinachu.ui.DynamicTime({
+						tagName: 'div',
+						type   : 'full',
+						time   : program.start
+					});
+				}
 			};
 
 			rows.push(row);

@@ -15,6 +15,8 @@ P = Class.create(P, {
 	,
 	deinit: function() {
 
+		if (this.grid) this.grid.destroy();
+
 		document.stopObserving('chinachu:recording', this.onNotify);
 
 		return this;
@@ -52,10 +54,11 @@ P = Class.create(P, {
 		this.view.content.className = '';
 		this.view.content.update();
 
-		this.grid = new flagrate.Grid({
+		this.grid = new ChinachuVirtualGrid({
 			multiSelect  : false,
 			disableSelect: true,
-			pagination   : true,
+			stateKey: 'recording',
+			legacyPage: parseInt(this.self.query.page, 10) || 0,
 			fill         : true,
 			cols: [
 				{
@@ -93,16 +96,8 @@ P = Class.create(P, {
 			],
 			onClick: function(e, row) {
 				window.location.href = '#!/program/view/id=' + row.data.id + '/';
-			},
-			onRendered: function() {
-				this.app.pm._lastHash = '!/recording/list/page=' + this.grid._pagePosition + '/';
-				history.replaceState(null, null, '#' + this.app.pm._lastHash);
-			}.bind(this)
+			}
 		}).insertTo(this.view.content);
-
-		if (this.self.query.page) {
-			this.grid._pagePosition = parseInt(this.self.query.page, 10);
-		}
 
 		this.drawMain();
 
@@ -220,11 +215,13 @@ P = Class.create(P, {
 
 			row.cell.datetime = {
 				sortAlt    : program.start,
-				element    : new chinachu.ui.DynamicTime({
-					tagName: 'div',
-					type   : 'full',
-					time   : program.start
-				}).entity
+				createElement: function() {
+					return new chinachu.ui.DynamicTime({
+						tagName: 'div',
+						type   : 'full',
+						time   : program.start
+					});
+				}
 			};
 
 			rows.push(row);

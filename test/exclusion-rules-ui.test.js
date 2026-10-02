@@ -45,6 +45,7 @@ function browser() {
 			createForm: function(options) { forms.push(options); return { element: {}, getResult: function() { return result; } }; },
 			Grid: function(options) {
 				this.options = options;
+				this.destroy = function() {};
 				this.selected = [];
 				this.insertTo = function() { return this; };
 				this.getSelectedRows = function() { return this.selected; };
@@ -92,6 +93,7 @@ describe('common exclusion rule GUI', function () {
 
 	it('loads, edits, refreshes and deletes exclusion rows without touching normal rules', function () {
 		const ctx = browser();
+		vm.runInContext('var ChinachuVirtualGrid = flagrate.Grid;', ctx);
 		vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/page/rules/list.js'), 'utf8'), ctx);
 		vm.runInContext(`
 			var edits = [];

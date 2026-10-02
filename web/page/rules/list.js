@@ -21,6 +21,8 @@ P = Class.create(P, {
 	,
 	deinit: function() {
 
+		if (this.grid) this.grid.destroy();
+
 		this.disposed = true;
 		document.stopObserving(this.ruleEvent, this.onNotify);
 
@@ -223,9 +225,10 @@ P = Class.create(P, {
 		this.view.content.update();
 		if (this.isExclusion) { this.view.title.update('共通除外ルール'); }
 
-		this.grid = new flagrate.Grid({
+		this.grid = new ChinachuVirtualGrid({
 			multiSelect: true,
-			pagination : true,
+			stateKey: this.isExclusion ? 'exclusion-rules' : 'rules',
+			legacyPage: parseInt(this.self.query.page, 10) || 0,
 			fill       : true,
 			cols: [
 				{

@@ -80,10 +80,12 @@ describe('browser display preferences and reservation descriptions', function() 
 			] } };
 			var flagrate = { Grid: function(options) {
 				this.options = options;
+				this.destroy = function() {};
 				this.insertTo = function() { return this; };
 				this.splice = function(start, count, rows) { this.rows = rows; };
 			} };
 		`, ctx);
+		vm.runInContext('var ChinachuVirtualGrid = flagrate.Grid;', ctx);
 		vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/page/reserves/list.js'), 'utf8'), ctx);
 		vm.runInContext('P.view = { content: { update: function() {} } }; P.self = { query: {} }; P.draw();', ctx);
 		assert.ok(!ctx.P.grid.rows[0].cell.title.html.includes('reserve-description'));
