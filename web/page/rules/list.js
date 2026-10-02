@@ -2,32 +2,71 @@ P = Class.create(P, {
 
 	init: function() {
 
+		this.isExclusion = this.self.query.kind === 'exclusion';
+		this.ruleResource = this.isExclusion ? 'exclusion-rules' : 'rules';
+		this.ruleEvent = 'chinachu:' + this.ruleResource;
+		this.exclusionRules = [];
+		this.disposed = false;
 		this.view.content.className = 'loading';
 
 		this.initToolbar();
 		this.draw();
 
 		this.onNotify = this.refresh.bindAsEventListener(this);
-		document.observe('chinachu:rules', this.onNotify);
+		document.observe(this.ruleEvent, this.onNotify);
+		if (this.isExclusion) { this.refresh(); }
 
 		return this;
 	}
 	,
 	deinit: function() {
 
-		document.stopObserving('chinachu:rules', this.onNotify);
+		this.disposed = true;
+		document.stopObserving(this.ruleEvent, this.onNotify);
 
 		return this;
 	}
 	,
 	refresh: function() {
 
-		this.drawMain();
-
+		if (this.isExclusion) {
+			new Ajax.Request('./api/exclusion-rules.json', {
+				method: 'get',
+				onSuccess: function(t) {
+					if (this.disposed) return;
+					this.exclusionRules = t.responseJSON;
+					this.drawMain();
+				}.bind(this),
+				onFailure: function(t) {
+					if (!this.disposed) new flagrate.Modal({ title: '失敗', text: '共通除外ルールを読み込めませんでした (' + t.status + ')' }).show();
+				}.bind(this)
+			});
+		} else {
+			this.drawMain();
+		}
 		return this;
 	}
 	,
+	getRules: function() {
+		return this.isExclusion ? this.exclusionRules : global.chinachu.rules;
+	}
+	,
 	initToolbar: function _initToolbar() {
+		this.view.toolbar.add({
+			key: 'rule-kind',
+			ui: new sakura.ui.Button({
+				label: this.isExclusion ? '通常ルールへ' : '共通除外ルールへ',
+				onClick: function() {
+					window.location.href = this.isExclusion ? '#!/rules/list/' : '#!/rules/list/kind=exclusion/';
+				}.bind(this)
+			})
+		});
+		if (this.isExclusion) {
+			this.view.toolbar.add({
+				key: 'refresh',
+				ui: new sakura.ui.Button({ label: '更新', onClick: this.refresh.bind(this) })
+			});
+		}
 
 		this.view.toolbar.add({
 			key: 'execute-scheduler',
@@ -45,10 +84,10 @@ P = Class.create(P, {
 		this.view.toolbar.add({
 			key: 'add',
 			ui : new sakura.ui.Button({
-				label  : 'ADD'.__(),
+				label  : this.isExclusion ? '共通除外ルールを追加' : 'ADD'.__(),
 				icon   : './icons/plus-circle.png',
 				onClick: function() {
-					new chinachu.ui.NewRule();
+					new chinachu.ui.NewRule(this.isExclusion);
 				}.bind(this)
 			})
 		});
@@ -59,7 +98,7 @@ P = Class.create(P, {
 				label  : 'EDIT'.__(),
 				icon   : './icons/hammer.png',
 				onClick: function() {
-					new chinachu.ui.EditRule(global.chinachu.rules.indexOf(this.grid.getSelectedRows().first().data));
+					new chinachu.ui.EditRule(this.getRules().indexOf(this.grid.getSelectedRows().first().data), this.isExclusion);
 				}.bind(this)
 			}).disable()
 		});
@@ -85,8 +124,11 @@ P = Class.create(P, {
 
 					var selected = this.grid.getSelectedRows();
 					var nums = [];
+					var rules = this.getRules();
+					var resource = this.ruleResource;
+					var refresh = this.refresh.bind(this);
 					selected.each(function(row) {
-						nums.push(global.chinachu.rules.indexOf(row.data));
+						nums.push(rules.indexOf(row.data));
 					});
 					nums.sort(function (a, b) {
 						return a - b;
@@ -119,9 +161,8 @@ P = Class.create(P, {
 
 					var main = function() {
 
-						document.stopObserving('chinachu:rules', main);
-
 						if (nums.length === 0) {
+							refresh();
 							modal.close();
 							return;
 						}
@@ -131,16 +172,16 @@ P = Class.create(P, {
 
 						modal.content.updateText('ルール#' + num.toString(10) + ' を削除しています...');
 
-						new Ajax.Request('./api/rules/' + num.toString(10) + '.json', {
+						new Ajax.Request('./api/' + resource + '/' + num.toString(10) + '.json', {
 							method    : 'delete',
-							onComplete: function() {
-								document.observe('chinachu:rules', main);
-							},
 							onSuccess: function() {
 
 								modal.content.updateText('ルール#' + num.toString(10) + ' を削除しました');
+								main();
 							},
 							onFailure: function(t) {
+								modal.close();
+								refresh();
 
 								new flagrate.Modal({
 									title: '失敗',
@@ -180,6 +221,7 @@ P = Class.create(P, {
 
 		this.view.content.className = '';
 		this.view.content.update();
+		if (this.isExclusion) { this.view.title.update('共通除外ルール'); }
 
 		this.grid = new flagrate.Grid({
 			multiSelect: true,
@@ -234,7 +276,7 @@ P = Class.create(P, {
 				},
 				{
 					key  : 'reserve_titles',
-					label: '対象タイトル'
+					label: this.isExclusion ? '除外するタイトル' : '対象タイトル'
 				},
 				{
 					key  : 'ignore_titles',
@@ -242,7 +284,7 @@ P = Class.create(P, {
 				},
 				{
 					key  : 'reserve_descriptions',
-					label: '対象説明文'
+					label: this.isExclusion ? '除外する説明文' : '対象説明文'
 				},
 				{
 					key  : 'ignore_descriptions',
@@ -252,11 +294,11 @@ P = Class.create(P, {
 					key  : 'recorded_format',
 					label: '録画ファイル名フォーマット'
 				}
-			],
+			].filter(function(col) { return !this.isExclusion || col.key !== 'recorded_format'; }.bind(this)),
 			onSelect  : this.updateToolbar.bind(this),
 			onDeselect: this.updateToolbar.bind(this),
 			onDblClick: function(e, row) {
-				new chinachu.ui.EditRule(global.chinachu.rules.indexOf(row.data));
+				new chinachu.ui.EditRule(this.getRules().indexOf(row.data), this.isExclusion);
 			}.bind(this)
 		}).insertTo(this.view.content);
 
@@ -269,7 +311,7 @@ P = Class.create(P, {
 
 		var rows = [];
 
-		global.chinachu.rules.each(function(rule, i) {
+		this.getRules().each(function(rule, i) {
 
 			var row = {
 				data: rule,
@@ -465,6 +507,7 @@ P = Class.create(P, {
 			this.grid.deselect(row);
 		}.bind(this));
 
+		this.updateToolbar();
 		return this;
 	}
 });

@@ -1,0 +1,12 @@
+{
+  "/": {
+    "script": "exclusion-rules",
+    "methods": ["get", "post"],
+    "types": ["json"]
+  },
+  "/:num": {
+    "script": "exclusion-rules",
+    "methods": ["get", "put", "delete"],
+    "types": ["json"]
+  }
+}

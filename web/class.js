@@ -1093,14 +1093,17 @@
 	});
 
 	ui.EditRule = Class.create({
-		initialize: function _init(ruleNum) {
+		initialize: function _init(ruleNum, isExclusion) {
 			this.num = ruleNum;
+			this.isExclusion = !!isExclusion;
 
 			this.create();
 
 			return this;
 		},
 		create: function _create() {
+			var isExclusion = this.isExclusion;
+			var resource = isExclusion ? 'exclusion-rules' : 'rules';
 			if (this.num === null) {
 				var modal = new flagrate.Modal({
 					title: 'エラー',
@@ -1109,7 +1112,7 @@
 			} else {
 				// フォームに表示させるルールを読み込む
 				var num = this.num;
-				new Ajax.Request('./api/rules/' + num + '.json', {
+				new Ajax.Request('./api/' + resource + '/' + num + '.json', {
 					method   : 'get',
 					onSuccess: function (t) {
 
@@ -1222,7 +1225,7 @@
 								},
 								{
 									key   : 'reserve_titles',
-									label : '対象タイトル',
+									label : isExclusion ? '除外するタイトル' : '対象タイトル',
 									input : {
 										type : formInputTypeStrings,
 										style: { width: '100%' },
@@ -1240,7 +1243,7 @@
 								},
 								{
 									key   : 'reserve_descriptions',
-									label : '対象説明文',
+									label : isExclusion ? '除外する説明文' : '対象説明文',
 									input : {
 										type : formInputTypeStrings,
 										style: { width: '100%' },
@@ -1274,11 +1277,12 @@
 										val  : !rule.isDisabled
 									}
 								}
-							]
+							].filter(function(field) { return !isExclusion || field.key !== 'recorded_format'; })
 						});
 
 						var modal = new flagrate.Modal({
-							title: 'ルール編集',
+							title: isExclusion ? '共通除外ルール編集' : 'ルール編集',
+							subtitle: isExclusion ? '一致した自動予約をスキップします。手動予約は対象外です。保存後、スケジューラー実行時に反映します。' : '',
 							element: form.element,
 							buttons: [
 								{
@@ -1288,6 +1292,11 @@
 										e.targetButton.disable();
 
 										var query = form.getResult();
+										if (isExclusion) {
+											['sid', 'category'].forEach(function(key) {
+												if (typeof rule[key] !== 'undefined') { query[key] = rule[key]; }
+											});
+										}
 
 										if (!query.duration.min) {
 											delete query.duration.min;
@@ -1312,6 +1321,7 @@
 
 										xhr.addEventListener('load', function () {
 											if (xhr.status === 200) {
+												if (isExclusion) { document.fire('chinachu:exclusion-rules'); }
 												flagrate.createModal({
 													title: '成功',
 													text : 'ルール変更に成功しました'
@@ -1325,7 +1335,7 @@
 											modal.close();
 										});
 
-										xhr.open('PUT', './api/rules/' + num + '.json');
+										xhr.open('PUT', './api/' + resource + '/' + num + '.json');
 										xhr.setRequestHeader('Content-Type', 'application/json');
 										xhr.send(JSON.stringify(query));
 									}
@@ -1340,6 +1350,7 @@
 						}).show();
 					}.bind(this),
 					onFailure: function(t) {
+						new flagrate.Modal({ title: '失敗', text: 'ルールを読み込めませんでした (' + t.status + ')' }).show();
 					}
 				});
 			}
@@ -1349,13 +1360,16 @@
 	});
 
 	ui.NewRule = Class.create({
-		initialize: function _init() {
+		initialize: function _init(isExclusion) {
+			this.isExclusion = !!isExclusion;
 
 			this.create();
 
 			return this;
 		},
 		create: function _create() {
+			var isExclusion = this.isExclusion;
+			var resource = isExclusion ? 'exclusion-rules' : 'rules';
 			if (false) { //のちにエラー処理を追加
 				var modal = new flagrate.Modal({
 					title: 'エラー',
@@ -1461,7 +1475,7 @@
 						},
 						{
 							key   : 'reserve_titles',
-							label : '対象タイトル',
+							label : isExclusion ? '除外するタイトル' : '対象タイトル',
 							input : {
 								type : formInputTypeStrings,
 								style: { width: '100%' }
@@ -1477,7 +1491,7 @@
 						},
 						{
 							key   : 'reserve_descriptions',
-							label : '対象説明文',
+							label : isExclusion ? '除外する説明文' : '対象説明文',
 							input : {
 								type : formInputTypeStrings,
 								style: { width: '100%' }
@@ -1508,11 +1522,12 @@
 								val  : true
 							}
 						}
-					]
+					].filter(function(field) { return !isExclusion || field.key !== 'recorded_format'; })
 				});
 
 				var modal = flagrate.createModal({
-					title: '新規作成',
+					title: isExclusion ? '共通除外ルールの新規作成' : '新規作成',
+					subtitle: isExclusion ? '一致した自動予約をスキップします。手動予約は対象外です。保存後、スケジューラー実行時に反映します。' : '',
 					element: form.element,
 					buttons: [
 						{
@@ -1546,6 +1561,7 @@
 
 								xhr.addEventListener('load', function () {
 									if (xhr.status === 201) {
+										if (isExclusion) { document.fire('chinachu:exclusion-rules'); }
 										flagrate.createModal({
 											title: '成功',
 											text : 'ルール作成に成功しました',
@@ -1559,7 +1575,7 @@
 									modal.close();
 								});
 
-								xhr.open('POST', './api/rules.json');
+								xhr.open('POST', './api/' + resource + '.json');
 								xhr.setRequestHeader('Content-Type', 'application/json');
 								xhr.send(JSON.stringify(query));
 							}
