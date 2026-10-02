@@ -42,6 +42,23 @@ describe('browser display preferences and reservation descriptions', function() 
 		vm.runInContext('first.destroy(); second.destroy(); pref.set(true);', ctx);
 		assert.equal(ctx.updates, 2);
 	});
+	it('synchronizes click action selectors and restores the selection if storage fails', function() {
+		const ctx = browser();
+		vm.runInContext(`
+			var first = ChinachuPreferences.createClickActionSelect(), second = ChinachuPreferences.createClickActionSelect();
+			var a = first.element.children[1], b = second.element.children[1];
+			a.value = 'skip'; a.handlers.change();
+		`,ctx);
+		assert.equal(ctx.b.value,'skip');
+		vm.runInContext("values['chinachu.reserves.clickAction'] = 'details'; events.storage({key:'chinachu.reserves.clickAction'});",ctx);
+		assert.equal(ctx.a.value,'details');
+		assert.equal(ctx.b.value,'details');
+		vm.runInContext("failStorage = true; a.value = 'skip'; a.handlers.change();",ctx);
+		assert.equal(ctx.a.value,'details');
+		assert.match(ctx.first.element.children[2].textContent,/保存できません/);
+		vm.runInContext("failStorage = false; first.destroy(); second.destroy(); ChinachuPreferences.setClickAction('skip');",ctx);
+		assert.equal(ctx.b.value,'details');
+	});
 	it('reports storage failure and restores the displayed choice', function() {
 		const ctx = browser();
 		vm.runInContext('var control = ChinachuPreferences.createSwitch(); failStorage = true; var input = control.element.children[0]; input.checked = true; input.handlers.change();', ctx);
@@ -55,6 +72,7 @@ describe('browser display preferences and reservation descriptions', function() 
 			Array.prototype.each = Array.prototype.forEach;
 			Array.prototype.invoke = function() { return []; };
 			String.prototype.escapeHTML = function() { return this.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+			var ChinachuReservationActions = { isPending: function() { return false; } };
 			var chinachu = { ui: { DynamicTime: function() { this.entity = {}; } } };
 			var global = { chinachu: { reserves: [
 				{ id: 'one', title: '番組', fullTitle: '番組', detail: '<img src=x onerror=alert(1)>', flags: [], channel: {}, seconds: 60, start: 1 },

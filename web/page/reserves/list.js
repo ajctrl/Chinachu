@@ -2,6 +2,7 @@ P = Class.create(P, {
 
 	init: function() {
 
+		this.closed = false;
 		this.view.content.className = 'loading';
 
 		this.initToolbar();
@@ -16,7 +17,9 @@ P = Class.create(P, {
 	deinit: function() {
 
 		document.stopObserving('chinachu:reserves', this.onNotify);
+		this.closed = true;
 		this.descriptionSwitch.destroy();
+		if (this.skipNotice) this.skipNotice.remove();
 
 		return this;
 	}
@@ -64,6 +67,9 @@ P = Class.create(P, {
 			fill         : true,
 			cols: [
 				{
+					key: 'details', label: '詳細', width: 60, disableSort: true
+				},
+				{
 					key  : 'type',
 					label: '放送波',
 					width: 45,
@@ -106,9 +112,7 @@ P = Class.create(P, {
 					width: 60
 				}
 			],
-			onClick: function(e, row) {
-				window.location.href = '#!/program/view/id=' + row.data.id + '/';
-			},
+			onClick: this.onRowClick.bind(this),
 			onRendered: function() {
 				this.app.pm._lastHash = '!/reserves/list/page=' + this.grid._pagePosition + '/';
 				history.replaceState(null, null, '#' + this.app.pm._lastHash);
@@ -124,6 +128,56 @@ P = Class.create(P, {
 		return this;
 	}
 	,
+	onRowClick: function(event, row) {
+		if (event.button && event.button !== 0) return;
+		if (event.target && event.target.closest && event.target.closest('a, button, input, select, .flagrate-grid-cell-menu')) return;
+		if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+		if (ChinachuPreferences.getClickAction() !== 'skip' || row.data.isManualReserved) {
+			window.location.href = '#!/program/view/id=' + row.data.id + '/';
+			return;
+		}
+		this.setProgramSkip(row.data, !row.data.isSkip);
+	},
+	setProgramSkip: function(program, skip) {
+		var current = global.chinachu.reserves.filter(function(item) { return item.id === program.id && item.start === program.start; })[0];
+		if (!current || current.isManualReserved) {
+			this.showSkipNotice('この番組の予約が変更されています。一覧を確認してください。');
+			return;
+		}
+		if (!!current.isSkip === skip) return;
+		ChinachuReservationActions.setSkip(current, skip, function(result) {
+			if (this.closed) return;
+			if (!result.ok) {
+				this.showSkipNotice('「' + program.title + '」の変更に失敗しました。' + (result.message || 'HTTP ' + result.status + '。一覧を確認して再操作してください。'));
+				return;
+			}
+			this.showSkipNotice('「' + program.title + '」' + (skip ? 'をスキップしました。' : 'のスキップを解除しました。'), function() {
+				this.setProgramSkip(program, !skip);
+			}.bind(this));
+		}.bind(this));
+	},
+	showSkipNotice: function(message, undo) {
+		if (this.skipNotice) this.skipNotice.remove();
+		var notice = this.skipNotice = document.createElement('div');
+		notice.className = 'reserve-skip-notice';
+		notice.setAttribute('role', 'status');
+		var text = document.createElement('span');
+		text.textContent = message;
+		notice.appendChild(text);
+		if (undo) {
+			var button = document.createElement('button');
+			button.type = 'button';
+			button.textContent = '元に戻す';
+			button.addEventListener('click', function() { notice.remove(); undo(); });
+			notice.appendChild(button);
+		}
+		var close = document.createElement('button');
+		close.type = 'button';
+		close.textContent = '閉じる';
+		close.addEventListener('click', function() { notice.remove(); });
+		notice.appendChild(close);
+		document.body.appendChild(notice);
+	},
 	drawMain: function() {
 
 		var rows = [];
@@ -139,6 +193,7 @@ P = Class.create(P, {
 		});
 
 		var showDescription = ChinachuPreferences.get();
+		var page = this;
 		programs.each(function(program, i) {
 
 			var row = {
@@ -181,6 +236,14 @@ P = Class.create(P, {
 					// 追加メニューはここに配置
 				]
 			};
+
+			var details = document.createElement('a');
+			details.className = 'reserve-details';
+			details.href = '#!/program/view/id=' + encodeURIComponent(program.id) + '/';
+			details.textContent = '詳細';
+			details.addEventListener('click', function(event) { event.stopPropagation(); });
+			row.cell.details = { element: details };
+			if (ChinachuReservationActions.isPending(program.id)) row.className += ' reserve-pending';
 
 			row.cell.type = {
 				sortAlt  : program.channel.type,
@@ -253,6 +316,7 @@ P = Class.create(P, {
 				titleHtml = '<div class="reserve-title">' + titleHtml + '</div><div class="reserve-description">' + String(program.detail).escapeHTML() + '</div>';
 			}
 
+			if (ChinachuReservationActions.isPending(program.id)) titleHtml = '<span class="reserve-pending-label">処理中… </span>' + titleHtml;
 			row.cell.title = {
 				className  : showDescription && program.detail ? 'reserve-description-cell' : '',
 				sortAlt    : program.title,

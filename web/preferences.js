@@ -14,7 +14,10 @@
 		listeners.push(listener);
 		return function() { listeners = listeners.filter(function(item) { return item !== listener; }); };
 	}
-	window.addEventListener('storage', function(event) { if (event.key === key || event.key === null) notify(); });
+	window.addEventListener('storage', function(event) {
+		if (event.key === key || event.key === null) notify();
+		if (event.key === clickKey || event.key === null) notifyClickAction();
+	});
 	function createSwitch(onChange) {
 		var label = document.createElement('label');
 		label.className = 'description-switch';
@@ -36,5 +39,40 @@
 		var unsubscribe = subscribe(function(value) { input.checked = value; if (onChange) onChange(value); });
 		return { element: label, destroy: unsubscribe };
 	}
-	window.ChinachuPreferences = { get: get, set: set, subscribe: subscribe, createSwitch: createSwitch };
+	var clickKey = 'chinachu.reserves.clickAction';
+	var clickListeners = [];
+	function getClickAction() {
+		try { return window.localStorage.getItem(clickKey) === 'skip' ? 'skip' : 'details'; } catch (error) { return 'details'; }
+	}
+	function notifyClickAction() { clickListeners.slice().forEach(function(listener) { listener(getClickAction()); }); }
+	function setClickAction(value) {
+		window.localStorage.setItem(clickKey, value === 'skip' ? 'skip' : 'details');
+		notifyClickAction();
+	}
+	function createClickActionSelect() {
+		var label = document.createElement('label');
+		label.className = 'reservation-click-setting';
+		label.appendChild(document.createTextNode('予約一覧のクリック動作 '));
+		var select = document.createElement('select');
+		[['details', '詳細を開く（初期値）'], ['skip', 'スキップを切り替える']].forEach(function(choice) {
+			var option = document.createElement('option');
+			option.value = choice[0];
+			option.textContent = choice[1];
+			select.appendChild(option);
+		});
+		select.value = getClickAction();
+		label.appendChild(select);
+		var error = document.createElement('span');
+		error.className = 'preference-error';
+		error.setAttribute('role', 'alert');
+		label.appendChild(error);
+		select.addEventListener('change', function() {
+			try { setClickAction(select.value); error.textContent = ''; }
+			catch (e) { select.value = getClickAction(); error.textContent = ' ブラウザに保存できませんでした。保存の許可設定を確認してください。'; }
+		});
+		var listener = function(value) { select.value = value; };
+		clickListeners.push(listener);
+		return { element: label, destroy: function() { clickListeners = clickListeners.filter(function(item) { return item !== listener; }); } };
+	}
+	window.ChinachuPreferences = { get: get, set: set, subscribe: subscribe, createSwitch: createSwitch, getClickAction: getClickAction, setClickAction: setClickAction, createClickActionSelect: createClickActionSelect };
 })();
