@@ -29,6 +29,7 @@ if (!fs.existsSync('./data/') || !fs.existsSync('./log/') || !fs.existsSync('./w
 const opts = require('opts');
 const { default: dateFormat } = require('dateformat');
 const chinachu = require('chinachu-common');
+const { buildCandidates } = require('./lib/reservation-planner');
 const mirakurun = new (require("mirakurun").default)();
 
 // 引数
@@ -165,48 +166,8 @@ function scheduler() {
 
 	log('TUNERS: ' + JSON.stringify(typeNum));
 
-	// matching
-	var matches = [];
-
-	schedule.forEach(function (ch) {
-		ch.programs.forEach(function (p) {
-			if (chinachu.isMatchedProgram(rules, p, config.normalizationForm)) {
-				matches.push(p);
-			}
-		});
-	});
-
-	reserves.forEach(function (reserve) {
-		var i, l;
-		if (reserve.isManualReserved) {
-			if (reserve.start + 86400000 > Date.now()) {
-				for (i = 0, l = matches.length; i < l; i++) {
-					if (matches[i].id === reserve.id) {
-						// ルールと重複していた場合、ルール予約が手動予約に優先するよう、matchesにpushせずreturnする
-						log('OVERRIDEBYRULE: ' + reserve.id + ' ' + dateFormat(new Date(reserve.start), 'isoDateTime') + ' [' + reserve.channel.name + '] ' + reserve.title);
-						return;
-					}
-				}
-				var isOneseg = reserve['1seg'] === true;
-				reserve = chinachu.getProgramById(reserve.id, schedule) || reserve;
-				reserve.isManualReserved = true;
-				if (isOneseg === true) {
-					reserve['1seg'] = true;
-				}
-				matches.push(reserve);
-			}
-			return;
-		}
-		if (reserve.isSkip) {
-			for (i = 0, l = matches.length; i < l; i++) {
-				if (matches[i].id === reserve.id) {
-					matches[i].isSkip = true;
-					break;
-				}
-			}
-			return;
-		}
-	});
+	// 予約対象を集めてから共通除外を判定し、保存済みの操作状態を引き継ぐ。
+	var matches = buildCandidates(schedule, rules, reserves, config);
 
 	// sort
 	matches.sort(function (a, b) {
@@ -217,6 +178,9 @@ function scheduler() {
 	var duplicateCount = 0;
 	for (i = 0; i < matches.length; i++) {
 		a = matches[i];
+
+		// 手動解除した予約は重複で削除せず、解除情報を維持する。
+		if (a.isSkip || a.autoSkipOverride) { continue; }
 
 		for (j = 0; j < matches.length; j++) {
 			var b = matches[j];
@@ -230,8 +194,8 @@ function scheduler() {
 			if (a.end !== b.end) { continue; }
 			if (a.title !== b.title) { continue; }
 
-			// 最終的にsidの若い方を選択させる
-			if (parseInt(a.channel.sid, 10) < parseInt(b.channel.sid, 10)) { continue; }
+			// 手動解除した予約を優先し、それ以外はsidの若い方を選択させる。
+			if (!b.autoSkipOverride && parseInt(a.channel.sid, 10) < parseInt(b.channel.sid, 10)) { continue; }
 
 			log('DUPLICATE: ' + a.id + ' ' + dateFormat(new Date(a.start), 'isoDateTime') + ' [' + a.channel.name + '] ' + a.title);
 			a.isDuplicate = true;

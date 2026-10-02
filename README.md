@@ -16,3 +16,5 @@ available in `PATH`, then install dependencies with `npm ci`. Chinachu does not
 install private copies of these tools. Both TCP and Unix socket connections to
 Mirakurun are supported. Socket.IO 2.x clients are not supported.
 
+
+Reservation keywords and automatic exclusion: [configuration and behavior](docs/auto-exclusion.md).

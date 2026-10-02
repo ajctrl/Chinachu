@@ -261,6 +261,26 @@ exports.isMatchedProgram = function (rules, program, nf) {
 	return false;
 };
 
+// 条件をすべて満たしたルールから、実際に一致したキーワードだけを収集する。
+exports.getProgramMatchInfo = function (rules, program, nf) {
+	var keywords = new Set();
+	var isMatched = false;
+	rules.forEach(function (rule) {
+		if (!exports.programMatchesRule(rule, program, nf)) { return; }
+		isMatched = true;
+		[['reserve_titles', program.fullTitle], ['reserve_descriptions', program.detail]].forEach(function (field) {
+			var text = field[1] || '';
+			if (nf) { text = text.normalize(nf); }
+			(rule[field[0]] || []).forEach(function (keyword) {
+				if (text.match(nf ? keyword.normalize(nf) : keyword) !== null) {
+					keywords.add(keyword);
+				}
+			});
+		});
+	});
+	return { isMatched: isMatched, keywords: Array.from(keywords) };
+};
+
 // 単体のルールとのマッチ判定
 exports.programMatchesRule = function (rule, program, nf, fullTitle_norm, detail_norm) {
 	var i, j, l, m, isFound;
@@ -272,7 +292,7 @@ exports.programMatchesRule = function (rule, program, nf, fullTitle_norm, detail
 			fullTitle_norm = program.fullTitle.normalize(nf);
 		}
 		if (!detail_norm) {
-			detail_norm = program.detail.normalize(nf);
+			detail_norm = (program.detail || '').normalize(nf);
 		}
 	}
 

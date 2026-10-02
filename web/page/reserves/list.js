@@ -81,6 +81,16 @@ P = Class.create(P, {
 					label: 'タイトル'
 				},
 				{
+					key  : 'matchedKeywords',
+					label: '一致キーワード',
+					width: 160
+				},
+				{
+					key  : 'excludedKeywords',
+					label: '除外ルール',
+					width: 160
+				},
+				{
 					key  : 'datetime',
 					label: '放送日時',
 					width: 210
@@ -239,6 +249,15 @@ P = Class.create(P, {
 				attribute  : {
 					title: program.fullTitle + ' - ' + program.detail
 				}
+			};
+
+			row.cell.matchedKeywords = {
+				text: (program.matchedKeywords || []).join('、')
+			};
+			row.cell.excludedKeywords = {
+				text: (program.excludedKeywords || []).map(function(keyword) {
+					return keyword + (program.autoSkipOverride ? '（手動解除）' : '');
+				}).join('、')
 			};
 
 			row.cell.duration = {

@@ -3,6 +3,8 @@
   "gid": "video",
   "mirakurunPath": "http+unix://%2Fvar%2Frun%2Fmirakurun.sock/",
 
+  "autoExclusionRules": [],
+
   "recordedDir" : "./recorded/",
 
   "vaapiEnabled": false,

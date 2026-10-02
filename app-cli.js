@@ -26,6 +26,7 @@ if (!fs.existsSync('./data/') || !fs.existsSync('./log/') || !fs.existsSync('./w
 
 // 追加モジュールのロード
 var chinachu   = require('chinachu-common');
+var reservationPlanner = require('./lib/reservation-planner');
 var opts       = require('opts');
 var dateFormat = require('dateformat').default;
 var Table      = require('easy-table');
@@ -498,7 +499,7 @@ function chinachuSkip() {
 
 	for (var i = 0, l = reserves.length; i < l; i++) {
 		if (target.id === reserves[i].id) {
-			reserves[i].isSkip = true;
+			reservationPlanner.skip(reserves[i]);
 			break;
 		}
 	}
@@ -534,7 +535,7 @@ function chinachuUnskip() {
 
 	for (var i = 0, l = reserves.length; i < l; i++) {
 		if (target.id === reserves[i].id) {
-			delete reserves[i].isSkip;
+			reservationPlanner.unskip(reserves[i]);
 			break;
 		}
 	}
