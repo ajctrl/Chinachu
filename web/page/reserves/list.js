@@ -197,7 +197,7 @@ P = Class.create(P, {
 		programs.each(function(program, i) {
 
 			var row = {
-				className: '',
+				className: showDescription ? 'reserve-description-row' : '',
 				data: program,
 				cell: {
 					id: {
@@ -288,7 +288,7 @@ P = Class.create(P, {
 			} else {
 				if (program.isSkip) {
 					titleHtml = '<span class="flag skip">スキップ</span>' + titleHtml;
-					row.className += ' disabled';
+					row.className += ' disabled reserve-skipped';
 
 					row.menuItems.unshift({
 						label   : 'スキップの取消...',
