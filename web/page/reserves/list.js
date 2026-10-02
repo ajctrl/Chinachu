@@ -16,6 +16,7 @@ P = Class.create(P, {
 	deinit: function() {
 
 		document.stopObserving('chinachu:reserves', this.onNotify);
+		this.descriptionSwitch.destroy();
 
 		return this;
 	}
@@ -29,6 +30,10 @@ P = Class.create(P, {
 	,
 	initToolbar: function _initToolbar() {
 
+		this.descriptionSwitch = ChinachuPreferences.createSwitch(this.refresh.bind(this));
+		var control = new sakura.ui.Element({ tagName: 'span' });
+		control.entity.appendChild(this.descriptionSwitch.element);
+		this.view.toolbar.add({ key: 'show-description', ui: control });
 		return this;
 	}
 	,
@@ -133,6 +138,7 @@ P = Class.create(P, {
 			return a.start - b.start;
 		});
 
+		var showDescription = ChinachuPreferences.get();
 		programs.each(function(program, i) {
 
 			var row = {
@@ -243,7 +249,12 @@ P = Class.create(P, {
 				row.className += ' disabled';
 			}
 
+			if (showDescription && program.detail) {
+				titleHtml = '<div class="reserve-title">' + titleHtml + '</div><div class="reserve-description">' + String(program.detail).escapeHTML() + '</div>';
+			}
+
 			row.cell.title = {
+				className  : showDescription && program.detail ? 'reserve-description-cell' : '',
 				sortAlt    : program.title,
 				html       : titleHtml,
 				attribute  : {

@@ -13,7 +13,7 @@ describe('common exclusion rule API', function () {
 	function request(method, rule, num, contentType = 'application/json') {
 		let status, body;
 		vm.runInNewContext(source, {
-			fs, define: { CONFIG_FILE: configFile },
+			fs, configStore: require('../lib/config-store'), define: { CONFIG_FILE: configFile },
 			request: { method, query: rule, param: typeof num === 'undefined' ? {} : { num: String(num) }, headers: { 'content-type': contentType } },
 			response: { head(code) { status = code; }, end(text) { body = JSON.parse(text); }, error(code) { status = code; } }
 		});

@@ -37,6 +37,7 @@ const { Bonjour } = require('bonjour-service');
 const chinachu = require('chinachu-common');
 const geoip = require('geoip-lite');
 const mirakurun = new (require("mirakurun").default)();
+const configStore = require('./lib/config-store');
 const { log } = require('./lib/logger');
 const { configureMirakurunClient } = require('./lib/mirakurun-client');
 const { createBasicAuthMiddleware } = require('./lib/socket-auth');
@@ -672,6 +673,7 @@ function httpServerMain(req, res, query) {
 				chinachu     : chinachu,
 				mirakurun    : mirakurun,
 				config       : config,
+				configStore  : configStore,
 				define: {
 					CONFIG_FILE        : CONFIG_FILE,
 					RULES_FILE         : RULES_FILE,

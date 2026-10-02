@@ -2,7 +2,8 @@
 	// Always merge into the current file, not the WUI's startup config snapshot.
 	var settings;
 	try {
-		settings = JSON.parse(fs.readFileSync(define.CONFIG_FILE, 'utf8'));
+		var originalText = fs.readFileSync(define.CONFIG_FILE, 'utf8');
+		settings = JSON.parse(originalText);
 	} catch (error) {
 		return response.error(500);
 	}
@@ -57,7 +58,7 @@
 	}
 	settings.autoExclusionRules = rules;
 	try {
-		fs.writeFileSync(define.CONFIG_FILE, JSON.stringify(settings, null, '  '));
+		configStore.save(define.CONFIG_FILE, JSON.stringify(settings, null, '  '), configStore.revision(originalText));
 	} catch (error) {
 		return response.error(500);
 	}

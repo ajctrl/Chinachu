@@ -18,3 +18,6 @@
 /usr/*
 /node
 /node_modules/*
+
+/config.json.bak
+/config.json.*.tmp

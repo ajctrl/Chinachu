@@ -1354,3 +1354,35 @@ div.sakura-alert-green {
 
 	div.sakura-alert > div:hover {
 		border-color    : transparent; }
+/* Browser preferences and server settings */
+.description-switch { display: inline-flex; align-items: center; gap: 5px; margin: 5px 10px; cursor: pointer; font-weight: normal; }
+.description-switch input { margin: 0; }
+.preference-error, .config-error, .config-field-error { color: #a51d38; }
+div.flagrate-grid td.reserve-description-cell { white-space: normal; }
+.reserve-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+div.flagrate-grid .reserve-description { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; max-height: 4.5em; margin-top: 4px; color: #666; font-size: 12px; }
+.config-settings { display: flex; flex-direction: column; overflow: hidden !important; }
+.config-status { flex: none; padding: 12px 16px; background: #f4f4f4; border-bottom: 1px solid #ddd; white-space: pre-wrap; max-height: 150px; overflow: auto; }
+.config-form { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
+.config-form > p, .config-group { max-width: 850px; }
+.config-group { margin: 0 0 24px; }
+.config-group h2 { font-size: 18px; margin: 4px 0 16px; border-bottom: 1px solid #ddd; padding-bottom: 8px; }
+.config-field { margin: 0 0 18px; }
+.config-field > label { display: block; margin-bottom: 5px; font-weight: bold; }
+.config-restart { display: inline-block; margin-left: 10px; padding: 2px 5px; font-size: 11px; font-weight: normal; background: #fff1da; color: #765011; border-radius: 3px; }
+.config-field input:not([type="checkbox"]), .config-field select, .config-field textarea { box-sizing: border-box; width: 100%; max-width: 650px; padding: 7px 9px; border: 1px solid #aaa; border-radius: 3px; background: #fff; color: #222; }
+.config-field textarea { min-height: 70px; }
+.config-field input[type="checkbox"], .description-switch input { width: 18px; height: 18px; accent-color: #b3005f; }
+.config-help { margin: 4px 0; color: #666; font-size: 12px; }
+.config-field-error { margin: 4px 0; }
+.config-field [aria-invalid="true"] { border-color: #a51d38 !important; outline: 1px solid #a51d38; }
+.config-json { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.config-json > p { padding: 10px 16px; margin: 0; }
+.config-json-editor { flex: 1; min-height: 150px; }
+.config-form[hidden], .config-json[hidden] { display: none; }
+.config-settings { background: #fff; color: #333; }
+.config-field input[role="switch"], .description-switch input[role="switch"] { appearance: none; -webkit-appearance: none; position: relative; width: 36px; height: 20px; border: 0; border-radius: 12px; background: #888; cursor: pointer; flex: none; vertical-align: middle; }
+.config-field input[role="switch"]::before, .description-switch input[role="switch"]::before { content: ''; position: absolute; left: 3px; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.config-field input[role="switch"]:checked, .description-switch input[role="switch"]:checked { background: #b3005f; }
+.config-field input[role="switch"]:checked::before, .description-switch input[role="switch"]:checked::before { transform: translateX(16px); }
+.config-field input[role="switch"]:focus-visible, .description-switch input[role="switch"]:focus-visible { outline: 2px solid #555; outline-offset: 2px; }
