@@ -52,7 +52,7 @@ describe('rule keyword operators', function () {
 		const rule = { reserve_titles: ['^ABC', '映画$'], reserve_titles_operator: 'and', reserve_descriptions: ['字幕'], reserve_fields_operator: 'or' };
 		const p = { ...program, fullTitle: 'ＡＢＣ 映画' };
 		assert.equal(chinachu.programMatchesRule(rule, p), false);
-		assert.deepEqual(chinachu.getProgramMatchInfo([rule], p, 'NFKC'), { isMatched: true, keywords: ['^ABC', '映画$'] });
+		assert.deepEqual(chinachu.getProgramMatchInfo([rule], p, 'NFKC'), { isMatched: true, keywords: ['^ABC', '映画$'], channels: [] });
 	});
 });
 

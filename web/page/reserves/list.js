@@ -386,9 +386,13 @@ P = Class.create(P, {
 				text: (program.matchedKeywords || []).join('、'),
 				postProcess: page.addKeywordTooltip
 			};
+			var exclusionReasons = (program.excludedKeywords || []).slice();
+			if ((program.excludedChannels || []).length) {
+				exclusionReasons.push('[' + program.channel.type + '] ' + (program.channel.name || program.channel.id));
+			}
 			row.cell.excludedKeywords = {
-				text: (program.excludedKeywords || []).map(function(keyword) {
-					return keyword + (program.autoSkipOverride ? '（手動解除）' : '');
+				text: exclusionReasons.map(function(reason) {
+					return reason + (program.autoSkipOverride ? '（手動解除）' : '');
 				}).join('、'),
 				postProcess: page.addKeywordTooltip
 			};

@@ -27,7 +27,7 @@ describe('reservation keyword matching', function () {
 			{ reserve_descriptions: ['紹介'], duration: { min: 0, max: 60 } }
 		];
 		assert.deepEqual(chinachu.getProgramMatchInfo(rules, program(), 'NFKC'), {
-			isMatched: true, keywords: ['ABC', '旅']
+			isMatched: true, keywords: ['ABC', '旅'], channels: []
 		});
 	});
 
@@ -39,9 +39,26 @@ describe('reservation keyword matching', function () {
 
 	it('handles missing detail and rules without keywords', function () {
 		assert.deepEqual(chinachu.getProgramMatchInfo([{ types: ['GR'] }], program({ detail: undefined }), 'NFKC'), {
-			isMatched: true, keywords: []
+			isMatched: true, keywords: [], channels: []
 		});
 		assert.equal(chinachu.getProgramMatchInfo([{ reserve_descriptions: ['旅'] }], program({ detail: undefined }), 'NFKC').isMatched, false);
+	});
+
+	it('collects channel evidence only from fully matching rules and deduplicates aliases', function() {
+		const p = program();
+		const nonmatching = [
+			{ channels: ['gr1'], reserve_titles: ['missing'] },
+			{ channels: ['gr1'], isDisabled: true },
+			{ channels: ['gr1'], ignore_descriptions: ['旅'] },
+			{ channels: ['gr1'], types: ['BS'] }
+		];
+		assert.deepEqual(chinachu.getProgramMatchInfo(nonmatching.concat([{ reserve_titles: ['ABC'] }]), p, 'NFKC'), {
+			isMatched: true, keywords: ['ABC'], channels: []
+		});
+		assert.deepEqual(chinachu.getProgramMatchInfo(nonmatching.concat([
+			{ channels: ['gr1', 'other'], reserve_titles: ['ABC'] },
+			{ channels: ['27'] }, { channels: ['GR_1'] }
+		]), p, 'NFKC'), { isMatched: true, keywords: ['ABC'], channels: ['gr1'] });
 	});
 });
 
@@ -63,6 +80,31 @@ describe('reservation exclusion state', function () {
 		assert.deepEqual(reserve.matchedKeywords, ['ABC']);
 		assert.deepEqual(reserve.excludedKeywords, ['再放送']);
 		assert.equal(p.isSkip, undefined);
+	});
+
+	it('persists channel-only exclusion evidence and clears it when no longer matched or manually reserved', function() {
+		const p = program();
+		function channelBuild(previous = [], channelExcludes = [{ channels: ['gr1'] }], epg = p) {
+			return planner.buildCandidates([{ programs: [epg] }], rules, JSON.parse(JSON.stringify(previous)), config, channelExcludes)[0];
+		}
+		let reserve = channelBuild();
+		assert.equal(reserve.isAutoSkip, true);
+		assert.deepEqual(reserve.excludedKeywords, []);
+		assert.deepEqual(reserve.excludedChannels, ['gr1']);
+		assert.equal(p.excludedChannels, undefined);
+		planner.unskip(reserve);
+		reserve = channelBuild([reserve]);
+		assert.equal(reserve.autoSkipOverride, true);
+		assert.deepEqual(reserve.excludedChannels, ['gr1']);
+		const changed = channelBuild([reserve], [{ channels: ['gr1'], reserve_titles: ['missing'] }]);
+		assert.equal(changed.isExcluded, false);
+		assert.deepEqual(changed.excludedChannels, []);
+		assert.deepEqual(channelBuild([reserve], []).excludedChannels, []);
+		const manual = channelBuild([{ ...reserve, isManualReserved: true }]);
+		assert.equal(manual.isManualReserved, true);
+		assert.deepEqual(manual.excludedChannels, []);
+		assert.equal(manual.isExcluded, undefined);
+		assert.equal(manual.isSkip, undefined);
 	});
 
 	it('preserves an override across updates, disappearing/reappearing exclusions and JSON reloads', function () {
@@ -203,6 +245,22 @@ describe('scheduler and CLI persistence', function () {
 		assert.equal(run('app-scheduler.js')[0].isAutoSkip, true);
 		files['excludes.json'] = '[]';
 		assert.equal(run('app-scheduler.js')[0].isSkip, undefined);
+	});
+
+	it('persists channel exclusion evidence through scheduler saves and CLI overrides', function() {
+		const p = program();
+		files['schedule.json'] = JSON.stringify([{ programs: [p] }]);
+		files['excludes.json'] = JSON.stringify([{ channels: ['27', 'GR_1'] }]);
+		const first = run('app-scheduler.js')[0];
+		assert.equal(first.isAutoSkip, true);
+		assert.deepEqual(first.excludedChannels, ['gr1']);
+		assert.deepEqual(first.excludedKeywords, []);
+		const restored = run('app-cli.js', { mode: 'unskip', id: p.id })[0];
+		assert.equal(restored.autoSkipOverride, true);
+		assert.deepEqual(restored.excludedChannels, ['gr1']);
+		assert.deepEqual(run('app-scheduler.js')[0].excludedChannels, ['gr1']);
+		files['excludes.json'] = '[]';
+		assert.deepEqual(run('app-scheduler.js')[0].excludedChannels, []);
 	});
 
 	it('persists unskip and re-skip through fresh scheduler and CLI instances', function () {

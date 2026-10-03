@@ -261,13 +261,15 @@ exports.isMatchedProgram = function (rules, program, nf) {
 	return false;
 };
 
-// 条件をすべて満たしたルールから、実際に一致したキーワードだけを収集する。
+// 条件をすべて満たしたルールから、一致したキーワードと対象チャンネルを収集する。
 exports.getProgramMatchInfo = function (rules, program, nf) {
 	var keywords = new Set();
+	var channels = new Set();
 	var isMatched = false;
 	rules.forEach(function (rule) {
 		if (!exports.programMatchesRule(rule, program, nf)) { return; }
 		isMatched = true;
+		if (rule.channels && rule.channels.length) { channels.add(program.channel.id); }
 		[['reserve_titles', program.fullTitle], ['reserve_descriptions', program.detail]].forEach(function (field) {
 			var text = field[1] || '';
 			if (nf) { text = text.normalize(nf); }
@@ -278,7 +280,7 @@ exports.getProgramMatchInfo = function (rules, program, nf) {
 			});
 		});
 	});
-	return { isMatched: isMatched, keywords: Array.from(keywords) };
+	return { isMatched: isMatched, keywords: Array.from(keywords), channels: Array.from(channels) };
 };
 
 // Positive keyword conditions shared by the scheduler and CLI search.

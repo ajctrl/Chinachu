@@ -64,6 +64,30 @@ function reservationList() {
 }
 
 describe('reservation list refresh', function() {
+	it('shows matched channel names alongside exclusion keywords and preserves override labels', function() {
+		const ctx = reservationList();
+		const p = ctx.global.chinachu.reserves[0];
+		p.excludedChannels = ['ch'];
+		p.isExcluded = p.isSkip = p.isAutoSkip = true;
+		ctx.P.refresh();
+		assert.equal(ctx.P.grid.rows[0].cell.excludedKeywords.text, '[GR] チャンネル');
+		assert.match(ctx.P.grid.rows[0].className, /reserve-skipped/);
+		p.excludedKeywords = ['再放送'];
+		ctx.P.refresh();
+		assert.equal(ctx.P.grid.rows[0].cell.excludedKeywords.text, '再放送、[GR] チャンネル');
+		planner.unskip(p);
+		ctx.P.refresh();
+		assert.equal(ctx.P.grid.rows[0].cell.excludedKeywords.text, '再放送（手動解除）、[GR] チャンネル（手動解除）');
+		assert.doesNotMatch(ctx.P.grid.rows[0].className, /reserve-skipped/);
+		p.channel.name = '<img src=x onerror=alert(1)>';
+		ctx.P.refresh();
+		assert.equal(ctx.P.grid.rows[0].cell.excludedKeywords.html, undefined);
+		assert.match(ctx.P.grid.rows[0].cell.excludedKeywords.text, /<img/);
+		p.excludedChannels = [];
+		ctx.P.refresh();
+		assert.equal(ctx.P.grid.rows[0].cell.excludedKeywords.text, '再放送（手動解除）');
+	});
+
 	it('retains unaffected rows and measured heights through skip, undo and failure', function() {
 		const ctx = reservationList();
 		const initial = ctx.P.grid.rows;
