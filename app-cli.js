@@ -180,6 +180,21 @@ opts.parse([
 		required   : false
 	},
 	{
+		long: 'reserve-fields-operator',
+		description: 'reserve_fields_operator (and/or)',
+		value: true
+	},
+	{
+		long: 'reserve-titles-operator',
+		description: 'reserve_titles_operator (and/or)',
+		value: true
+	},
+	{
+		long: 'reserve-descriptions-operator',
+		description: 'reserve_descriptions_operator (and/or)',
+		value: true
+	},
+	{
 		short      : 'title',
 		long       : 'titles',
 		description: 'タイトル',
@@ -289,6 +304,31 @@ if (opts.get('desc'))   rule.reserve_descriptions = opts.get('desc').split(',');
 if (opts.get('^desc'))  rule.ignore_descriptions  = opts.get('^desc').split(',');
 if (opts.get('flag'))   rule.reserve_flags        = opts.get('flag').split(',');
 if (opts.get('^flag'))  rule.ignore_flags         = opts.get('^flag').split(',');
+
+if (opts.get('reserve-fields-operator')) {
+	var operator = opts.get('reserve-fields-operator');
+	if (operator !== 'and' && operator !== 'or') {
+		console.error('--reserve-fields-operator must be and or or');
+		process.exit(1);
+	}
+	rule.reserve_fields_operator = operator;
+}
+if (opts.get('reserve-titles-operator')) {
+	var operator = opts.get('reserve-titles-operator');
+	if (operator !== 'and' && operator !== 'or') {
+		console.error('--reserve-titles-operator must be and or or');
+		process.exit(1);
+	}
+	rule.reserve_titles_operator = operator;
+}
+if (opts.get('reserve-descriptions-operator')) {
+	var operator = opts.get('reserve-descriptions-operator');
+	if (operator !== 'and' && operator !== 'or') {
+		console.error('--reserve-descriptions-operator must be and or or');
+		process.exit(1);
+	}
+	rule.reserve_descriptions_operator = operator;
+}
 
 // 動作モード
 switch (opts.get('mode')) {
@@ -678,7 +718,8 @@ function chinachuRuleList() {
 	var keys = [
 		'types', 'categories', 'channels', 'ignore_channels', 'reserve_flags',
 		'ignore_flags', 'hour', 'duration', 'reserve_titles', 'ignore_titles',
-		'reserve_descriptions', 'ignore_descriptions'
+		'reserve_descriptions', 'ignore_descriptions',
+		'reserve_fields_operator', 'reserve_titles_operator', 'reserve_descriptions_operator'
 	];
 
 	// output
@@ -1074,21 +1115,7 @@ function isMatchedProgram(program) {
 			}
 		}
 
-		// reserve_titles
-		if (rule.reserve_titles) {
-			var isFound = false;
-
-			for (var i = 0; i < rule.reserve_titles.length; i++) {
-				if (nf) {
-					if (title_norm.match(new RegExp(rule.reserve_titles[i].normalize(nf))) !== null) isFound = true;
-				}
-				else {
-					if (program.title.match(new RegExp(rule.reserve_titles[i])) !== null) isFound = true;
-				}
-			}
-
-			if (!isFound) return;
-		}
+		if (!chinachu.matchesRuleKeywords(rule, program.title, program.detail, nf)) return;
 
 		// ignore_descriptions
 		if (rule.ignore_descriptions) {
@@ -1102,24 +1129,6 @@ function isMatchedProgram(program) {
 					if (program.detail.match(new RegExp(rule.ignore_descriptions[i])) !== null) return;
 				}
 			}
-		}
-
-		// reserve_descriptions
-		if (rule.reserve_descriptions) {
-			if (!program.detail) return;
-
-			var isFound = false;
-
-			for (var i = 0; i < rule.reserve_descriptions.length; i++) {
-				if (nf) {
-					if (detail_norm.match(new RegExp(rule.reserve_descriptions[i].normalize(nf))) !== null) isFound = true;
-				}
-				else {
-					if (program.detail.match(new RegExp(rule.reserve_descriptions[i])) !== null) isFound = true;
-				}
-			}
-
-			if (!isFound) return;
 		}
 
 		// ignore_flags

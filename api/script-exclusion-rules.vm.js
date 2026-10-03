@@ -24,6 +24,10 @@
 		if (!/^application\/json(?:;|$)/i.test(request.headers['content-type'] || '')) return response.error(400);
 		rule = request.query;
 		if (!rule || typeof rule !== 'object' || Array.isArray(rule) || Object.keys(rule).length === 0) return response.error(400);
+		if (!rule || typeof rule !== 'object' || Array.isArray(rule)) return response.error(400);
+		if (['reserve_fields_operator', 'reserve_titles_operator', 'reserve_descriptions_operator'].some(function (key) {
+			return typeof rule[key] !== 'undefined' && rule[key] !== 'and' && rule[key] !== 'or';
+		})) return response.error(400);
 		// Reject malformed conditions and regular expressions before they reach the scheduler.
 		var arrays = ['types', 'categories', 'channels', 'ignore_channels', 'reserve_flags', 'ignore_flags',
 			'reserve_titles', 'ignore_titles', 'reserve_descriptions', 'ignore_descriptions'];

@@ -73,6 +73,25 @@ function browser() {
 }
 
 describe('common exclusion rule GUI', function () {
+	it('shows defaults in creation and restores saved keyword operators in editing', function () {
+		const ctx = browser();
+		const source = fs.readFileSync(path.join(__dirname, '../web/class.js'), 'utf8');
+		vm.runInContext(source.slice(source.indexOf('\tui.EditRule ='), source.indexOf('\tui.CreateRuleByProgram =')), ctx);
+		const keys = ['reserve_fields_operator', 'reserve_titles_operator', 'reserve_descriptions_operator'];
+		vm.runInContext('new ui.NewRule();', ctx);
+		for (const [i, key] of keys.entries()) {
+			assert.equal(ctx.forms[0].fields.find(f => f.key === key).input.val, i === 0 ? 'and' : 'or');
+		}
+		vm.runInContext("Object.assign(rules[0], { reserve_fields_operator: 'or', reserve_titles_operator: 'and', reserve_descriptions_operator: 'and' }); new ui.EditRule(0);", ctx);
+		for (const [i, key] of keys.entries()) {
+			assert.equal(ctx.forms[1].fields.find(f => f.key === key).input.val, i === 0 ? 'or' : 'and');
+		}
+		vm.runInContext("Object.assign(result, rules[0]); var editor = modals[modals.length - 1]; editor.buttons[0].onSelect({ targetButton: new Button({}) }, editor);", ctx);
+		for (const [i, key] of keys.entries()) {
+			assert.equal(ctx.requests.at(-1).body[key], i === 0 ? 'or' : 'and');
+		}
+	});
+
 	it('uses the shared form with separate endpoints and preserves normal rule editing', function () {
 		const ctx = browser();
 		const source = fs.readFileSync(path.join(__dirname, '../web/class.js'), 'utf8');

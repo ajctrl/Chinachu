@@ -277,6 +277,7 @@ P = Class.create(P, {
 					label: '長さ(分)',
 					width: 70
 				},
+				{ key: 'reserve_fields_operator', label: 'タイトル・説明文', width: 110 },
 				{
 					key  : 'reserve_titles',
 					label: this.isExclusion ? '除外するタイトル' : '対象タイトル'
@@ -438,9 +439,11 @@ P = Class.create(P, {
 				};
 			}
 
+			row.cell.reserve_fields_operator = { text: (rule.reserve_fields_operator || 'and').toUpperCase() };
+
 			if (rule.reserve_titles) {
 				row.cell.reserve_titles = {
-					text       : rule.reserve_titles.join(', '),
+					text       : '[' + (rule.reserve_titles_operator || 'or').toUpperCase() + '] ' + rule.reserve_titles.join(', '),
 					attribute  : { title: rule.reserve_titles.join(', ').truncate(256) }
 				};
 			} else {
@@ -466,7 +469,7 @@ P = Class.create(P, {
 
 			if (rule.reserve_descriptions) {
 				row.cell.reserve_descriptions = {
-					text       : rule.reserve_descriptions.join(', '),
+					text       : '[' + (rule.reserve_descriptions_operator || 'or').toUpperCase() + '] ' + rule.reserve_descriptions.join(', '),
 					attribute  : { title: rule.reserve_descriptions.join(', ').truncate(256) }
 				};
 			} else {

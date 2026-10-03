@@ -1224,6 +1224,42 @@
 									}
 								},
 								{
+									key: 'reserve_fields_operator',
+									label: 'タイトルと説明文の関係',
+									input: {
+										type: 'radios',
+										val: rule.reserve_fields_operator || 'and',
+										items: [
+											{ label: '両方に一致 (AND)', value: 'and' },
+											{ label: 'どちらかに一致 (OR)', value: 'or' }
+										]
+									}
+								},
+								{
+									key: 'reserve_titles_operator',
+									label: '対象タイトル内のキーワード',
+									input: {
+										type: 'radios',
+										val: rule.reserve_titles_operator || 'or',
+										items: [
+											{ label: 'すべてに一致 (AND)', value: 'and' },
+											{ label: 'いずれかに一致 (OR)', value: 'or' }
+										]
+									}
+								},
+								{
+									key: 'reserve_descriptions_operator',
+									label: '対象説明文内のキーワード',
+									input: {
+										type: 'radios',
+										val: rule.reserve_descriptions_operator || 'or',
+										items: [
+											{ label: 'すべてに一致 (AND)', value: 'and' },
+											{ label: 'いずれかに一致 (OR)', value: 'or' }
+										]
+									}
+								},
+								{
 									key   : 'reserve_titles',
 									label : isExclusion ? '除外するタイトル' : '対象タイトル',
 									input : {
@@ -1474,6 +1510,42 @@
 							}
 						},
 						{
+							key: 'reserve_fields_operator',
+							label: 'タイトルと説明文の関係',
+							input: {
+								type: 'radios',
+								val: 'and',
+								items: [
+									{ label: '両方に一致 (AND)', value: 'and' },
+									{ label: 'どちらかに一致 (OR)', value: 'or' }
+								]
+							}
+						},
+						{
+							key: 'reserve_titles_operator',
+							label: '対象タイトル内のキーワード',
+							input: {
+								type: 'radios',
+								val: 'or',
+								items: [
+									{ label: 'すべてに一致 (AND)', value: 'and' },
+									{ label: 'いずれかに一致 (OR)', value: 'or' }
+								]
+							}
+						},
+						{
+							key: 'reserve_descriptions_operator',
+							label: '対象説明文内のキーワード',
+							input: {
+								type: 'radios',
+								val: 'or',
+								items: [
+									{ label: 'すべてに一致 (AND)', value: 'and' },
+									{ label: 'いずれかに一致 (OR)', value: 'or' }
+								]
+							}
+						},
+						{
 							key   : 'reserve_titles',
 							label : isExclusion ? '除外するタイトル' : '対象タイトル',
 							input : {
@@ -1709,6 +1781,42 @@
 							input : {
 								type : 'number',
 								style: { width: '80px' }
+							}
+						},
+						{
+							key: 'reserve_fields_operator',
+							label: 'タイトルと説明文の関係',
+							input: {
+								type: 'radios',
+								val: 'and',
+								items: [
+									{ label: '両方に一致 (AND)', value: 'and' },
+									{ label: 'どちらかに一致 (OR)', value: 'or' }
+								]
+							}
+						},
+						{
+							key: 'reserve_titles_operator',
+							label: '対象タイトル内のキーワード',
+							input: {
+								type: 'radios',
+								val: 'or',
+								items: [
+									{ label: 'すべてに一致 (AND)', value: 'and' },
+									{ label: 'いずれかに一致 (OR)', value: 'or' }
+								]
+							}
+						},
+						{
+							key: 'reserve_descriptions_operator',
+							label: '対象説明文内のキーワード',
+							input: {
+								type: 'radios',
+								val: 'or',
+								items: [
+									{ label: 'すべてに一致 (AND)', value: 'and' },
+									{ label: 'いずれかに一致 (OR)', value: 'or' }
+								]
 							}
 						},
 						{

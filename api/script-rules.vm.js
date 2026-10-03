@@ -15,6 +15,10 @@
 					return response.error(400);
 				}
 			}
+			if (!newRule || typeof newRule !== 'object' || Array.isArray(newRule)) return response.error(400);
+			if (['reserve_fields_operator', 'reserve_titles_operator', 'reserve_descriptions_operator'].some(function (key) {
+				return typeof newRule[key] !== 'undefined' && newRule[key] !== 'and' && newRule[key] !== 'or';
+			})) return response.error(400);
 			if (JSON.stringify(newRule) === '{}') {
 				response.error(400);
 			} else {

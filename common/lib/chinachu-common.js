@@ -281,6 +281,31 @@ exports.getProgramMatchInfo = function (rules, program, nf) {
 	return { isMatched: isMatched, keywords: Array.from(keywords) };
 };
 
+// Positive keyword conditions shared by the scheduler and CLI search.
+exports.matchesRuleKeywords = function (rule, title, detail, nf) {
+	var results = [];
+	[['reserve_titles', title], ['reserve_descriptions', detail]].forEach(function (field) {
+		var keywords = rule[field[0]];
+		if (!keywords) { return; }
+		// Preserve explicit empty arrays in legacy rules; forms omit empty fields.
+		if (!keywords.length) {
+			if (!rule.reserve_fields_operator && !rule.reserve_titles_operator && !rule.reserve_descriptions_operator) {
+				results.push(false);
+			}
+			return;
+		}
+		var text = field[1];
+		if (typeof text !== 'string' || (field[0] === 'reserve_descriptions' && !text)) { results.push(false); return; }
+		if (nf) { text = text.normalize(nf); }
+		var matches = function (keyword) {
+			return text.match(nf ? keyword.normalize(nf) : keyword) !== null;
+		};
+		results.push(rule[field[0] + '_operator'] === 'and' ? keywords.every(matches) : keywords.some(matches));
+	});
+	return results.length === 0 || (rule.reserve_fields_operator === 'or' ?
+		results.some(function (value) { return value; }) : results.every(function (value) { return value; }));
+};
+
 // 単体のルールとのマッチ判定
 exports.programMatchesRule = function (rule, program, nf, fullTitle_norm, detail_norm) {
 	var i, j, l, m, isFound;
@@ -367,24 +392,7 @@ exports.programMatchesRule = function (rule, program, nf, fullTitle_norm, detail
 		if ((rule.duration.min > program.seconds) || (rule.duration.max < program.seconds)) { return false; }
 	}
 
-	// reserve_titles
-	if (rule.reserve_titles) {
-		isFound = false;
-
-		for (i = 0; i < rule.reserve_titles.length; i++) {
-			if (fullTitle_norm === null) {
-				console.log("program: " + JSON.stringify(program));
-			}
-			if (nf) {
-				if (fullTitle_norm.match(rule.reserve_titles[i].normalize(nf)) !== null) { isFound = true; }
-			}
-			else {
-				if (program.fullTitle.match(rule.reserve_titles[i]) !== null) { isFound = true; }
-			}
-		}
-
-		if (!isFound) { return false; }
-	}
+	if (!exports.matchesRuleKeywords(rule, program.fullTitle, program.detail, nf)) { return false; }
 
 	// ignore_titles
 	if (rule.ignore_titles) {
@@ -396,24 +404,6 @@ exports.programMatchesRule = function (rule, program, nf, fullTitle_norm, detail
 				if (program.fullTitle.match(rule.ignore_titles[i]) !== null) { return false; }
 			}
 		}
-	}
-
-	// reserve_descriptions
-	if (rule.reserve_descriptions) {
-		if (!program.detail) { return false; }
-
-		isFound = false;
-
-		for (i = 0; i < rule.reserve_descriptions.length; i++) {
-			if (nf) {
-				if (detail_norm.match(rule.reserve_descriptions[i].normalize(nf)) !== null) { isFound = true; }
-			}
-			else {
-				if (program.detail.match(rule.reserve_descriptions[i]) !== null) { isFound = true; }
-			}
-		}
-
-		if (!isFound) { return false; }
 	}
 
 	// ignore_descriptions

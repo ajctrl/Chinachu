@@ -27,6 +27,19 @@ describe('common exclusion rule API', function () {
 	});
 	afterEach(function () { fs.rmSync(dir, { recursive: true }); });
 
+	it('persists keyword operators and rejects invalid operators without writing', function () {
+		const rule = { reserve_titles: ['猫'], reserve_fields_operator: 'or', reserve_titles_operator: 'and', reserve_descriptions_operator: 'or' };
+		assert.equal(request('POST', rule).status, 201);
+		assert.deepEqual(request('GET', null, 0).body, rule);
+		const before = fs.readFileSync(configFile, 'utf8');
+		for (const key of ['reserve_fields_operator', 'reserve_titles_operator', 'reserve_descriptions_operator']) {
+			for (const value of ['xor', null, false, []]) {
+				assert.equal(request('PUT', { ...rule, [key]: value }, 0).status, 400);
+				assert.equal(fs.readFileSync(configFile, 'utf8'), before);
+			}
+		}
+	});
+
 	it('lists only exclusions and supports create, edit, enable, disable and delete across requests', function () {
 		assert.deepEqual(request('GET'), { status: 200, body: [] });
 		assert.equal(request('POST', { reserve_titles: ['再放送'], isEnabled: true }).status, 201);
