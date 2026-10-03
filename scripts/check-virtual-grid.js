@@ -1,6 +1,7 @@
 /* Optional browser regression check:
  * Install Playwright + Chromium separately, then run with NODE_PATH pointing to
  * that installation's node_modules: node scripts/check-virtual-grid.js
+ * Pass screen names (e.g. search recorded.search) to check only those screens.
  * Uses synthetic data and intercepted URLs; no DVR server or recordings touched.
  */
 'use strict';
@@ -64,28 +65,43 @@ async function run() {
 			};
 		});
 
-		for (const name of ['rules', 'reserves', 'recording', 'recorded']) {
+		for (const name of ['rules', 'reserves', 'recording', 'recorded', 'search', 'recorded.search']) {
+			if (process.argv.length > 2 && !process.argv.slice(2).includes(name)) continue;
+			const isSearch = name === 'search' || name === 'recorded.search';
+			const source = name === 'search' ? 'search/top' : name === 'recorded.search' ? 'recorded/search' : name + '/list';
+			const dataKey = isSearch ? 'recorded' : name;
 			await page.evaluate(name => {
 				window.P = Class.create({});
 				global.chinachu[name] = name === 'rules' ? new Array(10000).fill(null).map((_, i) => ({ reserve_titles: ['ルール ' + i] })) : makePrograms(10000);
-			}, name);
-			await page.addScriptTag({ content: read('web/page/' + name + '/list.js') });
-			await page.evaluate(() => {
+				global.chinachu.schedule = [{ programs: global.chinachu[name] }];
+				global.chinachu.status = {};
+			}, dataKey);
+			await page.addScriptTag({ content: read('web/page/' + source + '.js') });
+			await page.evaluate(({ name, isSearch }) => {
 				window.listPage = new P();
-				listPage.self = { query: {} };
+				// The old Firefox render callback encoded the query in place, so
+				// switching descriptions searched for percent escapes and lost rows.
+				Prototype.Browser.Gecko = name === 'search';
+				listPage.self = { query: isSearch ? { skip: 1, title: '番組', page: '2' } : {} };
 				listPage.view = { content: flagrate.createElement('div').setStyle({ position: 'relative', height: '100%' }).insertTo(document.getElementById('content')) };
 				listPage.updateToolbar = function() {};
-				listPage.draw();
-			});
+				if (isSearch) {
+					ChinachuPreferences.set(false, name);
+					window.searchToolbar = flagrate.createElement('div', { id: 'search-test-toolbar' }).insertTo(document.body);
+					listPage.view.toolbar = { add: option => searchToolbar.appendChild(option.ui.entity) };
+					listPage.init();
+				} else listPage.draw();
+			}, { name, isSearch });
 			await settle();
 			let state = await snapshot();
 			assert.ok(!state.pager, name + ': pager removed');
 			assert.ok(state.count > 0 && state.count < 100, name + ': bounded initial rows');
 			assert.equal(state.cached, state.count);
 			if (name === 'reserves' || name === 'recording') assert.equal(state.liveTimes, state.count);
+			if (isSearch) assert.ok(state.anchor.index >= 40, name + ': old page links become a scroll position');
 			if (name !== 'rules') {
 				const id = await page.evaluate(() => {
-					const row = listPage.grid._rows[0];
+					const row = listPage.grid._rows[listPage.grid._anchor().index];
 					row._tr.click();
 					row._last.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 400, clientY: 150 }));
 					return row.data.id;
@@ -94,7 +110,9 @@ async function run() {
 				assert.ok(await page.evaluate(() => !!document.querySelector('.flagrate-context-menu')));
 			}
 
-			await page.evaluate(() => listPage.grid._body.scrollTop = 150000);
+			// Stay inside a row: fractional browser heights can round a boundary
+			// scroll position into the preceding row after descriptions are shown.
+			await page.evaluate(() => listPage.grid._body.scrollTop = 150010);
 			await settle();
 			state = await snapshot();
 			assert.ok(state.coversViewport, name + ': middle viewport covered');
@@ -148,6 +166,26 @@ async function run() {
 				await settle();
 			}
 
+			if (isSearch) {
+				const anchor = state.anchor.key;
+				const hash = await page.evaluate(() => location.hash);
+				for (const checked of [true, false, true]) {
+					await page.locator('#search-test-toolbar input[role="switch"]').setChecked(checked);
+					await settle();
+					state = await snapshot();
+					assert.ok(state.count > 0 && state.count < 100 && state.coversViewport, name + ': descriptions keep results visible');
+					assert.equal(state.anchor.key, anchor, name + ': description switch preserves the visible program');
+					assert.equal(await page.evaluate(() => location.hash), hash, name + ': rendering does not rewrite the URL');
+					assert.equal(await page.evaluate(() => listPage.self.query.title), '番組', name + ': rendering does not encode the search term');
+					assert.equal(await page.evaluate(() => listPage.grid._rows.length), 10000);
+					assert.equal(await page.evaluate(() => !!listPage.grid.element.querySelector('.reserve-description')), checked);
+				}
+				await page.evaluate(() => { ChinachuPreferences.setDescriptionFontSize('16px'); document.fire('chinachu:schedule'); document.fire('chinachu:recorded'); });
+				await settle();
+				assert.equal((await snapshot()).anchor.key, anchor, name + ': font and data changes preserve the visible program');
+				assert.equal(await page.evaluate(() => listPage.grid.element.querySelector('.reserve-description').style.fontSize), '16px');
+			}
+
 			// Return from details recreates a page and restores the anchor and sort order.
 			await page.evaluate(name => listPage.grid.sort(name === 'rules' ? 'n' : 'datetime', false), name);
 			await settle();
@@ -167,11 +205,21 @@ async function run() {
 			state = await snapshot();
 			assert.ok(state.count < 100 && state.coversViewport, name + ': end viewport');
 			assert.ok(Math.abs(state.height - state.viewport - state.top) < 2, name + ': reaches the last row');
-			await page.evaluate(name => { global.chinachu[name] = []; listPage.drawMain(); }, name);
+			if (isSearch) {
+				await page.evaluate(() => { listPage.grid.destroy(); listPage.self.query.title = '^番組 1$'; listPage.draw(); });
+				await settle();
+				assert.equal(await page.evaluate(() => listPage.grid._rows.length), 1, name + ': new conditions filter results');
+				assert.equal((await snapshot()).anchor.index, 0, name + ': new conditions have an independent position');
+			}
+			await page.evaluate(name => { global.chinachu[name] = []; global.chinachu.schedule = []; listPage.drawMain(); }, dataKey);
 			await settle();
 			assert.equal((await snapshot()).count, 0);
 			assert.equal((await snapshot()).liveTimes, 0);
-			await page.evaluate(() => { listPage.grid.destroy(); listPage.view.content.remove(); });
+			await page.evaluate(isSearch => {
+				if (isSearch) { listPage.deinit(); searchToolbar.remove(); }
+				else listPage.grid.destroy();
+				listPage.view.content.remove();
+			}, isSearch);
 			console.log(name + ': 10,000 rows, scrolling, sorting, restoration and cleanup passed');
 		}
 		assert.deepEqual(errors, [], 'no browser errors');

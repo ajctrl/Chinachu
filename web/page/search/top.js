@@ -23,6 +23,8 @@ P = Class.create(P, {
 	,
 	deinit: function() {
 
+		if (this.grid) this.grid.destroy();
+
 		this.descriptionSwitch.destroy();
 		this.unsubscribeDescriptionFontSize();
 
@@ -33,7 +35,7 @@ P = Class.create(P, {
 	,
 	refresh: function() {
 
-		this.app.pm.realizeHash(true);
+		this.drawMain();
 
 		return this;
 	}
@@ -63,10 +65,13 @@ P = Class.create(P, {
 		this.view.content.className = '';
 		this.view.content.update();
 
-		this.grid = new flagrate.Grid({
+		this.grid = new ChinachuVirtualGrid({
 			multiSelect  : false,
 			disableSelect: true,
-			pagination   : true,
+			stateKey: 'search:' + JSON.stringify(Object.keys(this.self.query).sort().filter(function(key) {
+				return key !== 'page' && key !== 'skip';
+			}).map(function(key) { return [key, this.self.query[key]]; }, this)),
+			legacyPage: parseInt(this.self.query.page, 10) || 0,
 			fill         : true,
 			cols: [
 				{
@@ -104,31 +109,8 @@ P = Class.create(P, {
 			],
 			onClick: function(e, row) {
 				window.location.href = '#!/program/view/id=' + row.data.id + '/';
-			},
-			onRendered: function() {
-
-				this.self.query.page = this.grid._pagePosition;
-
-				if (Prototype.Browser.Gecko) {
-					if (typeof this.self.query.title !== 'undefined' && /^[%A-Z0-9]+$/.test(this.self.query.title) === false) {
-						this.self.query.title = encodeURIComponent(this.self.query.title);
-					}
-					if (typeof this.self.query.desc !== 'undefined' && /^[%A-Z0-9]+$/.test(this.self.query.desc) === false) {
-						this.self.query.desc = encodeURIComponent(this.self.query.desc);
-					}
-
-					location.hash = '!/search/top/' + Object.toQueryString(this.self.query) + '/';
-					this.app.pm._lastHash = location.hash.match(/^#(.+)$/)[1];
-				} else {
-					this.app.pm._lastHash = '!/search/top/' + Object.toQueryString(this.self.query) + '/';
-					history.replaceState(null, null, '#' + this.app.pm._lastHash);
-				}
-			}.bind(this)
+			}
 		}).insertTo(this.view.content);
-
-		if (this.self.query.page) {
-			this.grid._pagePosition = parseInt(this.self.query.page, 10);
-		}
 
 		if (!this.self.query.skip) {
 			this.viewSearchModal();
@@ -140,6 +122,8 @@ P = Class.create(P, {
 	}
 	,
 	drawMain: function() {
+
+		if (!this.grid) return this;
 
 		var time = new Date().getTime();
 
@@ -349,7 +333,7 @@ P = Class.create(P, {
 
 						this.self.query = Object.extend(this.self.query, result);
 						this.self.query.skip = 1;
-						this.self.query.page = 0;
+						delete this.self.query.page;
 
 						modal.close();
 

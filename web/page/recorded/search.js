@@ -15,6 +15,8 @@ P = Class.create(P, {
 	,
 	deinit: function() {
 
+		if (this.grid) this.grid.destroy();
+
 		this.descriptionSwitch.destroy();
 		this.unsubscribeDescriptionFontSize();
 
@@ -25,7 +27,7 @@ P = Class.create(P, {
 	,
 	refresh: function() {
 
-		this.app.pm.realizeHash(true);
+		this.drawMain();
 
 		return this;
 	}
@@ -55,10 +57,13 @@ P = Class.create(P, {
 		this.view.content.className = '';
 		this.view.content.update();
 
-		this.grid = new flagrate.Grid({
+		this.grid = new ChinachuVirtualGrid({
 			multiSelect  : false,
 			disableSelect: true,
-			pagination   : true,
+			stateKey: 'recorded.search:' + JSON.stringify(Object.keys(this.self.query).sort().filter(function(key) {
+				return key !== 'page' && key !== 'skip';
+			}).map(function(key) { return [key, this.self.query[key]]; }, this)),
+			legacyPage: parseInt(this.self.query.page, 10) || 0,
 			fill         : true,
 			cols: [
 				{
@@ -109,6 +114,8 @@ P = Class.create(P, {
 	}
 	,
 	drawMain: function() {
+
+		if (!this.grid) return this;
 
 		var rows = [];
 		var showDescription = ChinachuPreferences.get('recorded.search');
