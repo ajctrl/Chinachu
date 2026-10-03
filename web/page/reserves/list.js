@@ -21,7 +21,7 @@ P = Class.create(P, {
 		document.stopObserving('chinachu:reserves', this.onNotify);
 		this.closed = true;
 		this.descriptionSwitch.destroy();
-		if (this.skipNotice) this.skipNotice.remove();
+		this.clearSkipNotice();
 
 		return this;
 	}
@@ -151,8 +151,14 @@ P = Class.create(P, {
 			}.bind(this));
 		}.bind(this));
 	},
-	showSkipNotice: function(message, undo) {
+	clearSkipNotice: function() {
+		clearTimeout(this.skipNoticeTimer);
+		this.skipNoticeTimer = null;
 		if (this.skipNotice) this.skipNotice.remove();
+		this.skipNotice = null;
+	},
+	showSkipNotice: function(message, undo) {
+		this.clearSkipNotice();
 		var notice = this.skipNotice = document.createElement('div');
 		notice.className = 'reserve-skip-notice';
 		notice.setAttribute('role', 'status');
@@ -163,15 +169,26 @@ P = Class.create(P, {
 			var button = document.createElement('button');
 			button.type = 'button';
 			button.textContent = '元に戻す';
-			button.addEventListener('click', function() { notice.remove(); undo(); });
+			button.addEventListener('click', function() { this.clearSkipNotice(); undo(); }.bind(this));
 			notice.appendChild(button);
 		}
 		var close = document.createElement('button');
 		close.type = 'button';
 		close.textContent = '閉じる';
-		close.addEventListener('click', function() { notice.remove(); });
+		close.addEventListener('click', this.clearSkipNotice.bind(this));
 		notice.appendChild(close);
 		document.body.appendChild(notice);
+		this.skipNoticeTimer = setTimeout(this.clearSkipNotice.bind(this), 8000);
+	},
+	addKeywordTooltip: function(td, cell) {
+		td.addEventListener('mouseenter', function() {
+			if (cell.text && td.clientWidth > 0 && td.scrollWidth > td.clientWidth) {
+				td.setAttribute('title', cell.text);
+			} else {
+				td.removeAttribute('title');
+			}
+		});
+		td.addEventListener('mouseleave', function() { td.removeAttribute('title'); });
 	},
 	drawMain: function() {
 
@@ -309,11 +326,12 @@ P = Class.create(P, {
 				row.className += ' disabled';
 			}
 
+			if (ChinachuReservationActions.isPending(program.id)) titleHtml = '<span class="reserve-pending-spinner" role="status" aria-label="処理中" title="処理中"></span>' + titleHtml;
+
 			if (showDescription && program.detail) {
-				titleHtml = '<div class="reserve-title">' + titleHtml + '</div><div class="reserve-description">' + String(program.detail).escapeHTML() + '</div>';
+				titleHtml = '<div class="reserve-title">' + titleHtml + '</div><div class="reserve-description">' + String(program.detail).replace(/\r\n|\r|\n/g, ' ').escapeHTML() + '</div>';
 			}
 
-			if (ChinachuReservationActions.isPending(program.id)) titleHtml = '<span class="reserve-pending-label">処理中… </span>' + titleHtml;
 			row.cell.title = {
 				className  : showDescription && program.detail ? 'reserve-description-cell' : '',
 				sortAlt    : program.title,
@@ -324,12 +342,14 @@ P = Class.create(P, {
 			};
 
 			row.cell.matchedKeywords = {
-				text: (program.matchedKeywords || []).join('、')
+				text: (program.matchedKeywords || []).join('、'),
+				postProcess: page.addKeywordTooltip
 			};
 			row.cell.excludedKeywords = {
 				text: (program.excludedKeywords || []).map(function(keyword) {
 					return keyword + (program.autoSkipOverride ? '（手動解除）' : '');
-				}).join('、')
+				}).join('、'),
+				postProcess: page.addKeywordTooltip
 			};
 
 			row.cell.duration = {

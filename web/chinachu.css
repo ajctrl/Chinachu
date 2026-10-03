@@ -1203,42 +1203,51 @@ td.categories > div > span {
 td > div > div.dynamic-time {
 	line-height: inherit; }
 
-td > div > span.flag {
+td > div > span.flag,
+td > div > div.reserve-title > span.flag {
 	margin-right: 2px;
 	padding     : 1px 2px 0;
 	color       : #fff;
 	font-size   : 11px;
 	background  : #999; }
 
-td > div > span.flag.conflict {
+td > div > span.flag.conflict,
+td > div > div.reserve-title > span.flag.conflict {
 	background: #f00; }
 
-td > div > span.flag.manual {
+td > div > span.flag.manual,
+td > div > div.reserve-title > span.flag.manual {
 	background  : #000; }
 
-td > div > span.flag.新 {
+td > div > span.flag.新,
+td > div > div.reserve-title > span.flag.新 {
 	background  : #6ed02e; }
 
-td > div > span.flag.終 {
+td > div > span.flag.終,
+td > div > div.reserve-title > span.flag.終 {
 	background  : #d02e54; }
 
-td > div > span.flag.再 {
+td > div > span.flag.再,
+td > div > div.reserve-title > span.flag.再 {
 	background  : #2a45c0; }
 
-td > div > span.subtitle {
+td > div > span.subtitle,
+td > div > div.reserve-title > span.subtitle {
 	margin-left : 4px;
 	padding     : 1px 2px 0;
 	color       : #e95295;
 	font-size   : 11px;
 	font-weight : bold; }
 
-td > div > span.episode {
+td > div > span.episode,
+td > div > div.reserve-title > span.episode {
 	margin-left    : 2px;
 	padding        : 1px 2px 0;
 	color          : #d02e54;
 	font-size      : 11px; }
 
-td > div > span.id {
+td > div > span.id,
+td > div > div.reserve-title > span.id {
 	margin-left    : 4px;
 	color          : #aaa;
 	font-size      : 10px; }
@@ -1360,7 +1369,7 @@ div.sakura-alert-green {
 .preference-error, .config-error, .config-field-error { color: #a51d38; }
 div.flagrate-grid td.reserve-description-cell { white-space: normal; }
 .reserve-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-div.flagrate-grid .reserve-description { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; max-height: 4.5em; margin-top: 4px; color: #666; font-size: 12px; }
+div.flagrate-grid .reserve-description { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; white-space: normal; overflow-wrap: anywhere; line-height: 1.5; max-height: 3em; margin-top: 4px; color: #666; font-size: 12px; }
 .config-settings { display: flex; flex-direction: column; overflow: hidden !important; }
 .config-status { flex: none; padding: 12px 16px; background: #f4f4f4; border-bottom: 1px solid #ddd; white-space: pre-wrap; max-height: 150px; overflow: auto; }
 .config-form { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
@@ -1390,7 +1399,23 @@ div.flagrate-grid .reserve-description { display: -webkit-box; -webkit-box-orien
 .reservation-click-setting select { margin: 5px; padding: 6px; max-width: 100%; }
 .reserve-details { display: inline-block; padding: 1px 8px; border: 1px solid #aaa; border-radius: 3px; background: #fff; color: #333; text-decoration: none; }
 .reserve-details:hover { background: #eee; }
-div.flagrate-grid tr.reserve-pending > td { background: #fff1da; cursor: progress; }
+div.flagrate-grid tr.reserve-pending > td { background: #fff7e8; cursor: progress; }
+.reserve-pending-spinner {
+ display: inline-block;
+ box-sizing: border-box;
+ width: 12px;
+ height: 12px;
+ margin-right: 6px;
+ vertical-align: -1px;
+ border: 2px solid #d7b5c7;
+ border-top-color: #b3005f;
+ border-radius: 50%;
+ animation: reserve-pending-spin .7s linear infinite;
+}
+@keyframes reserve-pending-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+ .reserve-pending-spinner { animation: none; }
+}
 .reserve-skip-notice { position: fixed; z-index: 2000; bottom: 45px; left: 50%; transform: translateX(-50%); box-sizing: border-box; width: max-content; max-width: calc(100% - 24px); padding: 12px 16px; border: 1px solid #aaa; border-radius: 5px; background: #fff; color: #333; box-shadow: 0 2px 12px #0003; }
 .reserve-skip-notice button { margin-left: 12px; padding: 5px 8px; cursor: pointer; }
 
