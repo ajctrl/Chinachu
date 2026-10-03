@@ -115,7 +115,8 @@ P = Class.create(P, {
 					width: 60
 				}
 			],
-			onClick: this.onRowClick.bind(this)
+			onClick: this.onRowClick.bind(this),
+			onDblClick: this.onRowDoubleClick.bind(this)
 		}).insertTo(this.view.content);
 
 		this.drawMain();
@@ -127,15 +128,32 @@ P = Class.create(P, {
 		if (event.button && event.button !== 0) return;
 		if (event.target && event.target.closest && event.target.closest('a, button, input, select, .flagrate-grid-cell-menu')) return;
 		if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-		if (ChinachuPreferences.getClickAction() !== 'skip' || row.data.isManualReserved) {
+		if (ChinachuPreferences.getClickAction() !== 'skip') {
 			window.location.href = '#!/program/view/id=' + row.data.id + '/';
+			return;
+		}
+		if (event.detail > 1) return;
+		this.manualUnskipClick = row.data.isManualReserved && row.data.isSkip ? row.data : null;
+		if (row.data.isManualReserved && !row.data.isSkip) {
+			if (!ChinachuReservationActions.isPending(row.data.id)) {
+				this.showSkipNotice('手動予約をスキップするには、ダブルクリックしてください。', null, true);
+			}
 			return;
 		}
 		this.setProgramSkip(row.data, !row.data.isSkip);
 	},
+	onRowDoubleClick: function(event, row) {
+		if (ChinachuPreferences.getClickAction() !== 'skip' || !row.data.isManualReserved || row.data.isSkip) return;
+		if (event.button && event.button !== 0) return;
+		if (event.target && event.target.closest && event.target.closest('a, button, input, select, .flagrate-grid-cell-menu')) return;
+		if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+		// A fast unskip response must not turn the same double click into a new skip.
+		if (this.manualUnskipClick && this.manualUnskipClick.id === row.data.id && this.manualUnskipClick.start === row.data.start) return;
+		this.setProgramSkip(row.data, true);
+	},
 	setProgramSkip: function(program, skip) {
 		var current = global.chinachu.reserves.filter(function(item) { return item.id === program.id && item.start === program.start; })[0];
-		if (!current || current.isManualReserved) {
+		if (!current) {
 			this.showSkipNotice('この番組の予約が変更されています。一覧を確認してください。');
 			return;
 		}
@@ -157,28 +175,30 @@ P = Class.create(P, {
 		if (this.skipNotice) this.skipNotice.remove();
 		this.skipNotice = null;
 	},
-	showSkipNotice: function(message, undo) {
+	showSkipNotice: function(message, undo, isHint) {
 		this.clearSkipNotice();
 		var notice = this.skipNotice = document.createElement('div');
-		notice.className = 'reserve-skip-notice';
+		notice.className = 'reserve-skip-notice' + (isHint ? ' reserve-skip-hint' : '');
 		notice.setAttribute('role', 'status');
 		var text = document.createElement('span');
 		text.textContent = message;
 		notice.appendChild(text);
-		if (undo) {
+		if (undo && !isHint) {
 			var button = document.createElement('button');
 			button.type = 'button';
 			button.textContent = '元に戻す';
 			button.addEventListener('click', function() { this.clearSkipNotice(); undo(); }.bind(this));
 			notice.appendChild(button);
 		}
-		var close = document.createElement('button');
-		close.type = 'button';
-		close.textContent = '閉じる';
-		close.addEventListener('click', this.clearSkipNotice.bind(this));
-		notice.appendChild(close);
+		if (!isHint) {
+			var close = document.createElement('button');
+			close.type = 'button';
+			close.textContent = '閉じる';
+			close.addEventListener('click', this.clearSkipNotice.bind(this));
+			notice.appendChild(close);
+		}
 		document.body.appendChild(notice);
-		this.skipNoticeTimer = setTimeout(this.clearSkipNotice.bind(this), 8000);
+		this.skipNoticeTimer = setTimeout(this.clearSkipNotice.bind(this), isHint ? 3000 : 8000);
 	},
 	addKeywordTooltip: function(td, cell) {
 		td.addEventListener('mouseenter', function() {
@@ -299,27 +319,27 @@ P = Class.create(P, {
 						new chinachu.ui.Unreserve(program.id);
 					}
 				});
+			}
+			if (program.isSkip) {
+				row.menuItems.unshift({
+					label   : 'スキップの取消...',
+					icon    : './icons/tick-circle.png',
+					onSelect: function() {
+						new chinachu.ui.Unskip(program.id);
+					}
+				});
 			} else {
-				if (program.isSkip) {
-					titleHtml = '<span class="flag skip">スキップ</span>' + titleHtml;
-					row.className += ' disabled reserve-skipped';
-
-					row.menuItems.unshift({
-						label   : 'スキップの取消...',
-						icon    : './icons/tick-circle.png',
-						onSelect: function() {
-							new chinachu.ui.Unskip(program.id);
-						}
-					});
-				} else {
-					row.menuItems.unshift({
-						label   : 'スキップ...',
-						icon    : './icons/exclamation-red.png',
-						onSelect: function() {
-							new chinachu.ui.Skip(program.id);
-						}
-					});
-				}
+				row.menuItems.unshift({
+					label   : 'スキップ...',
+					icon    : './icons/exclamation-red.png',
+					onSelect: function() {
+						new chinachu.ui.Skip(program.id);
+					}
+				});
+			}
+			if (program.isSkip) {
+				titleHtml = '<span class="flag skip">スキップ</span>' + titleHtml;
+				row.className += ' disabled reserve-skipped';
 			}
 			if (program.isConflict) {
 				titleHtml = '<span class="flag conflict">競合</span>' + titleHtml;

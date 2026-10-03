@@ -6,7 +6,6 @@
 	
 	switch (request.method) {
 		case 'PUT':
-			if (program.isManualReserved) return response.error(400);
 			if (request.query.start !== undefined && Number(request.query.start) !== program.start) return response.error(409);
 			if (request.param.action !== 'skip' && request.param.action !== 'unskip') return response.error(400);
 			var cmd = '';

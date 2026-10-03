@@ -487,11 +487,6 @@ function chinachuSkip() {
 		process.exit(1);
 	}
 
-	if (target.isManualReserved) {
-		console.error('手動予約された番組はスキップできません。予約を解除してください。');
-		process.exit(1);
-	}
-
 	if (target.isSkip) {
 		console.error('既にスキップが有効になっています');
 		process.exit(1);

@@ -54,7 +54,7 @@
 		label.className = 'reservation-click-setting';
 		label.appendChild(document.createTextNode('予約一覧のクリック動作 '));
 		var select = document.createElement('select');
-		[['details', '詳細を開く（初期値）'], ['skip', 'スキップを切り替える']].forEach(function(choice) {
+		[['details', '詳細を開く（初期値）'], ['skip', 'スキップを切り替える（手動予約はスキップ時のみダブルクリック）']].forEach(function(choice) {
 			var option = document.createElement('option');
 			option.value = choice[0];
 			option.textContent = choice[1];

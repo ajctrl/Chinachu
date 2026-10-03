@@ -76,14 +76,83 @@ describe('reservation click actions', function() {
 		ctx.handlers.storage({ key: 'chinachu.reserves.clickAction' });
 		assert.equal(ctx.ChinachuPreferences.getClickAction(), 'details');
 	});
-	it('opens details by default and always opens details for manual reservations', function() {
+	it('opens details by default but ignores single clicks on unskipped manual reservations in skip mode', function() {
 		const ctx = browser();
 		ctx.P.onRowClick({}, {data:ctx.global.chinachu.reserves[0]});
 		assert.equal(ctx.window.location.href, '#!/program/view/id=one/');
-		ctx.ChinachuPreferences.setClickAction('skip');
 		ctx.P.onRowClick({}, {data:ctx.global.chinachu.reserves[2]});
 		assert.equal(ctx.window.location.href, '#!/program/view/id=manual/');
+		ctx.window.location.href = '#!/reserves/list/';
+		ctx.ChinachuPreferences.setClickAction('skip');
+		ctx.P.onRowClick({}, {data:ctx.global.chinachu.reserves[2]});
+		assert.equal(ctx.window.location.href, '#!/reserves/list/');
 		assert.equal(ctx.requests.length, 0);
+	});
+	it('skips manual reservations on double click, unskips on single click and supports undo', function() {
+		const ctx = browser();
+		ctx.ChinachuPreferences.setClickAction('skip');
+		const row = { data: ctx.global.chinachu.reserves[2] };
+		ctx.P.onRowClick({detail:1}, row);
+		ctx.P.onRowClick({detail:2}, row);
+		assert.equal(ctx.requests.length, 0);
+		ctx.P.onRowDoubleClick({detail:2}, row);
+		ctx.P.onRowDoubleClick({detail:2}, row);
+		assert.equal(ctx.requests.length, 1);
+		assert.match(ctx.requests[0].url, /manual\/skip.json$/);
+		complete(ctx, 0, true);
+		assert.equal(ctx.global.chinachu.reserves[2].isManualReserved, true);
+		assert.equal(ctx.global.chinachu.reserves[2].isSkip, true);
+		ctx.P.onRowClick({detail:1}, { data: ctx.global.chinachu.reserves[2] });
+		assert.match(ctx.requests[1].url, /manual\/unskip.json$/);
+		complete(ctx, 1, false);
+		assert.ok(!ctx.global.chinachu.reserves[2].isSkip);
+		ctx.notices.at(-1).undo();
+		complete(ctx, 2, true);
+		assert.equal(ctx.global.chinachu.reserves[2].isSkip, true);
+		ctx.notices.at(-1).undo();
+		complete(ctx, 3, false);
+		assert.equal(ctx.global.chinachu.reserves[2].isManualReserved, true);
+		assert.ok(!ctx.global.chinachu.reserves[2].isSkip);
+	});
+	it('does not re-skip a manual reservation when an unskip completes between the clicks', function() {
+		const ctx = browser();
+		ctx.ChinachuPreferences.setClickAction('skip');
+		ctx.global.chinachu.reserves[2].isSkip = true;
+		ctx.P.onRowClick({detail:1}, { data: ctx.global.chinachu.reserves[2] });
+		complete(ctx, 0, false);
+		const row = { data: ctx.global.chinachu.reserves[2] };
+		ctx.P.onRowClick({detail:2}, row);
+		ctx.P.onRowDoubleClick({detail:2}, row);
+		assert.equal(ctx.requests.length, 1);
+		assert.ok(!row.data.isSkip);
+		// A new double-click gesture can intentionally skip the reservation again.
+		ctx.P.onRowClick({detail:1}, row);
+		ctx.P.onRowClick({detail:2}, row);
+		ctx.P.onRowDoubleClick({detail:2}, row);
+		assert.equal(ctx.requests.length, 2);
+		assert.match(ctx.requests[1].url, /manual\/skip.json$/);
+	});
+	it('ignores double clicks in details mode, on automatic rows and on links or modified clicks', function() {
+		const ctx = browser();
+		const manual = { data: ctx.global.chinachu.reserves[2] };
+		ctx.P.onRowDoubleClick({}, manual);
+		ctx.ChinachuPreferences.setClickAction('skip');
+		ctx.P.onRowDoubleClick({}, { data: ctx.global.chinachu.reserves[0] });
+		for (const event of [{button:2}, {ctrlKey:true}, {metaKey:true}, {shiftKey:true}, {altKey:true}, {target:{closest:()=>true}}]) {
+			ctx.P.onRowDoubleClick(event, manual);
+		}
+		assert.equal(ctx.requests.length, 0);
+	});
+	it('does not toggle an automatic reservation twice during a double click', function() {
+		const ctx = browser();
+		ctx.ChinachuPreferences.setClickAction('skip');
+		ctx.P.onRowClick({detail:1}, { data: ctx.global.chinachu.reserves[0] });
+		complete(ctx, 0, true);
+		const row = { data: ctx.global.chinachu.reserves[0] };
+		ctx.P.onRowClick({detail:2}, row);
+		ctx.P.onRowDoubleClick({detail:2}, row);
+		assert.equal(ctx.requests.length, 1);
+		assert.equal(ctx.global.chinachu.reserves[0].isSkip, true);
 	});
 	it('skips immediately, restores through undo and preserves exclusion override metadata', function() {
 		const ctx = browser();
@@ -149,7 +218,7 @@ describe('reservation click actions', function() {
 });
 
 describe('reservation action API response', function() {
-	it('returns persisted state and guards manual/changed programs without running the CLI', function() {
+	it('returns persisted automatic and manual skip states and rejects changed programs or invalid actions', function() {
 		const dir=fs.mkdtempSync(path.join(os.tmpdir(),'chinachu-action-'));
 		const file=path.join(dir,'reserves.json');
 		const program={id:'one',title:'番組',start:100};
@@ -160,19 +229,27 @@ describe('reservation action API response', function() {
 				fs, define:{RESERVES_DATA_FILE:file}, data:{reserves:[{...program,isManualReserved:manual}]},
 				request:{method:'PUT',param:{id:'one',action},query:{start}},
 				chinachu:{getProgramById:(id,programs)=>programs.find(p=>p.id===id)||null},
-				child_process:{exec(cmd,cb) { executions++; const updated={...program};planner.skip(updated);fs.writeFileSync(file,JSON.stringify([updated]));cb(null); }},
+				child_process:{exec(cmd,cb) { executions++; const updated={...program,isManualReserved:manual,isSkip:action==='unskip'};planner[action](updated);fs.writeFileSync(file,JSON.stringify([updated]));cb(null); }},
 				response:{head(code){status=code;},end(text){body=JSON.parse(text);},error(code){status=code;}}
 			});
 			return {status,body};
 		}
 		try {
-			assert.equal(request('skip',100,true).status,400);
+			assert.equal(request('skip',999,true).status,409);
 			assert.equal(request('skip',999,false).status,409);
 			assert.equal(request('invalid',100,false).status,400);
 			assert.equal(executions,0);
 			const result=request('skip',100,false);
 			assert.equal(result.status,200);
 			assert.equal(result.body.program.isSkip,true);
+			const manual = request('skip',100,true);
+			assert.equal(manual.status,200);
+			assert.equal(manual.body.program.isSkip,true);
+			assert.equal(manual.body.program.isManualReserved,true);
+			const restored = request('unskip',100,true);
+			assert.equal(restored.status,200);
+			assert.ok(!restored.body.program.isSkip);
+			assert.equal(restored.body.program.isManualReserved,true);
 		} finally {fs.rmSync(dir,{recursive:true,force:true});}
 	});
 });

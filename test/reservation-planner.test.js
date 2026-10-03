@@ -120,6 +120,25 @@ describe('reservation exclusion state', function () {
 		assert.equal(reserve.isSkip, undefined);
 		assert.deepEqual(reserve.excludedKeywords, []);
 	});
+	it('preserves explicitly skipped manual reservations across EPG changes and missing EPG', function () {
+		const p = program();
+		let [reserve] = build(p, [Object.assign({}, p, { isManualReserved: true })]);
+		planner.skip(reserve);
+		for (let i = 0; i < 3; i++) {
+			[reserve] = build(Object.assign({}, p, { start: p.start + 60000, end: p.end + 60000 }), [reserve]);
+			assert.equal(reserve.isSkip, true);
+			assert.equal(reserve.isManualReserved, true);
+			assert.equal(reserve.isAutoSkip, undefined);
+			assert.deepEqual(reserve.excludedKeywords, []);
+		}
+		[reserve] = planner.buildCandidates([], [], [reserve], config);
+		assert.equal(reserve.isSkip, true);
+		planner.unskip(reserve);
+		[reserve] = build(p, [reserve]);
+		assert.equal(reserve.isSkip, undefined);
+		assert.equal(reserve.autoSkipOverride, undefined);
+		assert.equal(reserve.isManualReserved, true);
+	});
 
 	it('keeps ignore titles/descriptions excluding candidates and adds no candidates via exclusions', function () {
 		const p = program();
@@ -185,6 +204,24 @@ describe('scheduler and CLI persistence', function () {
 		assert.equal(run('app-scheduler.js')[0].isSkip, undefined);
 		assert.equal(run('app-cli.js', { mode: 'skip', id: p.id })[0].isSkip, true);
 		assert.equal(run('app-scheduler.js')[0].isSkip, true);
+	});
+	it('persists a manual skip and undo through real CLI and scheduler updates', function () {
+		const p = program();
+		files['schedule.json'] = JSON.stringify([{ programs: [p] }]);
+		files['reserves.json'] = JSON.stringify([Object.assign({}, p, { isManualReserved: true })]);
+		assert.equal(run('app-cli.js', { mode: 'skip', id: p.id })[0].isSkip, true);
+		for (let update = 0; update < 2; update++) {
+			const [reserve] = run('app-scheduler.js');
+			assert.equal(reserve.isSkip, true);
+			assert.equal(reserve.isManualReserved, true);
+			assert.equal(reserve.isAutoSkip, undefined);
+		}
+		const [restored] = run('app-cli.js', { mode: 'unskip', id: p.id });
+		assert.equal(restored.isManualReserved, true);
+		assert.equal(restored.isSkip, undefined);
+		const [reserve] = run('app-scheduler.js');
+		assert.equal(reserve.isSkip, undefined);
+		assert.equal(reserve.isManualReserved, true);
 	});
 
 	it('keeps excluded duplicates visible and does not allocate a tuner to them', function () {

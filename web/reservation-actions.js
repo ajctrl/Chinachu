@@ -35,7 +35,7 @@
 		});
 	}
 	function setSkip(program, skip, callback) {
-		if (program.isManualReserved || pending[program.id]) return false;
+		if (pending[program.id]) return false;
 		pending[program.id] = true;
 		queue.push({ id: program.id, start: program.start, skip: skip, callback: callback });
 		changed();

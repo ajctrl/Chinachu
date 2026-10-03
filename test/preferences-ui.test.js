@@ -76,7 +76,8 @@ describe('browser display preferences and reservation descriptions', function() 
 			var chinachu = { ui: { DynamicTime: function() { this.entity = {}; } } };
 			var global = { chinachu: { reserves: [
 				{ id: 'one', title: '番組', fullTitle: '番組', detail: '<img src=x onerror=alert(1)>', flags: [], channel: {}, seconds: 60, start: 1 },
-				{ id: 'two', title: '説明なし', flags: [], channel: {}, seconds: 60, start: 2 }
+				{ id: 'two', title: '説明なし', flags: [], channel: {}, seconds: 60, start: 2 },
+				{ id: 'manual', title: '手動予約', flags: [], channel: {}, seconds: 60, start: 3, isManualReserved: true, isSkip: true }
 			] } };
 			var flagrate = { Grid: function(options) {
 				this.options = options;
@@ -93,6 +94,11 @@ describe('browser display preferences and reservation descriptions', function() 
 		assert.match(ctx.P.grid.rows[0].cell.title.html, /&lt;img/);
 		assert.ok(!ctx.P.grid.rows[0].cell.title.html.includes('<img'));
 		assert.ok(!ctx.P.grid.rows[1].cell.title.html.includes('reserve-description'));
+		assert.match(ctx.P.grid.rows[2].className, /reserve-skipped/);
+		assert.match(ctx.P.grid.rows[2].cell.title.html, /class="flag skip"/);
+		assert.match(ctx.P.grid.rows[2].cell.title.html, /class="flag manual"/);
+		assert.equal(ctx.P.grid.rows[2].cell.details.createElement().entity.href, '#!/program/view/id=manual/');
+		assert.equal(typeof ctx.P.grid.options.onDblClick, 'function');
 		vm.runInContext('P.grid.options.onClick({}, P.grid.rows[0]);', ctx);
 		assert.equal(ctx.window.location.href, '#!/program/view/id=one/');
 	});

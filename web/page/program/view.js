@@ -84,30 +84,29 @@ P = Class.create(P, {
 						}
 					})
 				});
+			}
+			if (program.isSkip) {
+				this.view.toolbar.add({
+					key: null,
+					ui : new sakura.ui.Button({
+						label   : 'スキップの取消',
+						icon    : './icons/tick-circle.png',
+						onClick: function() {
+							new chinachu.ui.Unskip(program.id);
+						}
+					})
+				});
 			} else {
-				if (program.isSkip) {
-					this.view.toolbar.add({
-						key: null,
-						ui : new sakura.ui.Button({
-							label   : 'スキップの取消',
-							icon    : './icons/tick-circle.png',
-							onClick: function() {
-								new chinachu.ui.Unskip(program.id);
-							}
-						})
-					});
-				} else {
-					this.view.toolbar.add({
-						key: null,
-						ui : new sakura.ui.Button({
-							label   : 'スキップ',
-							icon    : './icons/exclamation-red.png',
-							onClick: function() {
-								new chinachu.ui.Skip(program.id);
-							}
-						})
-					});
-				}
+				this.view.toolbar.add({
+					key: null,
+					ui : new sakura.ui.Button({
+						label   : 'スキップ',
+						icon    : './icons/exclamation-red.png',
+						onClick: function() {
+							new chinachu.ui.Skip(program.id);
+						}
+					})
+				});
 			}
 		} else {
 			if (!program._isRecorded) {
@@ -216,7 +215,7 @@ P = Class.create(P, {
 				new sakura.ui.Alert({
 					title       : 'スキップ',
 					type        : 'yellow',
-					body        : 'この番組は自動録画予約されましたがスキップするように設定されています',
+					body        : 'この番組はスキップするように設定されています',
 					disableClose: true
 				}).render(this.view.content);
 			} else if (program.isConflict) {
