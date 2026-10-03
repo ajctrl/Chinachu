@@ -50,7 +50,19 @@ function browser() {
 				this.insertTo = function() { return this; };
 				this.getSelectedRows = function() { return this.selected; };
 				this.splice = function(a, b, rows) { var old = this.rows || []; this.rows = rows; this.selected = []; return old; };
-				this.deselect = function() {};
+				this.select = function(rows) {
+					rows.forEach(function(row) {
+						if (this.selected.indexOf(row) !== -1) return;
+						row.isSelected = true;
+						this.selected.push(row);
+						if (options.onSelect) options.onSelect({}, row);
+					}, this);
+				};
+				this.deselect = function(row) {
+					row.isSelected = false;
+					this.selected = this.selected.filter(function(item) { return item !== row; });
+					if (options.onDeselect) options.onDeselect({}, row);
+				};
 			}
 		};
 		var Ajax = { Request: function(url, options) {
@@ -69,6 +81,8 @@ function browser() {
 			};
 		}
 	`, context);
+	vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/channel-selector.js'), 'utf8'), context);
+	vm.runInContext('var ChinachuChannelSelector = window.ChinachuChannelSelector;', context);
 	return context;
 }
 
@@ -138,5 +152,82 @@ describe('common exclusion rule GUI', function () {
 		vm.runInContext("P.view.toolbar.one('rule-kind').options.onClick(); P.deinit();", ctx);
 		assert.equal(ctx.window.location.href, '#!/rules/list/');
 		assert.equal(ctx.handlers['chinachu:exclusion-rules'], undefined);
+		assert.equal(ctx.handlers['chinachu:schedule'], undefined);
 	});
+
+	it('shows channel names after schedule loading, preserves raw IDs and updates on renaming', function() {
+		const ctx = browser();
+		vm.runInContext('var ChinachuVirtualGrid = flagrate.Grid;', ctx);
+		vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/page/rules/list.js'), 'utf8'), ctx);
+		vm.runInContext(`
+			global.chinachu.rules = [{ channels: ['station', 'missing'], ignore_channels: ['BS_211'] }, {}];
+			global.chinachu.schedule = [];
+			P.self = { query: {} };
+			P.view = {
+				content: { update: function() {} }, title: { update: function() {} },
+				toolbar: { controls: {}, add: function(item) { this.controls[item.key] = item.ui; }, one: function(key) { return this.controls[key]; } }
+			};
+			P.init();
+		`, ctx);
+		assert.equal(ctx.P.grid.rows[0].cell.channels.text, 'station, missing');
+		vm.runInContext(`
+			global.chinachu.schedule = [{ id: 'station', name: '<b>BS11</b>', type: 'BS', channel: 'BS09_0', sid: 211 }];
+			document.fire('chinachu:schedule');
+		`, ctx);
+		assert.equal(ctx.P.grid.rows[0].cell.channels.text, '[BS] <b>BS11</b>, missing');
+		assert.equal(ctx.P.grid.rows[0].cell.channels.html, undefined);
+		assert.equal(ctx.P.grid.rows[0].cell.ignore_channels.text, 'BS_211（[BS] <b>BS11</b>）');
+		assert.match(ctx.P.grid.rows[0].cell.channels.attribute.title, /ID: station, missing/);
+		assert.equal(ctx.P.grid.rows[1].cell.channels.text, 'CH指定なし');
+		assert.equal(ctx.P.grid.rows[1].cell.ignore_channels.text, '除外なし');
+		vm.runInContext(`global.chinachu.schedule[0].name = '新しい局名'; document.fire('chinachu:schedule');`, ctx);
+		assert.equal(ctx.P.grid.rows[0].cell.channels.text, '[BS] 新しい局名, missing');
+		assert.deepEqual(Array.from(ctx.global.chinachu.rules[0].channels), ['station', 'missing']);
+		vm.runInContext('P.deinit();', ctx);
+		assert.equal(ctx.handlers['chinachu:schedule'], undefined);
+	});
+
+	for (const isExclusion of [false, true]) {
+		it('retains single and multiple selections across schedule updates for ' + (isExclusion ? 'exclusion' : 'normal') + ' rules', function() {
+			const ctx = browser();
+			ctx.isExclusion = isExclusion;
+			vm.runInContext('var ChinachuVirtualGrid = flagrate.Grid;', ctx);
+			vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/page/rules/list.js'), 'utf8'), ctx);
+			vm.runInContext(`
+				rules = [{ channels: ['station'] }, { ignore_channels: ['station'] }, {}];
+				global.chinachu.rules = rules;
+				global.chinachu.schedule = [{ id: 'station', name: 'BS11', type: 'BS', channel: 'BS09_0', sid: 211 }];
+				P.self = { query: { kind: isExclusion ? 'exclusion' : undefined } };
+				P.view = {
+					content: { update: function() {} }, title: { update: function() {} },
+					toolbar: { controls: {}, add: function(item) { this.controls[item.key] = item.ui; }, one: function(key) { return this.controls[key]; } }
+				};
+				P.init();
+				P.grid.select([P.grid.rows[1]]);
+				document.fire('chinachu:schedule');
+			`, ctx);
+			assert.equal(ctx.P.grid.getSelectedRows().length, 1);
+			assert.equal(ctx.P.grid.getSelectedRows()[0], ctx.P.grid.rows[1]);
+			assert.equal(ctx.P.grid.getSelectedRows()[0].data, ctx.rules[1]);
+			assert.equal(ctx.P.view.toolbar.one('edit').disabled, false);
+			assert.equal(ctx.P.view.toolbar.one('delete').disabled, false);
+			vm.runInContext(`
+				P.grid.select([P.grid.rows[2]]);
+				// Sorting changes display order, so selection must follow rule identity.
+				P.grid.rows.reverse();
+				global.chinachu.schedule[0].name = '新しい局名';
+				document.fire('chinachu:schedule');
+			`, ctx);
+			assert.deepEqual(Array.from(ctx.P.grid.getSelectedRows(), row => row.data), [ctx.rules[1], ctx.rules[2]]);
+			assert.ok(ctx.P.grid.getSelectedRows().every(row => row.isSelected && ctx.P.grid.rows.includes(row)));
+			assert.equal(ctx.P.grid.rows[1].cell.ignore_channels.text, '[BS] 新しい局名');
+			assert.equal(ctx.P.view.toolbar.one('edit').disabled, true);
+			assert.equal(ctx.P.view.toolbar.one('delete').disabled, false);
+			// A rule change continues to clear selection, avoiding actions on stale rules.
+			vm.runInContext('document.fire(P.ruleEvent);', ctx);
+			assert.equal(ctx.P.grid.getSelectedRows().length, 0);
+			assert.equal(ctx.P.view.toolbar.one('edit').disabled, true);
+			assert.equal(ctx.P.view.toolbar.one('delete').disabled, true);
+		});
+	}
 });

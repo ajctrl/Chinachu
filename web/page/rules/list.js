@@ -14,6 +14,8 @@ P = Class.create(P, {
 
 		this.onNotify = this.refresh.bindAsEventListener(this);
 		document.observe(this.ruleEvent, this.onNotify);
+		this.onSchedule = function() { this.drawMain(true); }.bindAsEventListener(this);
+		document.observe('chinachu:schedule', this.onSchedule);
 		if (this.isExclusion) { this.refresh(); }
 
 		return this;
@@ -25,6 +27,7 @@ P = Class.create(P, {
 
 		this.disposed = true;
 		document.stopObserving(this.ruleEvent, this.onNotify);
+		document.stopObserving('chinachu:schedule', this.onSchedule);
 
 		return this;
 	}
@@ -249,13 +252,13 @@ P = Class.create(P, {
 				},
 				{
 					key  : 'channels',
-					label: 'ch',
-					width: 70
+					label: '対象CH',
+					width: 180
 				},
 				{
 					key  : 'ignore_channels',
-					label: '無視ch',
-					width: 70
+					label: '無視CH',
+					width: 180
 				},
 				{
 					key  : 'reserve_flags',
@@ -311,9 +314,16 @@ P = Class.create(P, {
 		return this;
 	}
 	,
-	drawMain: function() {
+	drawMain: function(preserveSelection) {
 
+		// Schedule updates only change channel labels; keep selection by rule identity.
+		var selectedRules = preserveSelection === true ? this.grid.getSelectedRows().map(function(row) {
+			return row.data;
+		}) : [];
 		var rows = [];
+		function channelName(value) {
+			return ChinachuChannelSelector.format(value, global.chinachu.schedule);
+		}
 
 		this.getRules().each(function(rule, i) {
 
@@ -358,29 +368,29 @@ P = Class.create(P, {
 				};
 			}
 
-			if (rule.channels) {
+			if (rule.channels && rule.channels.length) {
 				row.cell.channels = {
-					text       : rule.channels.join(', '),
-					attribute  : { title: rule.channels.join(', ').truncate(256) }
+					text       : rule.channels.map(channelName).join(', '),
+					attribute  : { title: (rule.channels.map(channelName).join(', ') + '\nID: ' + rule.channels.join(', ')).truncate(256) }
 				};
 			} else {
 				row.cell.channels = {
 					className: 'default',
 					sortKey  : 0,
-					text     : 'any'
+					text     : 'CH指定なし'
 				};
 			}
 
-			if (rule.ignore_channels) {
+			if (rule.ignore_channels && rule.ignore_channels.length) {
 				row.cell.ignore_channels = {
-					text       : rule.ignore_channels.join(', '),
-					attribute  : { title: rule.ignore_channels.join(', ').truncate(256) }
+					text       : rule.ignore_channels.map(channelName).join(', '),
+					attribute  : { title: (rule.ignore_channels.map(channelName).join(', ') + '\nID: ' + rule.ignore_channels.join(', ')).truncate(256) }
 				};
 			} else {
 				row.cell.ignore_channels = {
 					className: 'default',
 					sortKey  : 0,
-					text     : 'none'
+					text     : '除外なし'
 				};
 			}
 
@@ -512,6 +522,9 @@ P = Class.create(P, {
 		this.grid.splice(0, void 0, rows).each(function(row) {
 			this.grid.deselect(row);
 		}.bind(this));
+		if (selectedRules.length) {
+			this.grid.select(rows.filter(function(row) { return selectedRules.indexOf(row.data) !== -1; }));
+		}
 
 		this.updateToolbar();
 		return this;

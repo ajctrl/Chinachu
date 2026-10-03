@@ -126,28 +126,11 @@
 	// inputType
 	var formInputTypeChannels = {
 		create: function () {
-			return flagrate.createTokenizer({
-				placeholder: '...',
-				tokenize: function (input) {
-					var candidates = global.chinachu.schedule.pluck('id').concat(global.chinachu.schedule.pluck('channel'));
-
-					var i, l;
-					for (i = 0, l = global.chinachu.schedule.length; i < l; i++) {
-						candidates.push(global.chinachu.schedule[i]['type'] + '_' + global.chinachu.schedule[i]['sid']);
-					}
-
-					for (i = 0, l = candidates.length; i < l; i++) {
-						if (input.match(/^[a-z0-9_]+$/i) === null) {
-							candidates[i] = null;
-						} else if (candidates[i].match(new RegExp('^' + input)) === null) {
-							candidates[i] = null;
-						}
-					}
-
-					candidates = candidates.compact();
-
-					return candidates;
-				}
+			return ChinachuChannelSelector.create({
+				element: flagrate.createElement('div'),
+				getChannels: function () { return global.chinachu.schedule; },
+				emptyText: this.emptyText,
+				label: this.emptyText === '除外なし' ? '無視CH' : '対象CH'
 			});
 		},
 		getVal: function () {
@@ -1155,6 +1138,7 @@
 									label: '無視CH',
 									input: {
 										type : formInputTypeChannels,
+										emptyText: '除外なし',
 										style: { width: '100%' },
 										val  : rule.ignore_channels
 									}
@@ -1446,6 +1430,7 @@
 							label: '無視CH',
 							input: {
 								type : formInputTypeChannels,
+								emptyText: '除外なし',
 								style: { width: '100%' }
 							}
 						},
@@ -1720,6 +1705,7 @@
 							label: '無視CH',
 							input: {
 								type : formInputTypeChannels,
+								emptyText: '除外なし',
 								style: { width: '100%' }
 							}
 						},
