@@ -1,14 +1,14 @@
 (function () {
-	// Always merge into the current file, not the WUI's startup config snapshot.
-	var settings;
+	// Read fresh files for every request, including legacy rules before migration.
+	var settings, snapshot;
 	try {
 		var originalText = fs.readFileSync(define.CONFIG_FILE, 'utf8');
 		settings = JSON.parse(originalText);
+		snapshot = excludesStore.read(define.EXCLUDES_FILE, settings, fs);
 	} catch (error) {
 		return response.error(500);
 	}
-	var rules = settings.autoExclusionRules || [];
-	if (!Array.isArray(rules)) return response.error(500);
+	var rules = snapshot.rules;
 	var hasNum = typeof request.param.num !== 'undefined';
 	var num = Number(request.param.num);
 	if (hasNum && (!/^\d+$/.test(request.param.num) || !Number.isSafeInteger(num) || !rules[num])) {
@@ -24,7 +24,6 @@
 		if (!/^application\/json(?:;|$)/i.test(request.headers['content-type'] || '')) return response.error(400);
 		rule = request.query;
 		if (!rule || typeof rule !== 'object' || Array.isArray(rule) || Object.keys(rule).length === 0) return response.error(400);
-		if (!rule || typeof rule !== 'object' || Array.isArray(rule)) return response.error(400);
 		if (['reserve_fields_operator', 'reserve_titles_operator', 'reserve_descriptions_operator'].some(function (key) {
 			return typeof rule[key] !== 'undefined' && rule[key] !== 'and' && rule[key] !== 'or';
 		})) return response.error(400);
@@ -60,11 +59,10 @@
 	} else {
 		return response.error(405);
 	}
-	settings.autoExclusionRules = rules;
 	try {
-		configStore.save(define.CONFIG_FILE, JSON.stringify(settings, null, '  '), configStore.revision(originalText));
+		excludesStore.save(define.EXCLUDES_FILE, rules, snapshot.revision, define.CONFIG_FILE);
 	} catch (error) {
-		return response.error(500);
+		return response.error(error.status || 500);
 	}
 	response.head(request.method === 'POST' ? 201 : 200);
 	response.end(JSON.stringify(rule || {}));

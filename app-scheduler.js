@@ -10,6 +10,7 @@ const PID_FILE = __dirname + '/data/scheduler.pid';
 
 const CONFIG_FILE = __dirname + '/config.json';
 const RULES_FILE = __dirname + '/rules.json';
+const EXCLUDES_FILE = __dirname + '/excludes.json';
 const RESERVES_DATA_FILE = __dirname + '/data/reserves.json';
 const SCHEDULE_DATA_FILE = __dirname + '/data/schedule.json';
 
@@ -30,6 +31,7 @@ const opts = require('opts');
 const { default: dateFormat } = require('dateformat');
 const chinachu = require('chinachu-common');
 const { buildCandidates } = require('./lib/reservation-planner');
+const excludesStore = require('./lib/excludes-store');
 const mirakurun = new (require("mirakurun").default)();
 
 // 引数
@@ -47,6 +49,7 @@ opts.parse([
 const pkg = require("./package.json");
 const config = require(CONFIG_FILE);
 const rules = JSON.parse(fs.readFileSync(RULES_FILE, { encoding: 'utf8' }) || '[]');
+const excludes = excludesStore.read(EXCLUDES_FILE, config, fs).rules;
 let reserves = null;//まだ読み込まない
 let tuners = null;
 
@@ -167,7 +170,7 @@ function scheduler() {
 	log('TUNERS: ' + JSON.stringify(typeNum));
 
 	// 予約対象を集めてから共通除外を判定し、保存済みの操作状態を引き継ぐ。
-	var matches = buildCandidates(schedule, rules, reserves, config);
+	var matches = buildCandidates(schedule, rules, reserves, config, excludes);
 
 	// sort
 	matches.sort(function (a, b) {

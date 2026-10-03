@@ -49,7 +49,7 @@ P = Class.create(P, {
 			panel.setAttribute('aria-label', index ? 'JSON編集' : '設定フォーム');
 		});
 		this.jsonPanel.hidden = true;
-		this.node('p', this.jsonPanel, 'フォーム対象外の設定も編集できます。サーバー設定は保存後にサービスの再起動が必要です（共通除外ルールは次回の予約計画から反映）。');
+		this.node('p', this.jsonPanel, 'フォーム対象外の設定も編集できます。サーバー設定は保存後にサービスの再起動が必要です。共通除外ルールは「ルール」画面から編集できます。');
 		this.editorElement = this.node('div', this.jsonPanel, undefined, 'config-json-editor');
 		this.node('p', this.formPanel, '表示設定はこのブラウザに即時保存します。');
 		this.addDisplaySettings(this.formPanel);
@@ -211,7 +211,6 @@ P = Class.create(P, {
 		if (errors.length) return;
 		var changed = this.data.original === null ? ['設定ファイルの修復'] : ChinachuConfig.changes(this.data.original, this.data.config);
 		if (!changed.length) { this.message('サーバー設定に変更はありません。' + (this.restartPending ? '保存済みの変更を反映するにはサービスの再起動が必要です。' : '')); return; }
-		var restart = changed.filter(function(key) { return key !== 'autoExclusionRules'; });
 		var labels = changed.map(function(key) {
 			var field = ChinachuConfig.fields.filter(function(f) { return f.key === key; })[0];
 			return field ? field.label : key === 'operGotifyFormat' ? '通知メッセージ' : key;
@@ -220,11 +219,11 @@ P = Class.create(P, {
 		var page = this;
 		flagrate.createModal({
 			title: 'サーバー設定の保存',
-			text: '変更項目: ' + labels.join('、') + '\n' + (restart.length ? '保存後、変更を反映するにはサービスの再起動が必要です。' : '共通除外ルールは次回の予約計画から反映されます。') + '\n直前の設定を config.json.bak にバックアップします。',
+			text: '変更項目: ' + labels.join('、') + '\n保存後、変更を反映するにはサービスの再起動が必要です。\n直前の設定を config.json.bak にバックアップします。',
 			buttons: [
 				{ label: '保存', color: '@orange', onSelect: function(e, modal) {
 					modal.close();
-					page.persist(text, restart.length > 0);
+					page.persist(text, true);
 				} },
 				{ label: 'キャンセル', onSelect: function(e, modal) { modal.close(); } }
 			]
@@ -249,7 +248,7 @@ P = Class.create(P, {
 				this.formEdited = false;
 				this.restartPending = this.restartPending || restart;
 				this.renderForm();
-				this.message('設定を保存しました。直前の設定: config.json.bak。' + (this.restartPending ? '変更はまだ反映されていません。サービスを再起動してください。' : '共通除外ルールは次回の予約計画から反映されます。'));
+				this.message('設定を保存しました。直前の設定: config.json.bak。' + (this.restartPending ? '変更はまだ反映されていません。サービスを再起動してください。' : ''));
 			}.bind(this),
 			onFailure: function(t) {
 				if (this.closed) return;

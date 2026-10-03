@@ -1,0 +1,22 @@
+[
+  {
+    "isDisabled": true,
+    "reserve_titles": ["再放送"],
+    "reserve_descriptions": ["再放送"],
+    "reserve_fields_operator": "or",
+    "reserve_titles_operator": "or",
+    "reserve_descriptions_operator": "or"
+  },
+  {
+    "isDisabled": true,
+    "reserve_titles": ["総集編", "ダイジェスト"],
+    "reserve_descriptions": ["再編集", "過去の放送"],
+    "reserve_fields_operator": "and",
+    "reserve_titles_operator": "or",
+    "reserve_descriptions_operator": "or"
+  },
+  {
+    "isDisabled": true,
+    "reserve_flags": ["再"]
+  }
+]

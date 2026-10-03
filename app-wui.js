@@ -8,6 +8,7 @@
 
 const CONFIG_FILE = __dirname + '/config.json';
 const RULES_FILE = __dirname + '/rules.json';
+const EXCLUDES_FILE = __dirname + '/excludes.json';
 const RESERVES_DATA_FILE = __dirname + '/data/reserves.json';
 const SCHEDULE_DATA_FILE = __dirname + '/data/schedule.json';
 const RECORDING_DATA_FILE = __dirname + '/data/recording.json';
@@ -38,6 +39,7 @@ const chinachu = require('chinachu-common');
 const geoip = require('geoip-lite');
 const mirakurun = new (require("mirakurun").default)();
 const configStore = require('./lib/config-store');
+const excludesStore = require('./lib/excludes-store');
 const { log } = require('./lib/logger');
 const { configureMirakurunClient } = require('./lib/mirakurun-client');
 const { createBasicAuthMiddleware } = require('./lib/socket-auth');
@@ -674,9 +676,11 @@ function httpServerMain(req, res, query) {
 				mirakurun    : mirakurun,
 				config       : config,
 				configStore  : configStore,
+				excludesStore: excludesStore,
 				define: {
 					CONFIG_FILE        : CONFIG_FILE,
 					RULES_FILE         : RULES_FILE,
+					EXCLUDES_FILE      : EXCLUDES_FILE,
 					RESERVES_DATA_FILE : RESERVES_DATA_FILE,
 					SCHEDULE_DATA_FILE : SCHEDULE_DATA_FILE,
 					RECORDING_DATA_FILE: RECORDING_DATA_FILE,

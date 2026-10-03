@@ -19,7 +19,10 @@
       ]
     },
     {
-      "reserve_titles": ["笑点"]
+      "reserve_titles": ["笑点"],
+      "reserve_fields_operator": "and",
+      "reserve_titles_operator": "or",
+      "reserve_descriptions_operator": "or"
     },
     {
       "types": ["CS"],
@@ -30,5 +33,13 @@
         "min": 600,
         "max": 10801
       }
+    },
+    {
+      "isDisabled": true,
+      "reserve_titles": ["映画", "劇場版"],
+      "reserve_descriptions": ["日本語", "吹替"],
+      "reserve_fields_operator": "or",
+      "reserve_titles_operator": "or",
+      "reserve_descriptions_operator": "and"
     }
 ]

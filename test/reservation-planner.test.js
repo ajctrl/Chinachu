@@ -47,11 +47,12 @@ describe('reservation keyword matching', function () {
 
 describe('reservation exclusion state', function () {
 	const rules = [{ reserve_titles: ['ABC'] }];
-	const config = { normalizationForm: 'NFKC', autoExclusionRules: [
+	const config = { normalizationForm: 'NFKC' };
+	const excludes = [
 		{ reserve_titles: ['再放送', 'missing'] }, { reserve_descriptions: ['再放送'] }
-	] };
+	];
 	function build(p, previous = [], settings = config, recordingRules = rules) {
-		return planner.buildCandidates([{ programs: [p] }], recordingRules, JSON.parse(JSON.stringify(previous)), settings);
+		return planner.buildCandidates([{ programs: [p] }], recordingRules, JSON.parse(JSON.stringify(previous)), settings, settings === config ? excludes : []);
 	}
 
 	it('retains excluded candidates, persists their evidence, and does not mutate the EPG', function () {
@@ -163,7 +164,11 @@ describe('scheduler and CLI persistence', function () {
 				if (name === 'fs') {
 					return {
 						existsSync(file) { return !file.endsWith('scheduler.pid'); },
-						readFileSync(file) { return files[path.basename(file)] || '[]'; },
+						readFileSync(file) {
+							const name = path.basename(file);
+							if (name === 'excludes.json' && !(name in files)) throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+							return files[name] || '[]';
+						},
 						writeFileSync(file, value) { files[path.basename(file)] = value; }
 					};
 				}
@@ -187,8 +192,17 @@ describe('scheduler and CLI persistence', function () {
 	}
 
 	beforeEach(function () {
-		config = { autoExclusionRules: [{ reserve_titles: ['再放送'] }] };
-		files = { 'rules.json': JSON.stringify([{}]), 'reserves.json': '[]' };
+		config = {};
+		files = { 'rules.json': JSON.stringify([{}]), 'excludes.json': JSON.stringify([{ reserve_titles: ['再放送'] }]), 'reserves.json': '[]' };
+	});
+
+	it('reads legacy config rules only until excludes.json exists', function () {
+		config.autoExclusionRules = [{ reserve_titles: ['再放送'] }];
+		delete files['excludes.json'];
+		files['schedule.json'] = JSON.stringify([{ programs: [program()] }]);
+		assert.equal(run('app-scheduler.js')[0].isAutoSkip, true);
+		files['excludes.json'] = '[]';
+		assert.equal(run('app-scheduler.js')[0].isSkip, undefined);
 	});
 
 	it('persists unskip and re-skip through fresh scheduler and CLI instances', function () {
@@ -200,7 +214,7 @@ describe('scheduler and CLI persistence', function () {
 		assert.equal(run('app-scheduler.js')[0].autoSkipOverride, true);
 		assert.equal(run('app-cli.js', { mode: 'skip', id: p.id })[0].isAutoSkip, true);
 		assert.equal(run('app-scheduler.js')[0].autoSkipOverride, undefined);
-		config.autoExclusionRules = [];
+		files['excludes.json'] = '[]';
 		assert.equal(run('app-scheduler.js')[0].isSkip, undefined);
 		assert.equal(run('app-cli.js', { mode: 'skip', id: p.id })[0].isSkip, true);
 		assert.equal(run('app-scheduler.js')[0].isSkip, true);
@@ -240,7 +254,7 @@ describe('scheduler and CLI persistence', function () {
 			const first = program({ id: 'first' });
 			const second = program({ id: 'second', start: first.start, end: first.end });
 			second.channel.sid = 2;
-			config.autoExclusionRules = [{ sid: 2, reserve_titles: ['再放送'] }];
+			files['excludes.json'] = JSON.stringify([{ sid: 2, reserve_titles: ['再放送'] }]);
 			files['schedule.json'] = JSON.stringify([{ programs: reversed ? [second, first] : [first, second] }]);
 			assert.equal(run('app-scheduler.js').find(p => p.id === second.id).isAutoSkip, true);
 			run('app-cli.js', { mode: 'unskip', id: second.id });

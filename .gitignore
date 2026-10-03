@@ -1,5 +1,8 @@
 /config.json
 /rules.json
+/excludes.json
+/excludes.json.bak
+/excludes.json.*.tmp
 /etc
 /etc/*
 /recorded
