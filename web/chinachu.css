@@ -1369,6 +1369,75 @@ div.sakura-alert-green {
 	div.sakura-alert > div:hover {
 		border-color    : transparent; }
 /* Browser preferences and server settings */
+/* Storage capacity */
+div.middle > div.main > div.main-body > div.storage-page {
+	padding: 24px;
+	background: #f6f7f9;
+	color: #30343b;
+}
+.storage-page .storage-card {
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 720px;
+	padding: 28px;
+	border: 1px solid #e1e4e9;
+	border-radius: 14px;
+	background: #fff;
+}
+.storage-card-header, .storage-summary, .storage-card-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+}
+.storage-card-header h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.storage-refresh {
+	padding: 7px 14px;
+	border: 1px solid #d5d9e0;
+	border-radius: 7px;
+	background: #fff;
+	color: #424853;
+	font-size: 13px;
+	cursor: pointer;
+}
+.storage-refresh:hover { background: #f6f7f9; }
+.storage-refresh:disabled { opacity: .5; cursor: wait; }
+.storage-refresh:focus-visible, .storage-recorded-link:focus-visible { outline: 2px solid #c24186; outline-offset: 4px; }
+.storage-summary { margin: 28px 0 22px; align-items: flex-end; flex-wrap: wrap; }
+.storage-label { margin-bottom: 6px; color: #66707d; font-size: 13px; }
+.storage-free-value { display: block; font-size: 42px; font-weight: 600; line-height: 1.2; letter-spacing: -.03em; }
+.storage-total { padding-bottom: 4px; text-align: right; }
+.storage-total strong { font-size: 18px; font-weight: 500; }
+.storage-free-value, .storage-total strong, .storage-breakdown dd { font-variant-numeric: tabular-nums; }
+.storage-bar { display: flex; height: 14px; overflow: hidden; border-radius: 7px; background: #edf0f4; }
+.storage-bar > span { display: block; height: 100%; flex: none; }
+.storage-recorded { background: #c24186; }
+.storage-other { background: #8b95a4; }
+.storage-available { background: #e5eaf0; }
+.storage-reserved { background: repeating-linear-gradient(135deg, #c4ccd7, #c4ccd7 3px, #f1f3f6 3px, #f1f3f6 6px); }
+.storage-breakdown { margin: 20px 0 0; }
+.storage-breakdown-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 10px 0; }
+.storage-breakdown dt { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: normal; }
+.storage-breakdown dd { margin: 0; flex: none; font-size: 14px; font-weight: 500; }
+.storage-dot { box-sizing: border-box; width: 10px; height: 10px; flex: none; border-radius: 3px; }
+.storage-dot.storage-available { border: 1px solid #c4ccd7; }
+.storage-warning { margin: 18px 0 0; padding: 12px 14px; border-radius: 7px; background: #fff4e5; color: #855009; font-size: 13px; line-height: 1.6; }
+.storage-low-space .storage-free-value { color: #a64022; }
+.storage-card-footer { margin-top: 22px; padding-top: 18px; border-top: 1px solid #edf0f4; flex-wrap: wrap; }
+.storage-recorded-link { color: #aa2c70; font-size: 13px; text-decoration: none; }
+.storage-recorded-link:hover { color: #802153; text-decoration: underline; }
+.storage-status { margin: 0; color: #66707d; font-size: 12px; line-height: 1.6; }
+.storage-status.storage-error { color: #a51d38; }
+.storage-card [hidden] { display: none; }
+@media screen and (max-width: 540px) {
+	div.middle > div.main > div.main-body > div.storage-page { padding: 14px; }
+	.storage-page .storage-card { padding: 20px; border-radius: 12px; }
+	.storage-free-value { font-size: 36px; }
+	.storage-summary { gap: 20px; }
+	.storage-total { text-align: left; }
+	.storage-card-footer { align-items: flex-start; flex-direction: column; gap: 10px; }
+}
+
 .description-switch { display: inline-flex; align-items: center; gap: 5px; margin: 5px 10px; cursor: pointer; font-weight: normal; }
 .description-switch input { margin: 0; }
 /* Match the vertical position and text size of the toolbar buttons. */

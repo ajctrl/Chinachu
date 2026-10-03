@@ -1,107 +1,145 @@
 P = Class.create(P, {
-
-	init: function _initPage() {
-
-		this.view.content.className = 'loading';
-
+	init: function() {
+		this.closed = false;
 		this.onNotify = this.refresh.bindAsEventListener(this);
-		document.observe('chinachu:storage', this.onNotify);
-
+		['chinachu:storage', 'chinachu:recorded', 'chinachu:recording'].forEach(function(event) {
+			document.observe(event, this.onNotify);
+		}, this);
 		this.draw();
-
+		this.refresh();
+		this.timer.storage = setInterval(function() {
+			if (!document.hidden) this.refresh();
+		}.bind(this), 30000);
 		return this;
-	}
-	,
-	refresh: function() {
-
-		this.draw();
-
+	},
+	deinit: function() {
+		this.closed = true;
+		clearInterval(this.timer.storage);
+		['chinachu:storage', 'chinachu:recorded', 'chinachu:recording'].forEach(function(event) {
+			document.stopObserving(event, this.onNotify);
+		}, this);
+		if (this.request) this.request.transport.abort();
 		return this;
-	}
-	,
-	deinit: function _deinit() {
-
-		document.stopObserving('chinachu:storage', this.onNotify);
-
-		return this;
-	}
-	,
-	draw: function _draw() {
-
-		this.view.content.className = '';
+	},
+	node: function(tag, parent, text, className) {
+		var node = document.createElement(tag);
+		if (text !== undefined) node.textContent = text;
+		if (className) node.className = className;
+		if (parent) parent.appendChild(node);
+		return node;
+	},
+	readableFilesize: function(size) {
+		var units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+		var index = 0;
+		while (size >= 1024 && index < units.length - 1) {
+			size /= 1024;
+			index++;
+		}
+		return size.toFixed(index ? 1 : 0) + ' ' + units[index];
+	},
+	draw: function() {
+		this.view.content.className = 'storage-page';
 		this.view.content.update();
-
-		var chart = dc.pieChart(this.view.content);
-		d3.json("./api/storage.json", function(error, data) {
-
-			function readableFilesize(size) {
-				var postfix = ["B","KB","MB","GB","TB","PB"];
-				var i = 0;
-				var sz = size;
-				var base = 1;
-				while(sz>=1024) {
-					i++;
-					sz = sz/1024;
-					base *= 1024;
-				}
-				return (size/base).toFixed(1) + postfix[i];
-			}
-
-			var pickBgColor = function(klass) {
-				var x = new Element('span');
-				x.setAttribute('class', klass);
-				this.view.content.appendChild(x);
-				var d3bgcol = d3.rgb( window.getComputedStyle(x).backgroundColor );
-				this.view.content.removeChild(x);
-				if( d3bgcol['3'] === undefined ) d3bgcol['3'] = 1.0; //d3.rgb has sloppy rgba support.
-				return d3bgcol;
-			}.bind(this);
-
-			var d3rgb2rgba = function(h) { return "rgba("+h['r']+","+h['g']+","+h['b']+","+h['3']+")"; }
-			var d3rgb_transparent = function(h, tr) { h['3'] = tr; return h; }
-
-
-
-			var catList   = ['RECORDED', 'FREE', 'USED BY OTHER PROGRAMS'].map(function(x) { return x.__();} );
-			var colorList = [	pickBgColor("bg-chinachu"),
-						d3rgb_transparent( pickBgColor("bg-chinachu"), 0.4),
-						pickBgColor('bg-silver')
-					].map(function(a) { return d3rgb2rgba(a) } );
-			var colorMap = catList.reduce( function(p, c, i, s) { p[c] = colorList[i]; return p; }, {});
-			var orderMap = catList.reduce( function(p, c, i, s) { p[c] = i+1; return p; }, {});
-
-			var w = 400;
-			var h = 400;
-			var width = Math.min(w,h) * 0.8;
-			var height = width;
-			var radius = width * 0.4;
-
-			var storageUsage = [
-				{ category: catList[0], value: data.recorded },
-				{ category: catList[1], value: data.avail},
-				{ category: catList[2], value: data.used - data.recorded}
-			];
-
-			var ndx = crossfilter(storageUsage);
-			var category = ndx.dimension(function(d) {return d.category;});
-			var valueGroup = category.group().reduceSum(function(d) {return d.value;});
-
-
-			chart
-			 .width(width)
-			 .height(height)
-			 .slicesCap(4)
-			 .innerRadius(radius*0.3)
-			 .dimension(category)
-			 .group(valueGroup)
-			 .colors(d3.scale.ordinal().domain(catList).range(colorList) )
-			 .label( function(d) { return d.data.key + ':' + readableFilesize(d.data.value); } )
-			 .ordering( function(d) { return orderMap[d.key]; })
-			 .title( function(d) { return readableFilesize(d.data.value); } );
-
-			chart.render();
-		}.bind(this));
-
+		this.card = this.node('section', this.view.content, undefined, 'storage-card');
+		this.card.setAttribute('aria-label', 'STORAGE USAGE'.__());
+		var header = this.node('div', this.card, undefined, 'storage-card-header');
+		this.node('h2', header, 'RECORDING STORAGE'.__());
+		this.refreshButton = this.node('button', header, 'REFRESH'.__(), 'storage-refresh');
+		this.refreshButton.type = 'button';
+		this.refreshButton.addEventListener('click', this.refresh.bind(this));
+		var summary = this.node('div', this.card, undefined, 'storage-summary');
+		var free = this.node('div', summary);
+		this.node('div', free, 'AVAILABLE SPACE'.__(), 'storage-label');
+		this.freeValue = this.node('strong', free, '—', 'storage-free-value');
+		var total = this.node('div', summary, undefined, 'storage-total');
+		this.node('div', total, 'TOTAL CAPACITY'.__(), 'storage-label');
+		this.totalValue = this.node('strong', total, '—');
+		this.bar = this.node('div', this.card, undefined, 'storage-bar');
+		this.bar.hidden = true;
+		// The numeric breakdown provides the accessible equivalent of the bar.
+		this.bar.setAttribute('aria-hidden', 'true');
+		this.breakdown = this.node('dl', this.card, undefined, 'storage-breakdown');
+		this.warning = this.node('p', this.card, undefined, 'storage-warning');
+		this.warning.setAttribute('role', 'status');
+		this.warning.hidden = true;
+		var footer = this.node('div', this.card, undefined, 'storage-card-footer');
+		var link = this.node('a', footer, 'OPEN RECORDED PROGRAMS'.__(), 'storage-recorded-link');
+		link.href = '#!/recorded/list/';
+		this.status = this.node('p', footer, '', 'storage-status');
+		this.status.setAttribute('role', 'status');
+		return this;
+	},
+	refresh: function() {
+		if (this.closed || this.loading) return this;
+		this.loading = true;
+		this.refreshButton.disabled = true;
+		this.card.setAttribute('aria-busy', 'true');
+		this.status.className = 'storage-status';
+		this.status.textContent = 'LOADING STORAGE'.__();
+		this.request = new Ajax.Request('./api/storage.json', {
+			method: 'get',
+			onSuccess: function(response) {
+				var data;
+				try { data = JSON.parse(response.responseText); }
+				catch (error) { this.receiveUsage(true); return; }
+				this.receiveUsage(false, data);
+			}.bind(this),
+			onFailure: function() { this.receiveUsage(true); }.bind(this)
+		});
+		return this;
+	},
+	receiveUsage: function(error, data) {
+		if (this.closed) return;
+		this.loading = false;
+		this.request = null;
+		this.refreshButton.disabled = false;
+		this.card.setAttribute('aria-busy', 'false');
+		var valid = data && ['size', 'used', 'avail', 'recorded'].every(function(key) {
+			return typeof data[key] === 'number' && isFinite(data[key]) && data[key] >= 0;
+		});
+		if (error || !valid || data.size === 0) {
+			this.status.className = 'storage-status storage-error';
+			this.status.textContent = 'STORAGE LOAD FAILED'.__();
+			if (this.hasData) this.status.textContent += ' ' + 'SHOWING PREVIOUS STORAGE'.__();
+			return;
+		}
+		this.renderUsage(data);
+		this.hasData = true;
+		this.status.textContent = 'LAST UPDATED'.__() + ': ' + new Date().toLocaleTimeString();
+	},
+	renderUsage: function(data) {
+		var used = Math.min(data.used, data.size);
+		var recorded = Math.min(data.recorded, used);
+		var available = Math.min(data.avail, data.size - used);
+		var reserved = Math.max(0, data.size - used - available);
+		var categories = [
+			{ label: 'RECORDED'.__(), value: recorded, className: 'storage-recorded' },
+			{ label: 'OTHER STORAGE USAGE'.__(), value: used - recorded, className: 'storage-other' },
+			{ label: 'AVAILABLE SPACE'.__(), value: available, className: 'storage-available' }
+		];
+		if (reserved > 0) categories.push({ label: 'RESERVED SPACE'.__(), value: reserved, className: 'storage-reserved' });
+		this.freeValue.textContent = this.readableFilesize(available);
+		this.totalValue.textContent = this.readableFilesize(data.size);
+		this.bar.textContent = '';
+		this.bar.hidden = false;
+		this.breakdown.textContent = '';
+		categories.forEach(function(category) {
+			var formatted = this.readableFilesize(category.value);
+			var segment = this.node('span', this.bar, undefined, category.className);
+			segment.style.width = (category.value / data.size * 100) + '%';
+			segment.title = category.label + ': ' + formatted;
+			var row = this.node('div', this.breakdown, undefined, 'storage-breakdown-row');
+			var label = this.node('dt', row);
+			var dot = this.node('span', label, undefined, 'storage-dot ' + category.className);
+			dot.setAttribute('aria-hidden', 'true');
+			this.node('span', label, category.label);
+			this.node('dd', row, formatted);
+		}, this);
+		var threshold = data.lowSpaceThreshold;
+		var lowSpace = available === 0 || (typeof threshold === 'number' && isFinite(threshold) && threshold > 0 && available < threshold);
+		this.warning.hidden = !lowSpace;
+		this.warning.textContent = available === 0 ? 'NO AVAILABLE SPACE'.__() : 'LOW AVAILABLE SPACE'.__();
+		this.card.className = 'storage-card' + (lowSpace ? ' storage-low-space' : '');
 		return this;
 	}
 });

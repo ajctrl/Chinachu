@@ -13,6 +13,7 @@
 			var recordedFiles = data.recorded.map( function(r) { return r.recorded; } );
 			var storageUsage = {};
 			storageUsage.recorded = sumOfFileSize(recordedFiles);
+			storageUsage.lowSpaceThreshold = (config.storageLowSpaceThresholdMB || 3000) * 1024 * 1024;
 			
 			child_process.exec('df --block-size=512 ' + config.recordedDir , function(err, stdout, stderr) {
 				if (err) {
