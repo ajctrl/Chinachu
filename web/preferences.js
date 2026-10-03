@@ -17,6 +17,7 @@
 	window.addEventListener('storage', function(event) {
 		if (event.key === key || event.key === null) notify();
 		if (event.key === clickKey || event.key === null) notifyClickAction();
+		if (event.key === descriptionFontSizeKey || event.key === null) notifyDescriptionFontSize();
 	});
 	function createSwitch(onChange) {
 		var label = document.createElement('label');
@@ -74,5 +75,49 @@
 		clickListeners.push(listener);
 		return { element: label, destroy: function() { clickListeners = clickListeners.filter(function(item) { return item !== listener; }); } };
 	}
-	window.ChinachuPreferences = { get: get, set: set, subscribe: subscribe, createSwitch: createSwitch, getClickAction: getClickAction, setClickAction: setClickAction, createClickActionSelect: createClickActionSelect };
+	var descriptionFontSizeKey = 'chinachu.reserves.descriptionFontSize';
+	var descriptionFontSizeChoices = [['10px', '10px'], ['11px', '11px'], ['12px', '標準（12px）'], ['13px', '13px'], ['14px', '14px'], ['16px', '16px']];
+	// Approximate previous rem choices using a 16px root font size.
+	var legacyDescriptionFontSizes = { '0.7rem': '11px', '0.8rem': '13px', '0.9rem': '14px', '1rem': '16px' };
+	var descriptionFontSizeListeners = [];
+	function normalizeDescriptionFontSize(value) {
+		value = legacyDescriptionFontSizes[value] || value;
+		return descriptionFontSizeChoices.some(function(choice) { return choice[0] === value; }) ? value : '12px';
+	}
+	function getDescriptionFontSize() {
+		try { return normalizeDescriptionFontSize(window.localStorage.getItem(descriptionFontSizeKey)); } catch (error) { return '12px'; }
+	}
+	function notifyDescriptionFontSize() { descriptionFontSizeListeners.slice().forEach(function(listener) { listener(getDescriptionFontSize()); }); }
+	function setDescriptionFontSize(value) {
+		window.localStorage.setItem(descriptionFontSizeKey, normalizeDescriptionFontSize(value));
+		notifyDescriptionFontSize();
+	}
+	function subscribeDescriptionFontSize(listener) {
+		descriptionFontSizeListeners.push(listener);
+		return function() { descriptionFontSizeListeners = descriptionFontSizeListeners.filter(function(item) { return item !== listener; }); };
+	}
+	function createDescriptionFontSizeSelect() {
+		var label = document.createElement('label');
+		label.className = 'reservation-description-font-setting';
+		label.appendChild(document.createTextNode('予約一覧の番組説明の文字サイズ '));
+		var select = document.createElement('select');
+		descriptionFontSizeChoices.forEach(function(choice) {
+			var option = document.createElement('option');
+			option.value = choice[0];
+			option.textContent = choice[1];
+			select.appendChild(option);
+		});
+		select.value = getDescriptionFontSize();
+		label.appendChild(select);
+		var error = document.createElement('span');
+		error.className = 'preference-error';
+		error.setAttribute('role', 'alert');
+		label.appendChild(error);
+		select.addEventListener('change', function() {
+			try { setDescriptionFontSize(select.value); error.textContent = ''; }
+			catch (e) { select.value = getDescriptionFontSize(); error.textContent = ' ブラウザに保存できませんでした。保存の許可設定を確認してください。'; }
+		});
+		return { element: label, destroy: subscribeDescriptionFontSize(function(value) { select.value = value; }) };
+	}
+	window.ChinachuPreferences = { get: get, set: set, subscribe: subscribe, createSwitch: createSwitch, getClickAction: getClickAction, setClickAction: setClickAction, createClickActionSelect: createClickActionSelect, getDescriptionFontSize: getDescriptionFontSize, setDescriptionFontSize: setDescriptionFontSize, subscribeDescriptionFontSize: subscribeDescriptionFontSize, createDescriptionFontSizeSelect: createDescriptionFontSizeSelect };
 })();

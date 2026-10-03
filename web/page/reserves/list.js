@@ -21,6 +21,7 @@ P = Class.create(P, {
 		document.stopObserving('chinachu:reserves', this.onNotify);
 		this.closed = true;
 		this.descriptionSwitch.destroy();
+		if (this.unsubscribeDescriptionFontSize) this.unsubscribeDescriptionFontSize();
 		this.clearSkipNotice();
 
 		return this;
@@ -36,6 +37,7 @@ P = Class.create(P, {
 	initToolbar: function _initToolbar() {
 
 		this.descriptionSwitch = ChinachuPreferences.createSwitch(this.refresh.bind(this));
+		this.unsubscribeDescriptionFontSize = ChinachuPreferences.subscribeDescriptionFontSize(this.refresh.bind(this));
 		var control = new sakura.ui.Element({ tagName: 'span' });
 		control.entity.appendChild(this.descriptionSwitch.element);
 		this.view.toolbar.add({ key: 'show-description', ui: control });
@@ -225,6 +227,7 @@ P = Class.create(P, {
 		});
 
 		var showDescription = ChinachuPreferences.get();
+		var descriptionFontSize = ChinachuPreferences.getDescriptionFontSize();
 		var page = this;
 		programs.each(function(program, i) {
 
@@ -349,7 +352,7 @@ P = Class.create(P, {
 			if (ChinachuReservationActions.isPending(program.id)) titleHtml = '<span class="reserve-pending-spinner" role="status" aria-label="処理中" title="処理中"></span>' + titleHtml;
 
 			if (showDescription && program.detail) {
-				titleHtml = '<div class="reserve-title">' + titleHtml + '</div><div class="reserve-description">' + String(program.detail).replace(/\r\n|\r|\n/g, ' ').escapeHTML() + '</div>';
+				titleHtml = '<div class="reserve-title">' + titleHtml + '</div><div class="reserve-description" style="font-size: ' + descriptionFontSize + '">' + String(program.detail).replace(/\r\n|\r|\n/g, ' ').escapeHTML() + '</div>';
 			}
 
 			row.cell.title = {

@@ -65,6 +65,32 @@ describe('browser display preferences and reservation descriptions', function() 
 		assert.equal(ctx.input.checked, false);
 		assert.match(ctx.control.element.children[2].textContent, /保存できません/);
 	});
+	it('persists description font sizes, synchronizes tabs and handles invalid values and storage failure', function() {
+		const ctx = browser();
+		vm.runInContext(`
+			var pref = ChinachuPreferences, updates = 0;
+			var first = pref.createDescriptionFontSizeSelect(), second = pref.createDescriptionFontSizeSelect();
+			var a = first.element.children[1], b = second.element.children[1];
+			var unsubscribe = pref.subscribeDescriptionFontSize(function() { updates++; });
+		`, ctx);
+		assert.equal(ctx.a.value, '12px');
+		vm.runInContext("a.value = '11px'; a.handlers.change();", ctx);
+		assert.equal(ctx.values['chinachu.reserves.descriptionFontSize'], '11px');
+		assert.equal(ctx.b.value, '11px');
+		vm.runInContext("values['chinachu.reserves.descriptionFontSize'] = '0.9rem'; events.storage({ key: 'chinachu.reserves.descriptionFontSize' });", ctx);
+		assert.equal(ctx.a.value, '14px');
+		assert.equal(ctx.b.value, '14px');
+		vm.runInContext("failStorage = true; a.value = '16px'; a.handlers.change();", ctx);
+		assert.equal(ctx.a.value, '12px');
+		assert.match(ctx.first.element.children[2].textContent, /保存できません/);
+		assert.equal(ctx.values['chinachu.reserves.descriptionFontSize'], '0.9rem');
+		vm.runInContext("failStorage = false; values['chinachu.reserves.descriptionFontSize'] = 'invalid'; events.storage({ key: null });", ctx);
+		assert.equal(ctx.a.value, '12px');
+		assert.equal(ctx.b.value, '12px');
+		vm.runInContext("first.destroy(); second.destroy(); unsubscribe(); pref.setDescriptionFontSize('16px');", ctx);
+		assert.equal(ctx.b.value, '12px');
+		assert.equal(ctx.updates, 3);
+	});
 	it('escapes descriptions, omits empty descriptions and keeps navigation to program details', function() {
 		const ctx = browser();
 		vm.runInContext(`
@@ -94,6 +120,9 @@ describe('browser display preferences and reservation descriptions', function() 
 		assert.match(ctx.P.grid.rows[0].cell.title.html, /&lt;img/);
 		assert.ok(!ctx.P.grid.rows[0].cell.title.html.includes('<img'));
 		assert.ok(!ctx.P.grid.rows[1].cell.title.html.includes('reserve-description'));
+		assert.match(ctx.P.grid.rows[0].cell.title.html, /font-size: 12px/);
+		vm.runInContext("ChinachuPreferences.setDescriptionFontSize('11px'); P.drawMain();", ctx);
+		assert.match(ctx.P.grid.rows[0].cell.title.html, /font-size: 11px/);
 		assert.match(ctx.P.grid.rows[2].className, /reserve-skipped/);
 		assert.match(ctx.P.grid.rows[2].cell.title.html, /class="flag skip"/);
 		assert.match(ctx.P.grid.rows[2].cell.title.html, /class="flag manual"/);
