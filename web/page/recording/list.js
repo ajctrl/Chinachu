@@ -15,6 +15,9 @@ P = Class.create(P, {
 	,
 	deinit: function() {
 
+		this.descriptionSwitch.destroy();
+		this.unsubscribeDescriptionFontSize();
+
 		if (this.grid) this.grid.destroy();
 
 		document.stopObserving('chinachu:recording', this.onNotify);
@@ -30,6 +33,12 @@ P = Class.create(P, {
 	}
 	,
 	initToolbar: function _initToolbar() {
+
+		this.descriptionSwitch = ChinachuPreferences.createSwitch(this.drawMain.bind(this), 'recording');
+		this.unsubscribeDescriptionFontSize = ChinachuPreferences.subscribeDescriptionFontSize(this.drawMain.bind(this));
+		var control = new sakura.ui.Element({ tagName: 'span' });
+		control.entity.appendChild(this.descriptionSwitch.element);
+		this.view.toolbar.add({ key: 'show-description', ui: control });
 
 		return this;
 	}
@@ -107,6 +116,8 @@ P = Class.create(P, {
 	drawMain: function() {
 
 		var rows = [];
+		var showDescription = ChinachuPreferences.get('recording');
+		var descriptionFontSize = ChinachuPreferences.getDescriptionFontSize();
 
 		var programs = [];
 
@@ -121,6 +132,7 @@ P = Class.create(P, {
 		programs.each(function(program, i) {
 
 			var row = {
+				className: showDescription ? 'reserve-description-row' : '',
 				data: program,
 				cell: {
 					id: {
@@ -200,7 +212,12 @@ P = Class.create(P, {
 				titleHtml = '<span class="flag manual">手動</span>' + titleHtml;
 			}
 
+			if (showDescription && program.detail) {
+				titleHtml = '<div class="reserve-title">' + titleHtml + '</div><div class="reserve-description" style="font-size: ' + descriptionFontSize + '">' + String(program.detail).replace(/\r\n|\r|\n/g, ' ').escapeHTML() + '</div>';
+			}
+
 			row.cell.title = {
+				className  : showDescription && program.detail ? 'reserve-description-cell' : '',
 				sortAlt    : program.title,
 				html       : titleHtml,
 				attribute  : {

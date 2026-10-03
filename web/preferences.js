@@ -1,43 +1,50 @@
 (function() {
 	'use strict';
-	var key = 'chinachu.reserves.showDescription';
+	// Preserve the existing reservation preference; other lists default to hidden.
+	function descriptionKey(scope) { return 'chinachu.' + (scope || 'reserves') + '.showDescription'; }
 	var listeners = [];
-	function get() {
-		try { return window.localStorage.getItem(key) === 'true'; } catch (error) { return false; }
+	function get(scope) {
+		try { return window.localStorage.getItem(descriptionKey(scope)) === 'true'; } catch (error) { return false; }
 	}
-	function notify() { listeners.slice().forEach(function(listener) { listener(get()); }); }
-	function set(value) {
+	function notify(key) {
+		listeners.slice().forEach(function(entry) {
+			if (key === null || descriptionKey(entry.scope) === key) entry.listener(get(entry.scope));
+		});
+	}
+	function set(value, scope) {
+		var key = descriptionKey(scope);
 		window.localStorage.setItem(key, value ? 'true' : 'false');
-		notify();
+		notify(key);
 	}
-	function subscribe(listener) {
-		listeners.push(listener);
-		return function() { listeners = listeners.filter(function(item) { return item !== listener; }); };
+	function subscribe(listener, scope) {
+		var entry = { listener: listener, scope: scope };
+		listeners.push(entry);
+		return function() { listeners = listeners.filter(function(item) { return item !== entry; }); };
 	}
 	window.addEventListener('storage', function(event) {
-		if (event.key === key || event.key === null) notify();
+		notify(event.key);
 		if (event.key === clickKey || event.key === null) notifyClickAction();
 		if (event.key === descriptionFontSizeKey || event.key === null) notifyDescriptionFontSize();
 	});
-	function createSwitch(onChange) {
+	function createSwitch(onChange, scope, labelText) {
 		var label = document.createElement('label');
 		label.className = 'description-switch';
 		var input = document.createElement('input');
 		input.type = 'checkbox';
 		input.setAttribute('role', 'switch');
-		input.checked = get();
+		input.checked = get(scope);
 		label.appendChild(input);
-		label.appendChild(document.createTextNode(' 番組説明を表示'));
+		label.appendChild(document.createTextNode(' ' + (labelText || '番組説明を表示')));
 		label.title = 'このブラウザにのみ適用・即時保存';
 		var error = document.createElement('span');
 		error.className = 'preference-error';
 		error.setAttribute('role', 'alert');
 		label.appendChild(error);
 		input.addEventListener('change', function() {
-			try { set(input.checked); error.textContent = ''; }
-			catch (e) { input.checked = get(); error.textContent = ' ブラウザに保存できませんでした。保存の許可設定を確認してください。'; }
+			try { set(input.checked, scope); error.textContent = ''; }
+			catch (e) { input.checked = get(scope); error.textContent = ' ブラウザに保存できませんでした。保存の許可設定を確認してください。'; }
 		});
-		var unsubscribe = subscribe(function(value) { input.checked = value; if (onChange) onChange(value); });
+		var unsubscribe = subscribe(function(value) { input.checked = value; if (onChange) onChange(value); }, scope);
 		return { element: label, destroy: unsubscribe };
 	}
 	var clickKey = 'chinachu.reserves.clickAction';
@@ -99,7 +106,7 @@
 	function createDescriptionFontSizeSelect() {
 		var label = document.createElement('label');
 		label.className = 'reservation-description-font-setting';
-		label.appendChild(document.createTextNode('予約一覧の番組説明の文字サイズ '));
+		label.appendChild(document.createTextNode('番組一覧の番組説明の文字サイズ '));
 		var select = document.createElement('select');
 		descriptionFontSizeChoices.forEach(function(choice) {
 			var option = document.createElement('option');

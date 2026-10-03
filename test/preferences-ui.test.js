@@ -42,6 +42,35 @@ describe('browser display preferences and reservation descriptions', function() 
 		vm.runInContext('first.destroy(); second.destroy(); pref.set(true);', ctx);
 		assert.equal(ctx.updates, 2);
 	});
+	it('stores visibility independently per list and only notifies matching controls', function() {
+		const ctx = browser();
+		vm.runInContext(`
+			var pref = ChinachuPreferences, updates = {};
+			var scopes = ['reserves', 'recording', 'recorded', 'search', 'recorded.search'];
+			pref.set(true);
+			var controls = scopes.map(function(scope) {
+				updates[scope] = 0;
+				return pref.createSwitch(function() { updates[scope]++; }, scope);
+			});
+		`, ctx);
+		assert.deepEqual(Array.from(ctx.controls, control => control.element.children[0].checked), [true, false, false, false, false]);
+		for (const scope of Array.from(ctx.scopes)) {
+			ctx.scope = scope;
+			vm.runInContext(`
+				var input = controls[scopes.indexOf(scope)].element.children[0];
+				input.checked = true; input.handlers.change();
+			`, ctx);
+			assert.equal(ctx.values['chinachu.' + scope + '.showDescription'], 'true');
+			assert.equal(ctx.updates[scope], 1);
+		}
+		vm.runInContext("values['chinachu.recorded.showDescription'] = 'false'; events.storage({ key: 'chinachu.recorded.showDescription' });", ctx);
+		assert.deepEqual(Array.from(ctx.controls, control => control.element.children[0].checked), [true, true, false, true, true]);
+		assert.deepEqual(Array.from(ctx.scopes, scope => ctx.updates[scope]), [1, 1, 2, 1, 1]);
+		vm.runInContext('values = {}; events.storage({ key: null });', ctx);
+		assert.ok(ctx.controls.every(control => !control.element.children[0].checked));
+		vm.runInContext("controls.forEach(function(control) { control.destroy(); }); pref.set(true, 'recorded');", ctx);
+		assert.equal(ctx.updates.recorded, 3);
+	});
 	it('synchronizes click action selectors and restores the selection if storage fails', function() {
 		const ctx = browser();
 		vm.runInContext(`
@@ -107,9 +136,13 @@ describe('browser display preferences and reservation descriptions', function() 
 			] } };
 			var flagrate = { Grid: function(options) {
 				this.options = options;
+				this.rows = [];
 				this.destroy = function() {};
 				this.insertTo = function() { return this; };
-				this.splice = function(start, count, rows) { this.rows = rows; };
+				this.splice = function(start, count, rows) {
+					count = typeof count === 'undefined' ? this.rows.length - start : count;
+					return this.rows.splice.apply(this.rows, [start, count].concat(rows));
+				};
 			} };
 		`, ctx);
 		vm.runInContext('var ChinachuVirtualGrid = flagrate.Grid;', ctx);
@@ -130,6 +163,34 @@ describe('browser display preferences and reservation descriptions', function() 
 		assert.equal(typeof ctx.P.grid.options.onDblClick, 'function');
 		vm.runInContext('P.grid.options.onClick({}, P.grid.rows[0]);', ctx);
 		assert.equal(ctx.window.location.href, '#!/program/view/id=one/');
+		for (const [page, scope] of Object.entries({ 'recording/list': 'recording', 'recorded/list': 'recorded', 'search/top': 'search', 'recorded/search': 'recorded.search' })) {
+			ctx.scope = scope;
+			vm.runInContext(`
+				global.chinachu.recording = global.chinachu.recorded = global.chinachu.reserves;
+				global.chinachu.schedule = [{ programs: global.chinachu.reserves }];
+				global.chinachu.status = {};
+				global.chinachu.reserves.forEach(function(program) { program.end = Date.now() + 60000; });
+				chinachu.dateToString = function() { return ''; };
+				ChinachuPreferences.set(false, scope);
+			`, ctx);
+			vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/page/' + page + '.js'), 'utf8'), ctx);
+			vm.runInContext("P.view = { content: { update: function() {} } }; P.self = { query: { skip: 1 } }; P.draw();", ctx);
+			const row = () => ctx.P.grid.rows.find(row => row.data.id === 'one');
+			assert.ok(!row().cell.title.html.includes('reserve-description'), page);
+			vm.runInContext('ChinachuPreferences.set(true, scope); P.drawMain();', ctx);
+			assert.equal(ctx.P.grid.rows.length, 3, page + ': enabling descriptions must replace existing rows');
+			assert.match(row().cell.title.html, /&lt;img/, page);
+			assert.ok(!row().cell.title.html.includes('<img'), page);
+			assert.match(row().className, /reserve-description-row/, page);
+			assert.equal(row().cell.title.className, 'reserve-description-cell', page);
+			assert.match(row().cell.title.html, /font-size: 11px/, page);
+			assert.ok(!ctx.P.grid.rows.find(row => row.data.id === 'two').cell.title.html.includes('reserve-description'), page);
+			vm.runInContext('ChinachuPreferences.set(false, scope); P.drawMain();', ctx);
+			assert.equal(ctx.P.grid.rows.length, 3, page + ': disabling descriptions must replace existing rows');
+			assert.ok(ctx.P.grid.rows.every(row => !row.cell.title.html.includes('reserve-description')), page);
+			assert.equal(row().cell.title.className, '', page);
+			assert.equal(row().className, '', page);
+		}
 	});
 	it('keeps invalid nullable numbers invalid after switching through JSON', function() {
 		const field = schema.fields.find(field => field.key === 'wuiPort');

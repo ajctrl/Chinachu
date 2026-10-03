@@ -1371,6 +1371,11 @@ div.sakura-alert-green {
 /* Browser preferences and server settings */
 .description-switch { display: inline-flex; align-items: center; gap: 5px; margin: 5px 10px; cursor: pointer; font-weight: normal; }
 .description-switch input { margin: 0; }
+/* Match the vertical position and text size of the toolbar buttons. */
+.main-head-toolbar .description-switch { position: relative; top: 4px; font-size: 13px; line-height: 15px; white-space: nowrap; }
+@media screen and (max-width: 880px) {
+ .main-head-toolbar .description-switch { font-size: 11px; }
+}
 .preference-error, .config-error, .config-field-error { color: #a51d38; }
 div.flagrate-grid td.reserve-description-cell { white-space: normal; }
 div.flagrate-grid .reserve-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #30343b; font-size: 14px; font-weight: 500; line-height: 1.3; }

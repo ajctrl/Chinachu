@@ -23,7 +23,7 @@ P = Class.create(P, {
 	},
 	deinit: function() {
 		this.closed = true;
-		if (this.descriptionSwitch) this.descriptionSwitch.destroy();
+		if (this.descriptionSwitches) this.descriptionSwitches.forEach(function(control) { control.destroy(); });
 		if (this.descriptionFontSizeSelect) this.descriptionFontSizeSelect.destroy();
 		if (this.clickActionSelect) this.clickActionSelect.destroy();
 		if (this.data.editor) this.data.editor.destroy();
@@ -55,17 +55,23 @@ P = Class.create(P, {
 		this.addDisplaySettings(this.formPanel);
 	},
 	addDisplaySettings: function(parent) {
-		if (this.descriptionSwitch) this.descriptionSwitch.destroy();
+		if (this.descriptionSwitches) this.descriptionSwitches.forEach(function(control) { control.destroy(); });
 		if (this.descriptionFontSizeSelect) this.descriptionFontSizeSelect.destroy();
 		if (this.clickActionSelect) this.clickActionSelect.destroy();
 		var group = this.node('section', parent, undefined, 'config-group');
 		this.node('h2', group, '表示');
-		this.descriptionSwitch = ChinachuPreferences.createSwitch();
-		group.appendChild(this.descriptionSwitch.element);
-		this.node('p', group, '予約済みのタイトルの下に番組説明を最大2行表示します。全文は「詳細」ボタンから確認できます。このブラウザにのみ適用・再起動不要。', 'config-help');
+		this.descriptionSwitches = [
+			['reserves', '予約済み'], ['recording', '録画中'], ['recorded', '録画済み'],
+			['search', '番組検索'], ['recorded.search', '録画番組検索']
+		].map(function(choice) {
+			var control = ChinachuPreferences.createSwitch(null, choice[0], choice[1] + 'の番組説明を表示');
+			group.appendChild(control.element);
+			return control;
+		});
+		this.node('p', group, '番組説明の表示はタブごとに設定できます。タイトルの下に最大2行表示します。全文は番組詳細で確認できます。このブラウザにのみ適用・再起動不要。', 'config-help');
 		this.descriptionFontSizeSelect = ChinachuPreferences.createDescriptionFontSizeSelect();
 		group.appendChild(this.descriptionFontSizeSelect.element);
-		this.node('p', group, '番組説明の文字サイズを変更します。標準は12pxです。このブラウザにのみ適用・即時保存・再起動不要。', 'config-help');
+		this.node('p', group, '番組説明の文字サイズは各タブ共通です。標準は12pxです。このブラウザにのみ適用・即時保存・再起動不要。', 'config-help');
 		this.clickActionSelect = ChinachuPreferences.createClickActionSelect();
 		group.appendChild(this.clickActionSelect.element);
 		this.node('p', group, 'スキップ優先時は行を左クリックすると確認なしでスキップ／解除します。「詳細」ボタンから番組詳細を開けます。手動予約の行は詳細を開きます。このブラウザにのみ適用・即時保存。', 'config-help');
