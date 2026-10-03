@@ -6,13 +6,42 @@ const vm = require('node:vm');
 const path = require('node:path');
 const sinon = require('sinon');
 
-function implementation(timers = { setTimeout, clearTimeout }) {
-	const context = vm.createContext({ window: timers, flagrate: { Grid: function() {} } });
+function implementation(timers = { setTimeout, clearTimeout }, Base = function() {}) {
+	const context = vm.createContext({ window: timers, flagrate: { Grid: Base } });
 	vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/virtual-grid.js'), 'utf8'), context);
 	return context.window.ChinachuVirtualGrid;
 }
 
 describe('virtual list geometry and selection', function() {
+	it('keeps the current viewport mounted until the scheduled refresh', function() {
+		function Base() {}
+		Base.prototype.splice = function(index, count, rows) {
+			const removed = this._rows.splice(index, count === undefined ? this._rows.length - index : count, ...rows);
+			this._requestRender();
+			return removed;
+		};
+		const Grid = implementation(undefined, Base);
+		const grid = Object.create(Grid.prototype);
+		const current = { data: { id: 'one', start: 100 }, _tr: {} };
+		const updated = { data: { id: 'one', start: 100, isSkip: true } };
+		grid._rows = [current];
+		grid._selectedRows = [];
+		grid._mounted = new Set([current]);
+		grid._heights = new Grid.Heights([61]);
+		grid._keys = ['one:100:0'];
+		grid._body = { scrollTop: 10, scrollLeft: 20 };
+		grid._requestRender = sinon.spy();
+		grid._unmount = sinon.spy();
+		grid.splice(0, undefined, [updated]);
+		assert.equal(grid._unmount.callCount, 0);
+		assert.ok(grid._mounted.has(current));
+		assert.strictEqual(grid._rows[0], updated);
+		assert.equal(grid._requestRender.callCount, 1);
+		assert.equal(grid._pendingAnchor.key, 'one:100:0');
+		assert.equal(grid._pendingAnchor.offset, 10);
+		assert.equal(grid._pendingAnchor.left, 20);
+	});
+
 	it('locates variable-height rows at boundaries and after height corrections', function() {
 		const Grid = implementation();
 		const values = Array.from({ length: 10000 }, (_, i) => 30 + i % 91);

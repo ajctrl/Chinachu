@@ -116,8 +116,9 @@
 	};
 	VirtualGrid.prototype.splice = function (index, count, rows) {
 		var anchor = this._pendingAnchor || this._saved || this._anchor();
-		// Data changes invalidate row heights (e.g. the description display switch).
-		this._mounted.forEach(this._unmount.bind(this));
+		// Keep the current rows mounted until the next render. Removing them here
+		// leaves the viewport empty for a frame whenever the data is refreshed.
+		// _render() removes the old row objects before mounting the new visible set.
 		var removed = Base.prototype.splice.call(this, index, count, rows);
 		var removedSet = new Set(removed);
 		this._selectedRows = this._selectedRows.filter(function (row) { return !removedSet.has(row); });

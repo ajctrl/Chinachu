@@ -29,12 +29,127 @@ function complete(ctx, index, skip, failure) {
 	if (failure) req.options.onFailure({ status: failure });
 	else {
 		const id = req.url.split('/')[3];
-		const program = JSON.parse(JSON.stringify(ctx.global.chinachu.reserves.find(p => p.id === id)));
+		const program = vm.runInContext('JSON', ctx).parse(JSON.stringify(ctx.global.chinachu.reserves.find(p => p.id === id)));
 		if (skip) planner.skip(program); else planner.unskip(program);
 		req.options.onSuccess({ status: 200, responseJSON: { program } });
 	}
 	req.options.onComplete();
 }
+
+function reservationList() {
+	const ctx = browser();
+	vm.runInContext(`
+		Array.prototype.each = Array.prototype.forEach;
+		Array.prototype.invoke = function(method) {
+			var args = Array.prototype.slice.call(arguments, 1);
+			return this.map(function(value) { return value[method].apply(value, args); });
+		};
+		String.prototype.escapeHTML = function() {
+			return this.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+		};
+		global.chinachu.reserves.forEach(function(program) {
+			program.fullTitle = program.title;
+			program.detail = '番組説明';
+			program.flags = [];
+			program.category = 'anime';
+			program.channel = { id: 'ch', name: 'チャンネル', type: 'GR' };
+			program.seconds = 1800;
+		});
+		P.grid = { rows: [], splice: function(index, count, rows) { this.rows = rows; } };
+		P.drawMain();
+		var fire = document.fire;
+		document.fire = function(name, memo) { fire(name, memo); P.refresh(); };
+	`, ctx);
+	return ctx;
+}
+
+describe('reservation list refresh', function() {
+	it('retains unaffected rows and measured heights through skip, undo and failure', function() {
+		const ctx = reservationList();
+		const initial = ctx.P.grid.rows;
+		const dom = {};
+		initial[1]._tr = dom;
+		initial[1]._virtualHeight = 61;
+		const unchanged = () => {
+			assert.strictEqual(ctx.P.grid.rows[1], initial[1]);
+			assert.strictEqual(ctx.P.grid.rows[1]._tr, dom);
+			assert.equal(ctx.P.grid.rows[1]._virtualHeight, 61);
+			assert.strictEqual(ctx.P.grid.rows[2], initial[2]);
+		};
+		ctx.P.setProgramSkip(initial[0].data, true);
+		assert.notStrictEqual(ctx.P.grid.rows[0], initial[0]);
+		assert.match(ctx.P.grid.rows[0].className, /reserve-pending/);
+		unchanged();
+		complete(ctx, 0, true);
+		assert.match(ctx.P.grid.rows[0].className, /reserve-skipped/);
+		assert.doesNotMatch(ctx.P.grid.rows[0].className, /reserve-pending/);
+		assert.equal(ctx.P.grid.rows[0].menuItems[0].label, 'スキップの取消...');
+		unchanged();
+		ctx.notices[0].undo();
+		unchanged();
+		complete(ctx, 1, false);
+		assert.doesNotMatch(ctx.P.grid.rows[0].className, /reserve-skipped|reserve-pending/);
+		unchanged();
+		ctx.P.setProgramSkip(ctx.P.grid.rows[0].data, true);
+		complete(ctx, 2, false, 500);
+		assert.doesNotMatch(ctx.P.grid.rows[0].className, /reserve-skipped|reserve-pending/);
+		unchanged();
+	});
+
+	it('reuses rows after identical server updates but detects in-place changes and new broadcasts', function() {
+		const ctx = reservationList();
+		const initial = ctx.P.grid.rows;
+		vm.runInContext('global.chinachu.reserves = JSON.parse(JSON.stringify(global.chinachu.reserves)); P.refresh();', ctx);
+		initial.forEach((row, i) => {
+			assert.strictEqual(ctx.P.grid.rows[i], row);
+			assert.strictEqual(row.data, ctx.global.chinachu.reserves[i]);
+		});
+		ctx.global.chinachu.reserves[0].excludedKeywords = ['除外'];
+		ctx.global.chinachu.reserves[0].autoSkipOverride = true;
+		ctx.P.refresh();
+		assert.notStrictEqual(ctx.P.grid.rows[0], initial[0]);
+		assert.equal(ctx.P.grid.rows[0].cell.excludedKeywords.text, '除外（手動解除）');
+		assert.strictEqual(ctx.P.grid.rows[1], initial[1]);
+		ctx.global.chinachu.reserves[1].start++;
+		ctx.P.refresh();
+		assert.notStrictEqual(ctx.P.grid.rows[1], initial[1]);
+		assert.strictEqual(ctx.P.grid.rows[2], initial[2]);
+	});
+
+	it('rebuilds rows for description settings and handles insertions and deletions', function() {
+		const ctx = reservationList();
+		let previous = ctx.P.grid.rows;
+		ctx.ChinachuPreferences.set(true);
+		ctx.P.refresh();
+		ctx.P.grid.rows.forEach((row, i) => {
+			assert.notStrictEqual(row, previous[i]);
+			assert.match(row.className, /reserve-description-row/);
+		});
+		previous = ctx.P.grid.rows;
+		ctx.ChinachuPreferences.setDescriptionFontSize('16px');
+		ctx.P.refresh();
+		ctx.P.grid.rows.forEach((row, i) => {
+			assert.notStrictEqual(row, previous[i]);
+			assert.match(row.cell.title.html, /font-size: 16px/);
+		});
+		previous = ctx.P.grid.rows;
+		vm.runInContext(`
+			global.chinachu.reserves.unshift(Object.assign({}, global.chinachu.reserves[0], { id: 'inserted', start: 0 }));
+			P.refresh();
+		`, ctx);
+		previous.forEach((row, i) => {
+			assert.strictEqual(ctx.P.grid.rows[i + 1], row);
+			assert.equal(row.cell.id.sortAlt, i + 1);
+		});
+		ctx.global.chinachu.reserves.splice(1, 1);
+		ctx.P.refresh();
+		assert.equal(ctx.P.grid.rows.length, 3);
+		assert.strictEqual(ctx.P.grid.rows[1], previous[1]);
+		ctx.global.chinachu.reserves.length = 0;
+		ctx.P.refresh();
+		assert.equal(ctx.P.grid.rows.length, 0);
+	});
+});
 
 describe('reservation click actions', function() {
 	it('notifies observers with the full current list before and after skip, undo and failure', function() {

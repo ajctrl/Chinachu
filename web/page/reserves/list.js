@@ -215,6 +215,10 @@ P = Class.create(P, {
 	drawMain: function() {
 
 		var rows = [];
+		var previousRows = new Map();
+		this.grid.rows.forEach(function(row) {
+			previousRows.set(row.data.id + ':' + row.data.start, row);
+		});
 
 		var programs = [];
 
@@ -230,8 +234,22 @@ P = Class.create(P, {
 		var descriptionFontSize = ChinachuPreferences.getDescriptionFontSize();
 		var page = this;
 		programs.each(function(program, i) {
+			var key = program.id + ':' + program.start;
+			var previousRow = previousRows.get(key);
+			previousRows.delete(key);
+			var pending = ChinachuReservationActions.isPending(program.id);
+			// Keep unchanged DOM, DynamicTime instances and measured row heights.
+			// Snapshot values because reservation objects can also change in place.
+			var signature = JSON.stringify([program, pending, showDescription, descriptionFontSize]);
+			if (previousRow && previousRow._reserveSignature === signature) {
+				previousRow.data = program;
+				previousRow.cell.id.sortAlt = i;
+				rows.push(previousRow);
+				return;
+			}
 
 			var row = {
+				_reserveSignature: signature,
 				className: showDescription ? 'reserve-description-row' : '',
 				data: program,
 				cell: {
@@ -280,7 +298,7 @@ P = Class.create(P, {
 				details.addEventListener('click', function(event) { event.stopPropagation(); });
 				return { entity: details, remove: function() { details.remove(); } };
 			} };
-			if (ChinachuReservationActions.isPending(program.id)) row.className += ' reserve-pending';
+			if (pending) row.className += ' reserve-pending';
 
 			row.cell.type = {
 				sortAlt  : program.channel.type,
@@ -349,7 +367,7 @@ P = Class.create(P, {
 				row.className += ' disabled';
 			}
 
-			if (ChinachuReservationActions.isPending(program.id)) titleHtml = '<span class="reserve-pending-spinner" role="status" aria-label="処理中" title="処理中"></span>' + titleHtml;
+			if (pending) titleHtml = '<span class="reserve-pending-spinner" role="status" aria-label="処理中" title="処理中"></span>' + titleHtml;
 
 			if (showDescription && program.detail) {
 				titleHtml = '<div class="reserve-title">' + titleHtml + '</div><div class="reserve-description" style="font-size: ' + descriptionFontSize + '">' + String(program.detail).replace(/\r\n|\r|\n/g, ' ').escapeHTML() + '</div>';
