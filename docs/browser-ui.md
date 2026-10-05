@@ -8,7 +8,7 @@ Tabulator を使用します。npm のサーバー依存とは別に、ブラウ
 | --- | --- |
 | ボタン、ダイアログ、フォーム、タブ、スライダー | Web Awesome 3.14.0 (MIT) |
 | 一覧表の仮想スクロール、ソート、選択 | Tabulator 6.6.1 (MIT) |
-| 設定のJSON編集 | 既存のAceサブモジュール |
+| 設定のJSON編集 | Ace 1.44.0 (BSD-3-Clause)、固定したサブモジュール |
 | サーバーからの更新通知 | サーバーが配信するSocket.IOクライアント |
 | 日本語フォント | Noto Sans JP variable WOFF2 (SIL OFL 1.1) |
 
@@ -22,6 +22,7 @@ Tabulator を使用します。npm のサーバー依存とは別に、ブラウ
 | PEP | Pointer Events | ポインター入力 |
 | Hyperform | HTML標準のフォーム検証 | 入力値の検証 |
 | date.format.js | Chinachuの `formatDate` 関数 | 日付の表示 |
+| Ace 1.1.2（2013年） | Ace 1.44.0 | 設定のJSON編集、構文チェック |
 
 Noto Sans JPは `web/lib/notosansjp/` に同梱しています。表示端末のインストール済みフォントに依存せず、通常起動時のCDN接続なしで表示できます。
 
@@ -60,6 +61,15 @@ python3 scripts/vendor-browser-libraries.py
 配布物の整合性を検証してから同梱ファイルを更新します。この操作にはネットワークが必要です。
 `components.js` に部品を追加した場合も再実行してください。
 
+Aceは公式の `ajaxorg/ace-builds` サブモジュールをタグ `v1.44.0`
+（コミット `184177de1dcc5946b093edba0b0fe1c29c2a127a`）に固定しています。
+本体、JSONモード、GitHubテーマ、JSON構文チェック用Workerはすべてローカルから読み込みます。
+上記の配布物再生成スクリプトには含めません。取得・更新後の復元には次を実行します。
+
+```sh
+git submodule update --init web/lib/ace
+```
+
 Noto Sans JPは、Gitで管理する固定のCSSと、`vendor.json` に記録した各WOFF2・ライセンスの配布URLおよびSHA-512を使って再生成します。
 Google FontsのCSS APIを起動時や再生成時に呼び出さないため、配布バージョンやURLが自動で変わることはありません。
 フォントのみを再生成する場合は `python3 scripts/vendor-browser-libraries.py notosansjp`、
@@ -86,6 +96,15 @@ NODE_PATH=/tmp/chinachu-browser-tools/node_modules node scripts/check-browser-ui
 NODE_PATH=/tmp/chinachu-browser-tools/node_modules node scripts/check-virtual-grid.js
 ```
 
+Firefoxで画面・Aceの検証を行う場合は、PlaywrightのFirefoxと必要な共有ライブラリを用意して実行します。
+
+```sh
+/tmp/chinachu-browser-tools/node_modules/.bin/playwright install firefox
+CHINACHU_BROWSER=firefox NODE_PATH=/tmp/chinachu-browser-tools/node_modules node scripts/check-browser-pages.cjs
+```
+
 画面検証は専用のHTTP/Socket.IOテストサーバーを使い、実際の録画環境には接続しません。
 全16画面、狭い画面幅、説明文の安全な表示、ポインター操作、フォーム、ダイアログ、
 1万件の一覧表示、ソート、選択、状態保持を確認します。
+画面検証ではAceのJSON構文チェック、日本語入力、undo/redo、フォームとの相互反映、
+模擬APIへの保存内容も確認します。実際の設定ファイルは変更しません。

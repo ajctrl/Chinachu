@@ -1,7 +1,8 @@
 /* Optional end-to-end browser check. Install Playwright and Chromium separately,
  * then run NODE_PATH=/path/to/node_modules node scripts/check-browser-pages.cjs.
  * All HTTP/Socket.IO data comes from a temporary loopback fixture server. API
- * writes are rejected; no DVR service or recording files are accessed.
+ * writes are rejected except a browser-intercepted mock config save; no DVR
+ * service, real configuration files or recording files are accessed.
  */
 'use strict';
 
@@ -10,11 +11,13 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const { Server } = require('socket.io');
-const { chromium } = require('playwright');
+const browserName = process.env.CHINACHU_BROWSER || 'chromium';
+if (!['chromium', 'firefox'].includes(browserName)) throw new Error('CHINACHU_BROWSER must be chromium or firefox');
+const browserType = require('playwright')[browserName];
 const webRoot = path.resolve(__dirname, '../web');
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.gif': 'image/gif', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
 const screenshotDir = process.env.CHINACHU_BROWSER_SCREENSHOTS;
-const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
+const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg==', 'base64');
 
 function makeFixture() {
 	const now = Date.now();
@@ -83,7 +86,7 @@ async function run() {
 	const origin = 'http://127.0.0.1:' + server.address().port;
 	let browser;
 	try {
-		browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+		browser = await browserType.launch({ headless: true, args: browserName === 'chromium' ? ['--no-sandbox'] : [] });
 		const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'ja-JP' });
 		const errors = [], external = [];
 		await context.route('**/*', route => {
@@ -214,8 +217,63 @@ async function run() {
 		await page.getByText('JSON編集', { exact: true }).first().click();
 		assert.equal(await page.evaluate(() => app.pm.p.activeTab), 'json');
 		assert.equal(await page.evaluate(() => JSON.parse(app.pm.p.data.editor.getValue()).wuiPort), 10772);
+		const aceVersion = JSON.parse(fs.readFileSync(path.join(webRoot, 'lib/ace/package.json'), 'utf8')).version;
+		assert.equal(await page.evaluate(() => ace.version), aceVersion, 'the browser must load the pinned Ace version');
+		await page.waitForFunction(() => app.pm.p.data.editor.session.getMode().$id === 'ace/mode/json' && app.pm.p.data.editor.session.$worker);
+		assert.equal(await page.evaluate(() => app.pm.p.data.editor.getTheme()), 'ace/theme/github');
+		const originalJson = await page.evaluate(() => app.pm.p.data.editor.getValue());
+		async function editJson(text) {
+			await page.evaluate(() => { app.pm.p.data.editor.focus(); app.pm.p.data.editor.selectAll(); });
+			await page.keyboard.insertText(text);
+			assert.equal(await page.evaluate(() => app.pm.p.data.editor.getValue()), text, 'Ace must preserve typed JSON and Japanese text');
+		}
+		const invalidJson = '{ "wuiPort": }';
+		await editJson(invalidJson);
+		await page.waitForFunction(() => app.pm.p.data.editor.session.getAnnotations().some(annotation => annotation.type === 'error'));
+		await page.getByRole('button', { name: 'サーバー設定を保存', exact: true }).click();
+		assert.match(await page.locator('.config-status').innerText(), /JSONを確認してください/);
+		assert.equal(await page.locator('wa-dialog[open]').count(), 0, 'invalid JSON must not open the save confirmation');
+		await page.evaluate(() => app.pm.p.data.editor.focus());
+		await page.keyboard.press('Control+z');
+		assert.equal(await page.evaluate(() => app.pm.p.data.editor.getValue()), originalJson);
+		await page.keyboard.press('Control+Shift+z');
+		assert.equal(await page.evaluate(() => app.pm.p.data.editor.getValue()), invalidJson);
+		const editedConfig = { ...JSON.parse(originalJson), wuiPort: 10773, customSetting: { text: '日本語の設定 <img src=x onerror="window.fixtureXss=true">' } };
+		await editJson(JSON.stringify(editedConfig, null, '  '));
+		await page.waitForFunction(() => app.pm.p.data.editor.session.getAnnotations().length === 0);
+		await page.getByRole('button', { name: '設定フォームに戻る', exact: true }).click();
+		assert.equal(await page.locator('#setting-wuiPort').inputValue(), '10773');
+		await page.locator('#setting-wuiPort').fill('10774');
+		await page.getByRole('button', { name: 'JSON編集', exact: true }).click();
+		editedConfig.wuiPort = 10774;
+		assert.deepEqual(await page.evaluate(() => JSON.parse(app.pm.p.data.editor.getValue())), editedConfig, 'form edits must preserve settings outside the form');
+		const savedConfig = [];
+		const configUrl = origin + '/api/config.json';
+		const mockConfigSave = async route => {
+			if (route.request().method() !== 'PUT') return route.continue();
+			savedConfig.push(new URLSearchParams(route.request().postData()));
+			return route.fulfill({ status: 200, headers: { 'Content-Type': 'application/json', ETag: '"fixture-saved"' }, body: '{}' });
+		};
+		await page.route(configUrl, mockConfigSave);
+		await page.getByRole('button', { name: 'サーバー設定を保存', exact: true }).click();
+		assert.equal(await page.locator('wa-dialog[label="サーバー設定の保存"][open]').count(), 1, await page.locator('.config-status').innerText());
+		// The footer is slotted light DOM outside the native dialog's subtree.
+		await page.locator('wa-dialog[label="サーバー設定の保存"][open]').getByRole('button', { name: '保存', exact: true }).click();
+		await page.waitForFunction(() => !app.pm.p.saving && app.pm.p.data.original?.wuiPort === 10774);
+		assert.equal(savedConfig.length, 1);
+		assert.deepEqual(JSON.parse(savedConfig[0].get('json')), editedConfig);
+		assert.equal(savedConfig[0].get('revision'), 'fixture-revision');
+		assert.equal(await page.evaluate(() => app.pm.p.data.revision), 'fixture-saved');
+		assert.equal(await page.evaluate(() => app.pm.p.data.editor.getReadOnly()), false);
+		assert.match(await page.locator('.config-status').innerText(), /設定を保存しました/);
+		assert.equal(await page.evaluate(() => window.fixtureXss), undefined);
+		assert.ok(requests.includes('/lib/ace/src-min-noconflict/worker-json.js'), 'JSON validation must use the local Worker');
+		await page.unroute(configUrl, mockConfigSave);
+		await page.evaluate(() => { window.fixtureEditor = app.pm.p.data.editor; });
+		console.log('PASS Ace ' + aceVersion + ': local JSON Worker/theme, Japanese editing, undo/redo, form synchronization and mock save');
 		for (const name of ['schedule/table', 'schedule/timeline']) {
 			await route(name);
+			assert.equal(await page.evaluate(() => fixtureEditor.destroyed && !fixtureEditor.session.$worker), true, 'leaving settings must destroy the editor and its Worker');
 			await page.waitForSelector('.rect[rel]');
 			if (name === 'schedule/table') {
 				const counts = await page.evaluate(async () => {
@@ -244,7 +302,7 @@ async function run() {
 		await route('reserves/list');
 		await route('program/view', 'id=future-1');
 		assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'mobile page must not overflow the viewport');
-		const touchContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: 'ja-JP' });
+		const touchContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: browserName === 'chromium', hasTouch: true, locale: 'ja-JP' });
 		await touchContext.route('**/*', route => {
 			if (new URL(route.request().url()).origin === origin) return route.continue();
 			external.push(route.request().url()); return route.abort();
@@ -272,7 +330,7 @@ async function run() {
 		assert.equal(requests.some(url => /\/lib\/(?:prototype|pep\.|date\.format|hyperform|bootstrap|flagrate|sakurapanel)/i.test(url)), false, 'removed libraries requested');
 		assert.equal(writes.length, 0, 'unexpected API writes: ' + writes.join(', '));
 		assert.equal(errors.length, 0, errors.join('\n'));
-		console.log('Browser checks passed: 16 routes, desktop/mobile, safe description links, mouse/touch pointer controls, local assets, no API writes.');
+		console.log('Browser checks passed (' + browserName + '): 16 routes, desktop/narrow viewport, safe description links, mouse/touch pointer controls, local assets, Ace JSON editing/mock save, no server API writes.');
 	} finally {
 		if (browser) await browser.close();
 		await new Promise(resolve => io.close(resolve));
