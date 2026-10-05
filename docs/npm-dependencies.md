@@ -32,6 +32,9 @@
 `chinachu-common`は外部配布物ではなく `file:common` を参照します。
 `common/package.json`には実際に使用する `dateformat` を宣言し、単独で依存を取得する場合も対応します。
 
+未使用の開発用依存 `sinon` を削除しました。本体と専用の間接依存を合わせて6個の
+インストール分が減り、Mochaでも使用する `diff` は残しています。
+
 ## uuidの限定的な指定
 
 Mirakurun 4.1.5の `jsonrpc2-ws` が古いuuidを要求するため、ルートの `overrides` で
