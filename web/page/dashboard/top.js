@@ -1,4 +1,4 @@
-P = Class.create(P, {
+Chinachu.definePage({
 
 	init: function () {
 
@@ -6,29 +6,29 @@ P = Class.create(P, {
 
 		this.draw();
 
-		this.onSchedule = this.drawChannels.bindAsEventListener(this);
-		document.observe('chinachu:schedule', this.onSchedule);
+		this.onSchedule = this.drawChannels.bind(this);
+		Chinachu.on(document, 'chinachu:schedule', this.onSchedule);
 		this.timer.channels = setInterval(this.onSchedule, 1000 * 15);
 
-		this.onReserves = this.drawReserves.bindAsEventListener(this);
-		document.observe('chinachu:reserves', this.onReserves);
+		this.onReserves = this.drawReserves.bind(this);
+		Chinachu.on(document, 'chinachu:reserves', this.onReserves);
 
-		this.onRecording = this.drawRecording.bindAsEventListener(this);
-		document.observe('chinachu:recording', this.onRecording);
+		this.onRecording = this.drawRecording.bind(this);
+		Chinachu.on(document, 'chinachu:recording', this.onRecording);
 		this.timer.recording = setInterval(this.onRecording, 1000 * 30);
 
-		this.onRecorded = this.drawRecorded.bindAsEventListener(this);
-		document.observe('chinachu:recorded', this.onRecorded);
+		this.onRecorded = this.drawRecorded.bind(this);
+		Chinachu.on(document, 'chinachu:recorded', this.onRecorded);
 
 		return this;
 	},
 
 	deinit: function () {
 
-		document.stopObserving('chinachu:schedule', this.onSchedule);
-		document.stopObserving('chinachu:reserves', this.onReserves);
-		document.stopObserving('chinachu:recording', this.onRecording);
-		document.stopObserving('chinachu:recorded', this.onRecorded);
+		Chinachu.off(document, 'chinachu:schedule', this.onSchedule);
+		Chinachu.off(document, 'chinachu:reserves', this.onReserves);
+		Chinachu.off(document, 'chinachu:recording', this.onRecording);
+		Chinachu.off(document, 'chinachu:recorded', this.onRecorded);
 
 		return this;
 	},
@@ -39,22 +39,22 @@ P = Class.create(P, {
 		this.view.content.update();
 
 		// create layout grid
-		var container = flagrate.createElement("div", { "class": "container-fluid" }).insertTo(this.view.content);
-		var r1 = flagrate.createElement("div", { "class": "row" }).insertTo(container);
-		var r1F = flagrate.createElement("div", { "class": "col-md-12" }).insertTo(r1);
-		var r2 = this.r2 = flagrate.createElement("div", { "class": "row channel-cards" }).insertTo(container);
-		var r3 = flagrate.createElement("div", { "class": "row program-cards" }).insertTo(container);
-		this.r3L = flagrate.createElement("div", { "class": "col-md-4" }).insertTo(r3);
-		this.r3C = flagrate.createElement("div", { "class": "col-md-4" }).insertTo(r3);
-		this.r3R = flagrate.createElement("div", { "class": "col-md-4" }).insertTo(r3);
+		var container = ChinachuUI.createElement("div", { "class": "page-layout" }).insertTo(this.view.content);
+		var r1 = ChinachuUI.createElement("div", { "class": "layout-row" }).insertTo(container);
+		var r1F = ChinachuUI.createElement("div", { "class": "layout-full" }).insertTo(r1);
+		var r2 = this.r2 = ChinachuUI.createElement("div", { "class": "layout-row channel-cards" }).insertTo(container);
+		var r3 = ChinachuUI.createElement("div", { "class": "layout-row program-cards" }).insertTo(container);
+		this.r3L = ChinachuUI.createElement("div", { "class": "layout-third" }).insertTo(r3);
+		this.r3C = ChinachuUI.createElement("div", { "class": "layout-third" }).insertTo(r3);
+		this.r3R = ChinachuUI.createElement("div", { "class": "layout-third" }).insertTo(r3);
 
-		var toggleChannels = flagrate.createButton({
-			labelHTML: "<span class='glyphicon glyphicon-flag'></span>放送中の番組とライブ視聴...",
+		var toggleChannels = ChinachuUI.createButton({
+			label: "放送中の番組とライブ視聴...",
 			className: "toggle-channels",
 			onSelect: function () {
 
 				toggleChannels.toggleClassName("dent");
-				r2.toggle();
+				if (r2.hidden) r2.show(); else r2.hide();
 
 				if (localStorage.getItem("dashboard.showChannels") === "yes") {
 					localStorage.setItem("dashboard.showChannels", "no");
@@ -73,10 +73,10 @@ P = Class.create(P, {
 
 		this.hideChannels = JSON.parse(localStorage.getItem('schedule.hide.channels') || '[]');
 
-		setTimeout(this.drawChannels.bind(this), 0);
-		setTimeout(this.drawReserves.bind(this), 0);
-		setTimeout(this.drawRecording.bind(this), 0);
-		setTimeout(this.drawRecorded.bind(this), 0);
+		this.timer.drawChannels = setTimeout(this.drawChannels.bind(this), 0);
+		this.timer.drawReserves = setTimeout(this.drawReserves.bind(this), 0);
+		this.timer.drawRecording = setTimeout(this.drawRecording.bind(this), 0);
+		this.timer.drawRecorded = setTimeout(this.drawRecorded.bind(this), 0);
 
 		return this;
 	},
@@ -97,28 +97,23 @@ P = Class.create(P, {
 
 		r2.update();
 
-		global.chinachu.schedule.each(function (channel) {
+		global.chinachu.schedule.forEach(function (channel) {
 
 			if (hideChannels.indexOf(channel.id) !== -1) {
 				return;
 			}
 
-			var onair = null;
-
-			channel.programs.each(function (program) {
-				if (now >= program.start && now < program.end) {
-					onair = program;
-					throw $break;
-				}
+			var onair = channel.programs.find(function(program) {
+				return now >= program.start && now < program.end;
 			});
 
 			if (!onair) { return; }
 			if (onair.title === "放送休止") { return; }
 
-			var col = flagrate.createElement("div", { "class": "col-sm-3" }).insertTo(r2);
-			var card = flagrate.createElement("div", { "class": "channel-card" }).insertTo(col);
+			var col = ChinachuUI.createElement("div", { "class": "layout-quarter" }).insertTo(r2);
+			var card = ChinachuUI.createElement("div", { "class": "channel-card" }).insertTo(col);
 
-			var ch = flagrate.createElement("div", {
+			var ch = ChinachuUI.createElement("div", {
 				"class": "channel label-type-" + channel.type
 			}).insertTo(card);
 
@@ -129,9 +124,9 @@ P = Class.create(P, {
 				});
 			}
 
-			ch.insert('<a href="#!/search/top/skip=1&chid=' + channel.id + '">' + channel.name + '</a>');
+			ChinachuUI.createElement('a', { href: '#!/search/top/skip=1&chid=' + encodeURIComponent(channel.id) + '/' }).insertText(channel.name).insertTo(ch);
 
-			flagrate.createButton({
+			ChinachuUI.createButton({
 				className: "live",
 				label: "ライブ視聴",
 				onSelect: function () {
@@ -139,17 +134,17 @@ P = Class.create(P, {
 				}
 			}).insertTo(ch);
 
-			flagrate.createProgress({
+			ChinachuUI.createProgress({
 				value: Date.now() - onair.start,
 				max: onair.end - onair.start
 			}).insertTo(card);
 
-			flagrate.createButton({
+			ChinachuUI.createButton({
 				className: "program",
-				labelHTML: "<span class='label-cat-" + onair.category + "'>" + onair.category + "</span>" + onair.title,
+				label: onair.category + " " + onair.title,
 				color: "@transparent",
 				attribute: {
-					title: onair.fullTitle + "\n\n" + onair.detail.truncate(300)
+					title: onair.fullTitle + "\n\n" + String(onair.detail || '').slice(0, 300)
 				},
 				onSelect: function () {
 					location.hash = "!/program/view/id=" + onair.id;
@@ -163,9 +158,9 @@ P = Class.create(P, {
 	drawReserves: function () {
 
 		this.drawPrograms(
-			"RESERVES".__(),
+			Chinachu.t("RESERVES"),
 			"reserves",
-			"panel-primary",
+			"program-panel-reserves",
 			this.r3L,
 			global.chinachu.reserves
 		);
@@ -180,9 +175,9 @@ P = Class.create(P, {
 		}
 
 		this.drawPrograms(
-			"RECORDING".__(),
+			Chinachu.t("RECORDING"),
 			"recording",
-			"panel-danger",
+			"program-panel-recording",
 			this.r3C,
 			global.chinachu.recording
 		);
@@ -193,9 +188,9 @@ P = Class.create(P, {
 	drawRecorded: function () {
 
 		this.drawPrograms(
-			"RECORDED".__(),
+			Chinachu.t("RECORDED"),
 			"recorded",
-			"panel-success",
+			"program-panel-recorded",
 			this.r3R,
 			global.chinachu.recorded
 		);
@@ -207,55 +202,49 @@ P = Class.create(P, {
 
 		container.update();
 
-		var panel = flagrate.createElement("div", {
-			"class": "panel " + className
+		var panel = ChinachuUI.createElement("div", {
+			"class": "program-panel " + className
 		}).insertTo(container);
 
-		flagrate.createElement("div", {
-			"class": "panel-heading"
+		ChinachuUI.createElement("div", {
+			"class": "program-panel-heading"
 		}).insertText(
-			'OF{0} {1}'.__([programs.length.toString(10), title])
+			Chinachu.t('OF{0} {1}', [programs.length.toString(10), title])
 		).insertTo(panel);
 
 		if (programs.length === 0) {
 			return this;
 		}
 
-		var ul = flagrate.createElement("ul", { "class": "list-group" }).insertTo(panel);
+		var ul = ChinachuUI.createElement("ul", { "class": "program-list" }).insertTo(panel);
 
 		var now = Date.now();
-		var hasMore = false;
+		var hasMore = programs.length > 11;
 
-		programs.each(function (program, i) {
+		programs.slice(0, 11).forEach(function (program, i) {
 
-			if (i > 10) {
-				hasMore = true;
-				throw $break;
-			}
 
 			program = chinachu.util.getProgramById(program.id);
 
-			var li = flagrate.createElement("li", {
-				"class": "list-group-item",
-				title: program.fullTitle + "\n\n" + program.detail.truncate(300)
+			var li = ChinachuUI.createElement("li", {
+				"class": "program-list-item",
+				title: program.fullTitle + "\n\n" + String(program.detail || '').slice(0, 300)
 			}).insertTo(ul);
 			li.onclick = function () {
 				location.hash = "!/program/view/id=" + program.id;
 			}
 
-			var title = flagrate.createElement("div", { "class": "title" }).insertTo(li);
-			title.insert(
-				"<span class='label-cat-" + program.category + "'>" + program.category + "</span>" +
-				program.flags.invoke('sub', /.+/, '<span rel="#{0}">#{0}</span>').join('') +
-				program.title
-			);
-			if (program.episode) {
-				title.insert('<span class="episode">#' + program.episode + '</span>');
-			}
+			var title = ChinachuUI.createElement("div", { "class": "title" }).insertTo(li);
+			ChinachuUI.createElement('span', { 'class': 'label-cat-' + program.category }).insertText(program.category).insertTo(title);
+			(program.flags || []).forEach(function(flag) {
+				ChinachuUI.createElement('span', { rel: flag }).insertText(flag).insertTo(title);
+			});
+			title.insertText(program.title);
+			if (program.episode) ChinachuUI.createElement('span', { 'class': 'episode' }).insertText('#' + program.episode).insertTo(title);
 
 			if (program._isRecording && program.pid) {
-				flagrate.createElement("img", {
-					"class": "img-rounded img-responsive",
+				ChinachuUI.createElement("img", {
+					"class": "program-preview",
 					src: "./api/recording/" + program.id + "/preview.jpg?width=480&height=270&_n=" + now
 				}).insertTo(li);
 			}
@@ -267,10 +256,7 @@ P = Class.create(P, {
 			}).entity;
 			li.insert(dt);
 
-			li.insert(
-				'<span class="label label-type-' + program.channel.type + '">' + program.channel.type + ': ' +
-				program.channel.name + '</span>'
-			);
+			ChinachuUI.createElement('span', { 'class': 'badge label-type-' + program.channel.type }).insertText(program.channel.type + ': ' + program.channel.name).insertTo(li);
 
 			var contextMenuItems = [
 				{
@@ -353,17 +339,17 @@ P = Class.create(P, {
 				}
 			}
 
-			flagrate.createContextMenu({
+			ChinachuUI.createContextMenu({
 				target: li,
 				items : contextMenuItems
 			});
 		});
 
 		if (hasMore) {
-			flagrate.createElement("div", {
-				"class": "panel-footer"
+			ChinachuUI.createElement("div", {
+				"class": "program-panel-footer"
 			}).insert(
-				'<span class="glyphicon glyphicon-chevron-right"></span> <a href="#!/' + type + '/list/">すべて表示</a>'
+				'<a href="#!/' + type + '/list/">すべて表示 →</a>'
 			).insertTo(panel);
 		}
 

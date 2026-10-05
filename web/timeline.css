@@ -1,0 +1,27 @@
+/* Horizontal EPG: channel labels and the time ruler stay aligned with the board. */
+div.timeline { background: #343434; color: #333; isolation: isolate; }
+.timeline > .board { position: absolute; inset: 30px 0 0; overflow: auto; overscroll-behavior: contain; }
+.timeline .timeline-extent { pointer-events: none; visibility: hidden; }
+.timeline > .head { position: absolute; z-index: 3; inset: 30px auto 0 0; width: 150px; overflow: hidden; background: #292929; border-right: 1px solid #555; }
+.timeline > .head > div { position: absolute; left: 0; right: 0; padding: 3px 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #eee; background: #404040; font-size: 12px; line-height: 19px; cursor: pointer; }
+.timeline > .head > div:hover { background: #555; }
+.timeline > .timescale { position: absolute; z-index: 3; inset: 0 0 auto 150px; height: 30px; overflow: hidden; background: #444; color: #eee; font-size: 10px; }
+.timeline > .timescale > div:not(.timeline-extent) { position: absolute; bottom: 0; border-left: 1px solid #aaa; padding-left: 3px; white-space: nowrap; }
+.timeline > .timescale > .long { height: 24px; }
+.timeline > .timescale > .middle { height: 12px; }
+.timeline > .timescale > .short { height: 6px; }
+.timeline > .timescale > .date { height: 29px; color: #ffd9ee; }
+.timeline > .board > .handline { position: absolute; z-index: 2; top: 0; width: 2px; background: #e64977; pointer-events: none; }
+.timeline > .board > .cutline { position: absolute; z-index: 1; top: 0; width: 1px; border-left: 1px dashed #d98da9; pointer-events: none; }
+.timeline > .board > .rect { position: absolute; box-sizing: border-box; overflow: hidden; cursor: pointer; border: 1px solid #5555; border-radius: 2px; }
+.timeline > .board > .rect > div { overflow: hidden; padding: 3px; font-size: 12px; line-height: 17px; white-space: nowrap; text-overflow: ellipsis; }
+.timeline > .board > .rect:hover, .timeline > .board > .rect.spot { outline: 2px solid #e05f97; outline-offset: -2px; }
+.timeline > .board > .rect.reserved { border-bottom: 3px solid #c24186; }
+.timeline > .board > .rect.recording { border-bottom: 3px solid #c22; font-weight: bold; }
+.timeline > .board > .rect.skip { opacity: .55; text-decoration: line-through; }
+.timeline > .drawer { position: absolute; z-index: 5; right: 12px; bottom: 12px; box-sizing: border-box; width: min(380px, calc(100% - 24px)); max-height: calc(100% - 54px); overflow: auto; border: 1px solid #ccc; border-radius: 6px; background: #fff; box-shadow: 0 4px 18px #0005; }
+.timeline > .drawer.hide { display: none; }
+.timeline > .drawer .detail { white-space: pre-wrap; overflow-wrap: anywhere; }
+.timeline > .drawer .foot { padding: 0 10px 10px; }
+.timeline > .drawer .foot > wa-button { display: block; width: 100%; }
+.timeline > .drawer .foot > wa-button::part(base) { width: 100%; }

@@ -13,26 +13,24 @@ function browser() {
 		var rules = [{ reserve_titles: ['再放送'], isDisabled: true, sid: 2 }];
 		var ui = {}, P = {}, window = { location: {} }, global = { chinachu: { rules: [] } };
 		var formInputTypeChannels = {}, formInputTypeStrings = {};
-		Array.prototype.each = Array.prototype.forEach;
-		Array.prototype.first = function() { return this[0]; };
-		String.prototype.__ = function() { return String(this); };
-		String.prototype.truncate = function() { return String(this); };
-		Function.prototype.bindAsEventListener = Function.prototype.bind;
-		var Class = { create: function(parent, definition) {
-			if (definition) return definition;
-			function Constructor() { parent.initialize.apply(this, arguments); }
-			Constructor.prototype = parent;
-			return Constructor;
-		} };
-		var document = {
-			observe: function(name, handler) { handlers[name] = handler; },
-			stopObserving: function(name) { delete handlers[name]; },
-			fire: function(name) { events.push(name); if (handlers[name]) handlers[name](); }
+		var Chinachu = {
+			definePage: function(definition) { P = definition; },
+			createClass: function(methods) {
+				function Action() { this.initialize.apply(this, arguments); }
+				Object.assign(Action.prototype, methods);
+				return Action;
+			},
+			t: function(text) { return text; },
+			escapeHTML: function(text) { return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); },
+			on: function(target, name, handler) { handlers[name] = handler; },
+			off: function(target, name) { delete handlers[name]; },
+			emit: function(target, name) { events.push(name); if (handlers[name]) handlers[name](); }
 		};
+		var document = {};
 		function Button(options) { this.options = options; }
 		Button.prototype.disable = function() { this.disabled = true; return this; };
 		Button.prototype.enable = function() { this.disabled = false; return this; };
-		var sakura = { ui: { Button: Button, Element: function() {} } };
+
 		function Modal(options) {
 			Object.assign(this, options);
 			(this.buttons || []).forEach(function(button) { button.button = new Button({}); });
@@ -40,7 +38,16 @@ function browser() {
 			this.close = function() { this.closed = true; };
 			this.content = { updateText: function() {} };
 		}
-		var flagrate = {
+		var ChinachuUI = {
+			createElement: function(tag, attributes) {
+				return {
+					tag: tag, attributes: attributes, children: [],
+					insertText: function(text) { this.text = text; return this; },
+					insertTo: function(parent) { this.parentNode = parent; (parent.children || (parent.children = [])).push(this); return this; },
+					remove: function() { this.parentNode.children = this.parentNode.children.filter(child => child !== this); }
+				};
+			},
+			ActionButton: Button, ElementView: function() {},
 			Modal: Modal, createModal: function(options) { return new Modal(options); },
 			createForm: function(options) { forms.push(options); return { element: {}, getResult: function() { return result; } }; },
 			Grid: function(options) {
@@ -65,11 +72,11 @@ function browser() {
 				};
 			}
 		};
-		var Ajax = { Request: function(url, options) {
+		Chinachu.request = function(url, options) {
 			requests.push({ method: options.method, url: url });
 			if (options.method === 'delete') rules.splice(Number(url.match(/\\/(\\d+)\\.json/)[1]), 1);
 			if (options.onSuccess) options.onSuccess({ responseJSON: /\\/\\d+\\.json$/.test(url) ? rules[0] : rules });
-		} };
+		};
 		function XMLHttpRequest() {
 			this.addEventListener = function(name, fn) { this.loaded = fn; };
 			this.setRequestHeader = function() {};
@@ -126,7 +133,7 @@ describe('common exclusion rule GUI', function () {
 
 	it('loads, edits, refreshes and deletes exclusion rows without touching normal rules', function () {
 		const ctx = browser();
-		vm.runInContext('var ChinachuVirtualGrid = flagrate.Grid;', ctx);
+		vm.runInContext('var ChinachuVirtualGrid = ChinachuUI.Grid;', ctx);
 		vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/page/rules/list.js'), 'utf8'), ctx);
 		vm.runInContext(`
 			var edits = [];
@@ -136,28 +143,74 @@ describe('common exclusion rule GUI', function () {
 				content: { update: function() {} }, title: { update: function(text) { this.text = text; } },
 				toolbar: { controls: {}, add: function(item) { this.controls[item.key] = item.ui; }, one: function(key) { return this.controls[key]; } }
 			};
+			P.view.title.parentNode = { children: [] };
 			P.init();
 			P.grid.selected = [P.grid.rows[0]];
 			P.updateToolbar();
 			P.view.toolbar.one('edit').options.onClick();
 		`, ctx);
 		assert.equal(ctx.P.view.title.text, '共通除外ルール');
+		assert.equal(ctx.P.view.toolbar.one('refresh'), undefined);
 		assert.equal(ctx.P.grid.rows[0].className, 'disabled');
 		assert.equal(ctx.edits[0].exclusion, true);
 		assert.equal(ctx.edits[0].num, 0);
-		vm.runInContext("document.fire('chinachu:exclusion-rules'); P.grid.selected = [P.grid.rows[0]]; P.view.toolbar.one('delete').options.onClick(); var modal = modals[0]; modal.buttons[0].onSelect({}, modal);", ctx);
-		assert.equal(ctx.P.grid.rows.length, 0);
+		vm.runInContext("rules.push({ channels: ['another-tab'] }); Chinachu.emit(document, 'chinachu:exclusion-rules');", ctx);
+		assert.equal(ctx.P.grid.rows.length, 2);
+		assert.equal(ctx.P.grid.rows[1].data.channels[0], 'another-tab');
+		vm.runInContext("Chinachu.emit(document, 'chinachu:exclusion-rules'); P.grid.selected = [P.grid.rows[0]]; P.view.toolbar.one('delete').options.onClick(); var modal = modals[0]; modal.buttons[0].onSelect({}, modal);", ctx);
+		assert.equal(ctx.P.grid.rows.length, 1);
 		assert.ok(ctx.requests.some(r => r.method === 'delete' && r.url === './api/exclusion-rules/0.json'));
 		assert.ok(ctx.requests.every(r => r.url.includes('exclusion-rules')));
-		vm.runInContext("P.view.toolbar.one('rule-kind').options.onClick(); P.deinit();", ctx);
-		assert.equal(ctx.window.location.href, '#!/rules/list/');
+		assert.equal(ctx.P.view.title.hidden, true);
+		const tabs = ctx.P.view.title.parentNode.children[0].children;
+		assert.equal(tabs[0].attributes.href, '#!/rules/list/');
+		assert.equal(tabs[0].attributes['aria-current'], null);
+		assert.equal(tabs[1].attributes.href, '#!/rules/list/kind=exclusion/');
+		assert.equal(tabs[1].attributes['aria-current'], 'page');
+		assert.equal(ctx.P.view.toolbar.one('rule-kind'), undefined);
+		vm.runInContext('P.deinit();', ctx);
+		assert.equal(ctx.P.view.title.hidden, false);
+		assert.equal(ctx.P.view.title.parentNode.children.length, 0);
 		assert.equal(ctx.handlers['chinachu:exclusion-rules'], undefined);
 		assert.equal(ctx.handlers['chinachu:schedule'], undefined);
 	});
 
+	it('fetches on server notification and keeps the latest response when refreshes overlap', function () {
+		const ctx = browser();
+		vm.runInContext('var ChinachuVirtualGrid = ChinachuUI.Grid;', ctx);
+		vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/page/rules/list.js'), 'utf8'), ctx);
+		const source = fs.readFileSync(path.join(__dirname, '../web/chinachu.js'), 'utf8').replace(/\r\n/g, '\n');
+		const handlerStart = source.indexOf('\tvar socketOnNotifyExclusionRules =');
+		const handlerEnd = source.indexOf('\n\tvar socketOnNotifyRules =', handlerStart);
+		vm.runInContext(`
+			var pending = [], socketCallbacks = {};
+			Chinachu.request = function(url, options) { pending.push(options); };
+			var app = { socket: { on: function(name, handler) { socketCallbacks[name] = handler; } } };
+			P.self = { query: { kind: 'exclusion' } };
+			P.view = {
+				content: { update: function() {} }, title: { update: function() {} },
+				toolbar: { controls: {}, add: function(item) { this.controls[item.key] = item.ui; }, one: function(key) { return this.controls[key]; } }
+			};
+			P.view.title.parentNode = { children: [] };
+			P.init();
+		`, ctx);
+		vm.runInContext(source.slice(handlerStart, handlerEnd), ctx);
+		vm.runInContext(source.split('\n').find(line => line.includes("app.socket.on('notify-exclusion-rules'")), ctx);
+		vm.runInContext(`
+			socketCallbacks['notify-exclusion-rules']();
+			pending[1].onSuccess({ responseJSON: [{ channels: ['latest'] }] });
+			pending[0].onSuccess({ responseJSON: [{ channels: ['stale'] }] });
+			pending[0].onFailure({ status: 500 });
+		`, ctx);
+		assert.equal(ctx.P.grid.rows[0].data.channels[0], 'latest');
+		assert.equal(ctx.modals.length, 0);
+		vm.runInContext("P.deinit(); socketCallbacks['notify-exclusion-rules']();", ctx);
+		assert.equal(ctx.pending.length, 2);
+	});
+
 	it('shows channel names after schedule loading, preserves raw IDs and updates on renaming', function() {
 		const ctx = browser();
-		vm.runInContext('var ChinachuVirtualGrid = flagrate.Grid;', ctx);
+		vm.runInContext('var ChinachuVirtualGrid = ChinachuUI.Grid;', ctx);
 		vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/page/rules/list.js'), 'utf8'), ctx);
 		vm.runInContext(`
 			global.chinachu.rules = [{ channels: ['station', 'missing'], ignore_channels: ['BS_211'] }, {}];
@@ -167,12 +220,13 @@ describe('common exclusion rule GUI', function () {
 				content: { update: function() {} }, title: { update: function() {} },
 				toolbar: { controls: {}, add: function(item) { this.controls[item.key] = item.ui; }, one: function(key) { return this.controls[key]; } }
 			};
+			P.view.title.parentNode = { children: [] };
 			P.init();
 		`, ctx);
 		assert.equal(ctx.P.grid.rows[0].cell.channels.text, 'station, missing');
 		vm.runInContext(`
 			global.chinachu.schedule = [{ id: 'station', name: '<b>BS11</b>', type: 'BS', channel: 'BS09_0', sid: 211 }];
-			document.fire('chinachu:schedule');
+			Chinachu.emit(document, 'chinachu:schedule');
 		`, ctx);
 		assert.equal(ctx.P.grid.rows[0].cell.channels.text, '[BS] <b>BS11</b>, missing');
 		assert.equal(ctx.P.grid.rows[0].cell.channels.html, undefined);
@@ -180,7 +234,7 @@ describe('common exclusion rule GUI', function () {
 		assert.match(ctx.P.grid.rows[0].cell.channels.attribute.title, /ID: station, missing/);
 		assert.equal(ctx.P.grid.rows[1].cell.channels.text, 'CH指定なし');
 		assert.equal(ctx.P.grid.rows[1].cell.ignore_channels.text, '除外なし');
-		vm.runInContext(`global.chinachu.schedule[0].name = '新しい局名'; document.fire('chinachu:schedule');`, ctx);
+		vm.runInContext(`global.chinachu.schedule[0].name = '新しい局名'; Chinachu.emit(document, 'chinachu:schedule');`, ctx);
 		assert.equal(ctx.P.grid.rows[0].cell.channels.text, '[BS] 新しい局名, missing');
 		assert.deepEqual(Array.from(ctx.global.chinachu.rules[0].channels), ['station', 'missing']);
 		vm.runInContext('P.deinit();', ctx);
@@ -191,7 +245,7 @@ describe('common exclusion rule GUI', function () {
 		it('retains single and multiple selections across schedule updates for ' + (isExclusion ? 'exclusion' : 'normal') + ' rules', function() {
 			const ctx = browser();
 			ctx.isExclusion = isExclusion;
-			vm.runInContext('var ChinachuVirtualGrid = flagrate.Grid;', ctx);
+			vm.runInContext('var ChinachuVirtualGrid = ChinachuUI.Grid;', ctx);
 			vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/page/rules/list.js'), 'utf8'), ctx);
 			vm.runInContext(`
 				rules = [{ channels: ['station'] }, { ignore_channels: ['station'] }, {}];
@@ -202,9 +256,10 @@ describe('common exclusion rule GUI', function () {
 					content: { update: function() {} }, title: { update: function() {} },
 					toolbar: { controls: {}, add: function(item) { this.controls[item.key] = item.ui; }, one: function(key) { return this.controls[key]; } }
 				};
-				P.init();
+				P.view.title.parentNode = { children: [] };
+			P.init();
 				P.grid.select([P.grid.rows[1]]);
-				document.fire('chinachu:schedule');
+				Chinachu.emit(document, 'chinachu:schedule');
 			`, ctx);
 			assert.equal(ctx.P.grid.getSelectedRows().length, 1);
 			assert.equal(ctx.P.grid.getSelectedRows()[0], ctx.P.grid.rows[1]);
@@ -216,7 +271,7 @@ describe('common exclusion rule GUI', function () {
 				// Sorting changes display order, so selection must follow rule identity.
 				P.grid.rows.reverse();
 				global.chinachu.schedule[0].name = '新しい局名';
-				document.fire('chinachu:schedule');
+				Chinachu.emit(document, 'chinachu:schedule');
 			`, ctx);
 			assert.deepEqual(Array.from(ctx.P.grid.getSelectedRows(), row => row.data), [ctx.rules[1], ctx.rules[2]]);
 			assert.ok(ctx.P.grid.getSelectedRows().every(row => row.isSelected && ctx.P.grid.rows.includes(row)));
@@ -224,7 +279,7 @@ describe('common exclusion rule GUI', function () {
 			assert.equal(ctx.P.view.toolbar.one('edit').disabled, true);
 			assert.equal(ctx.P.view.toolbar.one('delete').disabled, false);
 			// A rule change continues to clear selection, avoiding actions on stale rules.
-			vm.runInContext('document.fire(P.ruleEvent);', ctx);
+			vm.runInContext('Chinachu.emit(document, P.ruleEvent);', ctx);
 			assert.equal(ctx.P.grid.getSelectedRows().length, 0);
 			assert.equal(ctx.P.view.toolbar.one('edit').disabled, true);
 			assert.equal(ctx.P.view.toolbar.one('delete').disabled, true);

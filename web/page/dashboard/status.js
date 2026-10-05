@@ -1,11 +1,11 @@
-P = Class.create(P, {
+Chinachu.definePage({
 
 	init: function _initPage() {
 
 		this.view.content.className = 'loading';
 
-		this.onNotify = this.refresh.bindAsEventListener(this);
-		document.observe('chinachu:status', this.onNotify);
+		this.onNotify = this.refresh.bind(this);
+		Chinachu.on(document, 'chinachu:status', this.onNotify);
 
 		this.draw();
 
@@ -21,7 +21,7 @@ P = Class.create(P, {
 	,
 	deinit: function _deinit() {
 
-		document.stopObserving('chinachu:status', this.onNotify);
+		Chinachu.off(document, 'chinachu:status', this.onNotify);
 
 		return this;
 	}
@@ -32,7 +32,7 @@ P = Class.create(P, {
 		this.view.content.update();
 
 		if (!global.chinachu.status.operator) {
-			new sakura.ui.Alert({
+			new ChinachuUI.Alert({
 				title       : 'ステータス',
 				body        : '取得待ち...',
 				disableClose: true
@@ -42,14 +42,14 @@ P = Class.create(P, {
 		}
 
 		if (global.chinachu.status.operator.alive === true) {
-			new sakura.ui.Alert({
+			new ChinachuUI.Alert({
 				title       : 'Operator',
 				type        : 'green',
 				body        : '動作しています',
 				disableClose: true
 			}).render(this.view.content);
 		} else {
-			new sakura.ui.Alert({
+			new ChinachuUI.Alert({
 				title       : 'Operator',
 				type        : 'red',
 				body        : '停止しています',

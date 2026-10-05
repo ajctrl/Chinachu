@@ -1,4 +1,4 @@
-P = Class.create(P, {
+Chinachu.definePage({
 
 	init: function() {
 
@@ -8,8 +8,8 @@ P = Class.create(P, {
 		this.initToolbar();
 		this.draw();
 
-		this.onNotify = this.refresh.bindAsEventListener(this);
-		document.observe('chinachu:reserves', this.onNotify);
+		this.onNotify = this.refresh.bind(this);
+		Chinachu.on(document, 'chinachu:reserves', this.onNotify);
 
 		return this;
 	}
@@ -18,7 +18,7 @@ P = Class.create(P, {
 
 		if (this.grid) this.grid.destroy();
 
-		document.stopObserving('chinachu:reserves', this.onNotify);
+		Chinachu.off(document, 'chinachu:reserves', this.onNotify);
 		this.closed = true;
 		this.descriptionSwitch.destroy();
 		if (this.unsubscribeDescriptionFontSize) this.unsubscribeDescriptionFontSize();
@@ -38,7 +38,7 @@ P = Class.create(P, {
 
 		this.descriptionSwitch = ChinachuPreferences.createSwitch(this.refresh.bind(this));
 		this.unsubscribeDescriptionFontSize = ChinachuPreferences.subscribeDescriptionFontSize(this.refresh.bind(this));
-		var control = new sakura.ui.Element({ tagName: 'span' });
+		var control = new ChinachuUI.ElementView({ tagName: 'span' });
 		control.entity.appendChild(this.descriptionSwitch.element);
 		this.view.toolbar.add({ key: 'show-description', ui: control });
 		return this;
@@ -128,7 +128,7 @@ P = Class.create(P, {
 	,
 	onRowClick: function(event, row) {
 		if (event.button && event.button !== 0) return;
-		if (event.target && event.target.closest && event.target.closest('a, button, input, select, .flagrate-grid-cell-menu')) return;
+		if (event.target && event.target.closest && event.target.closest('a, button, input, select, .chinachu-grid-menu')) return;
 		if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
 		if (ChinachuPreferences.getClickAction() !== 'skip') {
 			window.location.href = '#!/program/view/id=' + row.data.id + '/';
@@ -147,7 +147,7 @@ P = Class.create(P, {
 	onRowDoubleClick: function(event, row) {
 		if (ChinachuPreferences.getClickAction() !== 'skip' || !row.data.isManualReserved || row.data.isSkip) return;
 		if (event.button && event.button !== 0) return;
-		if (event.target && event.target.closest && event.target.closest('a, button, input, select, .flagrate-grid-cell-menu')) return;
+		if (event.target && event.target.closest && event.target.closest('a, button, input, select, .chinachu-grid-menu')) return;
 		if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
 		// A fast unskip response must not turn the same double click into a new skip.
 		if (this.manualUnskipClick && this.manualUnskipClick.id === row.data.id && this.manualUnskipClick.start === row.data.start) return;
@@ -233,7 +233,7 @@ P = Class.create(P, {
 		var showDescription = ChinachuPreferences.get();
 		var descriptionFontSize = ChinachuPreferences.getDescriptionFontSize();
 		var page = this;
-		programs.each(function(program, i) {
+		programs.forEach(function(program, i) {
 			var key = program.id + ':' + program.start;
 			var previousRow = previousRows.get(key);
 			previousRows.delete(key);
@@ -303,13 +303,13 @@ P = Class.create(P, {
 			row.cell.type = {
 				sortAlt  : program.channel.type,
 				className: 'types',
-				html     : '<span class="label-type-' + program.channel.type + '">' + program.channel.type + '</span>'
+				html     : '<span class="label-type-' + Chinachu.escapeHTML(program.channel.type) + '">' + Chinachu.escapeHTML(program.channel.type) + '</span>'
 			};
 
 			row.cell.category = {
 				sortAlt    : program.category,
 				className  : 'categories',
-				html       : '<span class="label-cat-' + program.category + '">' + program.category + '</span>'
+				html       : '<span class="label-cat-' + Chinachu.escapeHTML(program.category) + '">' + Chinachu.escapeHTML(program.category) + '</span>'
 			};
 
 			row.cell.channel = {
@@ -320,14 +320,14 @@ P = Class.create(P, {
 				}
 			};
 
-			var titleHtml = program.flags.invoke('sub', /.+/, '<span class="flag #{0}">#{0}</span>').join('') + program.title;
+			var titleHtml = (program.flags || []).map(function(flag) { return '<span class="flag ' + Chinachu.escapeHTML(flag) + '">' + Chinachu.escapeHTML(flag) + '</span>'; }).join('') + Chinachu.escapeHTML(program.title);
 			if (program.subTitle && program.title.indexOf(program.subTitle) === -1) {
-				titleHtml += '<span class="subtitle">' + program.subTitle + '</span>';
+				titleHtml += '<span class="subtitle">' + Chinachu.escapeHTML(program.subTitle) + '</span>';
 			}
 			if (typeof program.episode !== 'undefined' && program.episode !== null) {
-				titleHtml += '<span class="episode">#' + program.episode + '</span>';
+				titleHtml += '<span class="episode">#' + Chinachu.escapeHTML(program.episode) + '</span>';
 			}
-			titleHtml += '<span class="id">#' + program.id + '</span>';
+			titleHtml += '<span class="id">#' + Chinachu.escapeHTML(program.id) + '</span>';
 
 			row.menuItems.unshift('--');
 			if (program.isManualReserved) {
@@ -370,7 +370,7 @@ P = Class.create(P, {
 			if (pending) titleHtml = '<span class="reserve-pending-spinner" role="status" aria-label="処理中" title="処理中"></span>' + titleHtml;
 
 			if (showDescription && program.detail) {
-				titleHtml = '<div class="reserve-title">' + titleHtml + '</div><div class="reserve-description" style="font-size: ' + descriptionFontSize + '">' + String(program.detail).replace(/\r\n|\r|\n/g, ' ').escapeHTML() + '</div>';
+				titleHtml = '<div class="reserve-title">' + titleHtml + '</div><div class="reserve-description" style="font-size: ' + descriptionFontSize + '">' + Chinachu.escapeHTML(String(program.detail).replace(/\r\n|\r|\n/g, ' ')) + '</div>';
 			}
 
 			row.cell.title = {
@@ -388,7 +388,7 @@ P = Class.create(P, {
 			};
 			var exclusionReasons = (program.excludedKeywords || []).slice();
 			if ((program.excludedChannels || []).length) {
-				exclusionReasons.push('[' + program.channel.type + '] ' + (program.channel.name || program.channel.id));
+				exclusionReasons.push('[' + Chinachu.escapeHTML(program.channel.type) + '] ' + (program.channel.name || program.channel.id));
 			}
 			row.cell.excludedKeywords = {
 				text: exclusionReasons.map(function(reason) {

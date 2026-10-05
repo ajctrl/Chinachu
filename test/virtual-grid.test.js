@@ -4,144 +4,146 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
-const sinon = require('sinon');
 
-function implementation(timers = { setTimeout, clearTimeout }, Base = function() {}) {
-	const context = vm.createContext({ window: timers, flagrate: { Grid: Base } });
+function implementation() {
+	const storage = new Map();
+	const window = {
+		sessionStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) },
+		requestAnimationFrame() { return 1; }, cancelAnimationFrame() {}
+	};
+	const context = vm.createContext({ window, console, document: { createElement: () => ({ setAttribute() {} }) } });
 	vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/virtual-grid.js'), 'utf8'), context);
-	return context.window.ChinachuVirtualGrid;
+	return { Grid: window.ChinachuVirtualGrid, storage, window };
+}
+function model(id, start, text = id) { return { data: { id, start }, cell: { title: { text } } }; }
+function grid() {
+	const { Grid } = implementation();
+	return new Grid({ stateKey: 'test', multiSelect: true, cols: [{ key: 'title' }] });
 }
 
-describe('virtual list geometry and selection', function() {
-	it('keeps the current viewport mounted until the scheduled refresh', function() {
-		function Base() {}
-		Base.prototype.splice = function(index, count, rows) {
-			const removed = this._rows.splice(index, count === undefined ? this._rows.length - index : count, ...rows);
-			this._requestRender();
-			return removed;
-		};
-		const Grid = implementation(undefined, Base);
-		const grid = Object.create(Grid.prototype);
-		const current = { data: { id: 'one', start: 100 }, _tr: {} };
-		const updated = { data: { id: 'one', start: 100, isSkip: true } };
-		grid._rows = [current];
-		grid._selectedRows = [];
-		grid._mounted = new Set([current]);
-		grid._heights = new Grid.Heights([61]);
-		grid._keys = ['one:100:0'];
-		grid._body = { scrollTop: 10, scrollLeft: 20 };
-		grid._requestRender = sinon.spy();
-		grid._unmount = sinon.spy();
-		grid.splice(0, undefined, [updated]);
-		assert.equal(grid._unmount.callCount, 0);
-		assert.ok(grid._mounted.has(current));
-		assert.strictEqual(grid._rows[0], updated);
-		assert.equal(grid._requestRender.callCount, 1);
-		assert.equal(grid._pendingAnchor.key, 'one:100:0');
-		assert.equal(grid._pendingAnchor.offset, 10);
-		assert.equal(grid._pendingAnchor.left, 20);
-	});
-
-	it('locates variable-height rows at boundaries and after height corrections', function() {
-		const Grid = implementation();
-		const values = Array.from({ length: 10000 }, (_, i) => 30 + i % 91);
-		const heights = new Grid.Heights(values);
-		for (let i = 0; i < values.length; i += 113) {
-			values[i] = 145.5;
-			heights.set(i, values[i]);
-		}
-		let sum = 0;
-		values.forEach((height, index) => {
-			assert.equal(heights.sum(index), sum);
-			assert.equal(heights.at(sum), index);
-			assert.equal(heights.at(sum + height - 0.01), index);
-			sum += height;
-		});
-		assert.equal(heights.sum(values.length), sum);
-		assert.equal(heights.at(sum + 100), values.length - 1);
-		assert.equal(new Grid.Heights([]).at(0), 0);
-		assert.equal(new Grid.Heights([]).sum(0), 0);
-	});
-
-	it('keeps selection on unmounted rows, without duplicates or accidental deselection', function() {
-		const Grid = implementation();
-		const grid = Object.create(Grid.prototype);
-		grid._opt = { multiSelect: true };
-		grid._rows = [{ data: 'first' }, { data: 'offscreen' }, { data: 'last' }];
-		grid._selectedRows = [];
-		grid.element = { fire() {} };
+describe('Tabulator list adapter', function() {
+	it('keeps selection on unmounted rows and supports select all without duplicate callbacks', function() {
+		const view = grid();
+		view.splice(0, undefined, [model('first', 1), model('offscreen', 2), model('last', 3)]);
 		let selected = 0, deselected = 0;
-		grid.onSelect = () => selected++;
-		grid.onDeselect = () => deselected++;
-		grid.select(1);
-		grid.select(1);
-		grid.deselect(0);
-		assert.equal(grid._selectedRows.length, 1);
-		assert.equal(grid._selectedRows[0], grid._rows[1]);
-		grid.select(grid._rows);
-		assert.equal(grid._selectedRows.length, 3);
+		view.onSelect = () => selected++;
+		view.onDeselect = () => deselected++;
+		view.select(1);
+		view.select(1);
+		view.deselect(0);
+		assert.equal(view.getSelectedRows().length, 1);
+		assert.equal(view.getSelectedRows()[0], view.rows[1]);
+		view.selectAll();
+		assert.equal(view.getSelectedRows().length, 3);
 		assert.equal(selected, 3);
-		grid.deselect(grid._rows);
-		assert.equal(grid._selectedRows.length, 0);
+		view.deselectAll();
+		assert.equal(view.getSelectedRows().length, 0);
 		assert.equal(deselected, 3);
 	});
 
-	it('restores the anchor by identity after insertions and clamps missing rows and offsets', function() {
-		const Grid = implementation();
-		const grid = Object.create(Grid.prototype);
-		grid._rows = [{}, {}, {}];
-		grid._heights = new Grid.Heights([30, 80, 40]);
-		grid._keyIndexes = new Map([['first', 0], ['anchor', 1], ['last', 2]]);
-		assert.equal(grid._anchorTop({ key: 'anchor', index: 0, offset: 20 }), 50);
-		assert.equal(grid._anchorTop({ key: 'deleted', index: 50, offset: 100 }), 149);
-		assert.equal(grid._anchorTop({ key: 'anchor', offset: -10 }), 30);
+	it('discards selection of replaced rules while preserving selected rows that remain', function() {
+		const view = grid();
+		const rows = [model('one', 1), model('two', 2)];
+		view.splice(0, undefined, rows);
+		view.selectAll();
+		view.splice(0, undefined, [model('one', 1), rows[1]]);
+		assert.equal(view.getSelectedRows().length, 1);
+		assert.equal(view.getSelectedRows()[0], rows[1]);
 	});
 
-	it('resynchronizes checkbox state after cancelled input activation and rapid toggles', function() {
-		const clock = sinon.useFakeTimers();
-		try {
-			const Grid = implementation();
-			const grid = Object.create(Grid.prototype);
-			const checkbox = { checked: false, check() { this.checked = true; }, uncheck() { this.checked = false; } };
-			const row = { _checkbox: checkbox };
-			grid._opt = { multiSelect: true };
-			grid._rows = [row];
-			grid._selectedRows = [];
-			grid.element = { fire() {} };
-			grid.select(0);
-			checkbox.checked = false; // Browser rollback after the click is cancelled.
-			clock.tick(0);
-			assert.equal(checkbox.checked, true);
-			assert.equal(grid._selectedRows.length, 1);
-			grid.deselect(0);
-			checkbox.checked = true;
-			clock.tick(0);
-			assert.equal(checkbox.checked, false);
-			assert.equal(grid._selectedRows.length, 0);
-			grid.select(0);
-			grid.deselect(0);
-			assert.equal(clock.countTimers(), 1);
-			clock.tick(0);
-			assert.equal(checkbox.checked, false);
-		} finally { clock.restore(); }
+	it('uses broadcast identity and occurrence for distinct stable keys and numeric sorting', function() {
+		const view = grid();
+		const first = model('one', 1);
+		first.cell.title.sortAlt = 123;
+		view.splice(0, undefined, [first, model('one', 2), model('one', 1)]);
+		const data = view._data();
+		assert.deepEqual(Array.from(data, item => item._key), ['one:1:0', 'one:2:0', 'one:1:1']);
+		assert.equal(data[0].title, 123);
 	});
 
-	it('cancels pending checkbox synchronization when a row is unmounted', function() {
-		const clock = sinon.useFakeTimers();
-		try {
-			const Grid = implementation();
-			const grid = Object.create(Grid.prototype);
-			const checkbox = { check: sinon.spy(), uncheck: sinon.spy() };
-			const row = { cell: {}, isSelected: true, _checkbox: checkbox, _tr: { classList: { toggle() {} }, remove() {} } };
-			grid._mounted = new Set([row]);
-			grid._selectionStyle(row);
-			assert.equal(clock.countTimers(), 1);
-			grid._unmount(row);
-			assert.equal(clock.countTimers(), 0);
-			clock.tick(0);
-			assert.equal(checkbox.check.callCount, 1);
-			assert.equal(row._checkbox, undefined);
-			assert.equal(row._selectionTimer, undefined);
-		} finally { clock.restore(); }
+	it('updates only changed models without replacing the table or unmounting unaffected rows', async function() {
+		const view = grid();
+		const first = model('one', 1), second = model('two', 2);
+		view.splice(0, undefined, [first, second]);
+		view._lastData = view._data();
+		view._ready = true;
+		view._pendingAnchor = { key: first._key };
+		const changed = model('one', 1, 'updated');
+		view._rows[0] = changed;
+		let updates, reformatted = 0;
+		view.table = {
+			async updateData(data) { updates = data; },
+			replaceData() { throw new Error('full replacement is unnecessary'); },
+			getRow() { return { reformat() { reformatted++; } }; }
+		};
+		view._restore = async () => {};
+		view._syncContent = () => {};
+		await view._render();
+		assert.equal(updates.length, 1);
+		assert.equal(updates[0]._model, changed);
+		assert.equal(reformatted, 1);
+		assert.equal(view._lastData[1]._model, second);
+	});
+
+	it('restores a visible row by identity after insertion and corrects measured variable heights', async function() {
+		const view = grid();
+		view._rows = [model('new', 0), model('anchor', 1)];
+		let requested;
+		const row = {
+			getData: () => ({ _key: 'anchor:1:0' }),
+			getElement: () => ({ getBoundingClientRect: () => ({ top: 198, height: 110 }) })
+		};
+		view._body = { scrollTop: 2000, scrollLeft: 0, getBoundingClientRect: () => ({ top: 100 }) };
+		view.table = { getRows: () => [row], async scrollToRow(target) { requested = target; } };
+		await view._restore({ key: 'anchor:1:0', index: 0, offset: 25, left: 40 });
+		assert.equal(requested, row);
+		assert.equal(view._body.scrollTop, 2123);
+		assert.equal(view._body.scrollLeft, 40);
+	});
+
+	it('preserves row callbacks and excludes buttons and links from row activation', function() {
+		const view = grid();
+		let clicks = 0, doubles = 0;
+		view._opt.disableSelect = true;
+		view._opt.onClick = () => clicks++;
+		view._opt.onDblClick = () => doubles++;
+		const row = model('one', 1);
+		view._click({ target: { closest: () => true } }, row, false);
+		view._click({ target: { closest: () => false } }, row, false);
+		view._click({ target: { closest: () => false } }, row, true);
+		assert.equal(clicks, 1);
+		assert.equal(doubles, 1);
+		assert.equal(view.getSelectedRows().length, 0);
+	});
+
+	it('restores page scope for actions invoked by the table and ignores departed pages', function() {
+		const env = implementation(), owner = { _disposed: false };
+		env.window.Chinachu = { scope: owner, withScope(scope, fn) { const previous = this.scope; this.scope = scope; try { return fn(); } finally { this.scope = previous; } } };
+		let observed, clicks = 0;
+		const view = new env.Grid({ cols: [], disableSelect: true, onClick() { observed = env.window.Chinachu.scope; clicks++; } });
+		env.window.Chinachu.scope = null;
+		view._click({ target: { closest: () => false } }, model('one', 1));
+		assert.equal(observed, owner);
+		assert.equal(env.window.Chinachu.scope, null);
+		owner._disposed = true;
+		view._click({ target: { closest: () => false } }, model('one', 1));
+		assert.equal(clicks, 1);
+	});
+
+	it('stops dynamic cell content and persists state when destroyed', function() {
+		const { Grid, storage } = implementation();
+		const view = new Grid({ stateKey: 'test', cols: [] });
+		let removed = 0, destroyed = 0;
+		const row = model('one', 1);
+		row.cell.title._content = { remove() { removed++; } };
+		view._renderedModels.add(row);
+		view.table = { destroy() { destroyed++; } };
+		view._ready = true;
+		view._anchor = () => ({ key: 'one:1:0', index: 50, offset: 9, sort: 'title', ascending: false });
+		view.destroy();
+		view.destroy();
+		assert.equal(removed, 1);
+		assert.equal(destroyed, 1);
+		assert.equal(JSON.parse(storage.get('chinachu.virtual-grid.test')).key, 'one:1:0');
 	});
 });

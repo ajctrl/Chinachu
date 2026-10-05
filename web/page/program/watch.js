@@ -1,4 +1,4 @@
-P = Class.create(P, {
+Chinachu.definePage({
 
 	init: function() {
 
@@ -6,12 +6,12 @@ P = Class.create(P, {
 
 		this.program = chinachu.util.getProgramById(this.self.query.id);
 
-		this.onNotify = this.refresh.bindAsEventListener(this);
-		document.observe('chinachu:recording', this.onNotify);
-		document.observe('chinachu:recorded', this.onNotify);
+		this.onNotify = this.refresh.bind(this);
+		Chinachu.on(document, 'chinachu:recording', this.onNotify);
+		Chinachu.on(document, 'chinachu:recorded', this.onNotify);
 
 		if (this.program === null) {
-			this.modal = new flagrate.Modal({
+			this.modal = new ChinachuUI.Modal({
 				title: '番組が見つかりません',
 				text : '番組が見つかりません',
 				buttons: [
@@ -41,8 +41,8 @@ P = Class.create(P, {
 
 		if (this.modal) setTimeout(function() { this.modal.close(); }.bind(this), 0);
 
-		document.stopObserving('chinachu:recording', this.onNotify);
-		document.stopObserving('chinachu:recorded', this.onNotify);
+		Chinachu.off(document, 'chinachu:recording', this.onNotify);
+		Chinachu.off(document, 'chinachu:recorded', this.onNotify);
 
 		return this;
 	}
@@ -60,7 +60,7 @@ P = Class.create(P, {
 
 		this.view.toolbar.add({
 			key: 'streaming',
-			ui : new sakura.ui.Button({
+			ui : new ChinachuUI.ActionButton({
 				label  : '番組詳細',
 				icon   : './icons/film.png',
 				onClick: function() {
@@ -79,19 +79,19 @@ P = Class.create(P, {
 		this.view.content.className = 'bg-black';
 		this.view.content.update();
 
-		var titleHtml = program.flags.invoke('sub', /.+/, '<span class="flag #{0}">#{0}</span>').join('') + program.title;
-		if (typeof program.episode !== 'undefined' && program.episode !== null) {
-			titleHtml += '<span class="episode">#' + program.episode + '</span>';
+		var title = document.createDocumentFragment();
+		function titlePart(text, className) {
+			var span = document.createElement('span');
+			span.className = className;
+			span.textContent = text;
+			title.appendChild(span);
 		}
-		titleHtml += '<span class="id">#' + program.id + '</span>';
-
-		if (program.isManualReserved) {
-			titleHtml = '<span class="flag manual">手動</span>' + titleHtml;
-		}
-
-		setTimeout(function() {
-			this.view.title.update(titleHtml);
-		}.bind(this), 0);
+		if (program.isManualReserved) titlePart('手動', 'flag manual');
+		(program.flags || []).forEach(function(flag) { titlePart(flag, 'flag ' + flag); });
+		title.appendChild(document.createTextNode(program.title || ''));
+		if (program.episode !== undefined && program.episode !== null) titlePart('#' + program.episode, 'episode');
+		titlePart('#' + program.id, 'id');
+		this.view.title.update(title);
 
 		var saveSettings = function (d) {
 			localStorage.setItem('program.watch.settings', JSON.stringify(d));
@@ -137,7 +137,7 @@ P = Class.create(P, {
 							url += '/api/recorded/';
 						}
 
-						url += program.id + '/watch.' + d.ext + '?' + Object.toQueryString(d);
+						url += program.id + '/watch.' + d.ext + '?' + Chinachu.serializeQuery(d);
 
 						if (/Android/.test(navigator.userAgent) === true) {
 							location.href = "intent://" + url + "#Intent;package=org.videolan.vlc;type=video;scheme=" + location.protocol.replace(':','') + ';end';
@@ -160,7 +160,7 @@ P = Class.create(P, {
 						saveSettings(d);
 
 						if (d.ext === 'm2ts') {
-							new flagrate.Modal({
+							new ChinachuUI.Modal({
 								title: 'エラー',
 								text : 'MPEG-2 TSコンテナの再生はサポートしていません。'
 							}).show();
@@ -194,14 +194,14 @@ P = Class.create(P, {
 							url += '/api/recorded/';
 						}
 
-						url += program.id + '/watch.xspf?' + Object.toQueryString(d);
+						url += program.id + '/watch.xspf?' + Chinachu.serializeQuery(d);
 						location.href = url;
 					}.bind(this));
 				}.bind(this)
 			});
 		}
 
-		if (!Prototype.Browser.MobileSafari && !program._isRecording) {
+		if ('download' in document.createElement('a') && !program._isRecording) {
 			buttons.push({
 				label: 'ダウンロード',
 				color: '@blue',
@@ -215,13 +215,13 @@ P = Class.create(P, {
 
 						d.prefix = location.protocol + '//' + location.host + '/api/recording/' + program.id + '/';
 						d.mode = 'download';
-						location.href = './api/recorded/' + program.id + '/watch.' + d.ext + '?' + Object.toQueryString(d);
+						location.href = './api/recorded/' + program.id + '/watch.' + d.ext + '?' + Chinachu.serializeQuery(d);
 					}.bind(this));
 				}.bind(this)
 			});
 		}
 
-		var modal = this.modal = new flagrate.Modal({
+		var modal = this.modal = new ChinachuUI.Modal({
 			disableCloseByMask: true,
 			disableCloseButton: true,
 			target: this.view.content,
@@ -242,7 +242,7 @@ P = Class.create(P, {
 			});
 		}
 
-		this.form = flagrate.createForm({
+		this.form = ChinachuUI.createForm({
 			fields: [
 				{
 					key: "ext",
@@ -404,6 +404,7 @@ P = Class.create(P, {
 
 		this.isPlaying = true;
 
+		var page = this;
 		var p = this.program;
 		var d = this.d;
 
@@ -415,7 +416,7 @@ P = Class.create(P, {
 
 			var r = location.protocol + '//' + location.host + location.pathname.replace(/\/[^\/]*$/, '');
 			r += '/api/' + (!!p._isRecording ? 'recording' : 'recorded') + '/' + p.id + '/watch.' + d.ext;
-			var q = Object.toQueryString(d);
+			var q = Chinachu.serializeQuery(d);
 
 			return r + '?' + q;
 		};
@@ -433,11 +434,11 @@ P = Class.create(P, {
 
 		// create video view
 
-		var videoContainer = new flagrate.Element('div', {
+		var videoContainer = new ChinachuUI.Element('div', {
 			'class': 'video-container'
 		}).insertTo(this.view.content);
 
-		var video = this.video = new flagrate.Element('video', {
+		var video = this.video = new ChinachuUI.Element('video', {
 			controls: true,
 			src: getRequestURI()
 		}).insertTo(videoContainer);
@@ -452,61 +453,61 @@ P = Class.create(P, {
 		video.oncanplay = function () {
 			video.play();
 			if (video.paused) {
-				control.getElementByKey('play').setLabelHTML('&#57458;');
+				control.getElementByKey('play').setLabelHTML('▶');
 			} else {
-				control.getElementByKey('play').setLabelHTML('&#57459;');
+				control.getElementByKey('play').setLabelHTML('Ⅱ');
 			}
 		};
 
 		video.onpause = function () {
-			control.getElementByKey('play').setLabelHTML('&#57458;');
+			control.getElementByKey('play').setLabelHTML('▶');
 			d.ss = seek.getValue() - 2;
 		};
 
 		video.onplay = function () {
 			video.poster = "";
-			control.getElementByKey('play').setLabelHTML('&#57459;');
+			control.getElementByKey('play').setLabelHTML('Ⅱ');
 		};
 
 		video.volume = 1;
 
 		// create control view
 
-		var control = new flagrate.Toolbar({
+		var control = new ChinachuUI.Toolbar({
 			className: 'video-control',
 			items: [
 				{
 					key    : 'play',
-					element: new flagrate.Button({ labelHTML: '&#8987;', onSelect: togglePlay})
+					element: new ChinachuUI.Button({ labelHTML: '&#8987;', onSelect: togglePlay})
 				},
 				'--',
 				{
 					key    : 'fast-rewind',
-					element: new flagrate.Button({ labelHTML: '&#57457;'})
+					element: new ChinachuUI.Button({ labelHTML: '↶'})
 				},
 				{
 					key    : 'fast-forward',
-					element: new flagrate.Button({ labelHTML: '&#57461;'})
+					element: new ChinachuUI.Button({ labelHTML: '↷'})
 				},
 				'--',
 				{
 					key    : 'played',
-					element: new flagrate.Element('span').insertText('00:00')
+					element: new ChinachuUI.Element('span').insertText('00:00')
 				},
 				{
 					key    : 'seek',
-					element: new flagrate.Slider({ value: 0, max: p.seconds, className: 'seek' })
+					element: new ChinachuUI.Slider({ value: 0, max: p.seconds, className: 'seek' })
 				},
 				{
 					key    : 'duration',
-					element: new flagrate.Element('span').insertText(
-						Math.floor(p.seconds / 60).toPaddedString(2) + ':' + (p.seconds % 60).toPaddedString(2)
+					element: new ChinachuUI.Element('span').insertText(
+						Chinachu.pad(Math.floor(p.seconds / 60), 2) + ':' + Chinachu.pad((p.seconds % 60), 2)
 					)
 				},
 				'--',
 				{
 					key    : 'vol',
-					element: new flagrate.Slider({ value: 10, max: 10 })
+					element: new ChinachuUI.Slider({ value: 10, max: 10 })
 				}
 			]
 		}).insertTo(this.view.content);
@@ -526,13 +527,13 @@ P = Class.create(P, {
 			video.pause();
 			video.src = "";
 
-			setTimeout(function() {
+			page.timer.seekSource = setTimeout(function() {
 				video.src = uri;
 				lastTime = 0;
 				currentTime = d.ss * 1000;
 			}, 500);
 
-			setTimeout(function() {
+			page.timer.seekReady = setTimeout(function() {
 				seek.enable();
 				fastForward.enable();
 				fastRewind.enable();
@@ -589,7 +590,7 @@ P = Class.create(P, {
 			var current = Math.floor(currentTime / 1000);
 
 			control.getElementByKey('played').updateText(
-				Math.floor(current / 60).toPaddedString(2) + ':' + (current % 60).toPaddedString(2)
+				Chinachu.pad(Math.floor(current / 60), 2) + ':' + Chinachu.pad((current % 60), 2)
 			);
 			seek.setValue(current);
 
@@ -607,7 +608,7 @@ P = Class.create(P, {
 			}
 
 			control.getElementByKey('played').updateText(
-				Math.floor(current / 60).toPaddedString(2) + ':' + (current % 60).toPaddedString(2)
+				Chinachu.pad(Math.floor(current / 60), 2) + ':' + Chinachu.pad((current % 60), 2)
 			);
 			seek.setValue(current);
 		}.bind(this);

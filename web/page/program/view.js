@@ -1,4 +1,4 @@
-P = Class.create(P, {
+Chinachu.definePage({
 
 	init: function() {
 
@@ -6,11 +6,11 @@ P = Class.create(P, {
 
 		this.program = chinachu.util.getProgramById(this.self.query.id);
 
-		this.onNotify = this.refresh.bindAsEventListener(this);
-		document.observe('chinachu:schedule', this.onNotify);
-		document.observe('chinachu:reserves', this.onNotify);
-		document.observe('chinachu:recording', this.onNotify);
-		document.observe('chinachu:recorded', this.onNotify);
+		this.onNotify = this.refresh.bind(this);
+		Chinachu.on(document, 'chinachu:schedule', this.onNotify);
+		Chinachu.on(document, 'chinachu:reserves', this.onNotify);
+		Chinachu.on(document, 'chinachu:recording', this.onNotify);
+		Chinachu.on(document, 'chinachu:recorded', this.onNotify);
 
 		if (this.program === null) {
 			this.timer.notFound = setTimeout(function () {
@@ -24,11 +24,11 @@ P = Class.create(P, {
 		this.draw();
 
 		// ホットキー
-		sakura.shortcut.add("Left", function () {
-			try { $("program-view-link-to-prev").click(); } catch (e) {}
+		Chinachu.shortcuts.add("Left", function () {
+			try { document.getElementById("program-view-link-to-prev").click(); } catch (e) {}
 		});
-		sakura.shortcut.add("Right", function () {
-			try { $("program-view-link-to-next").click(); } catch (e) {}
+		Chinachu.shortcuts.add("Right", function () {
+			try { document.getElementById("program-view-link-to-next").click(); } catch (e) {}
 		});
 
 		return this;
@@ -37,13 +37,13 @@ P = Class.create(P, {
 	deinit: function() {
 
 		// ホットキー
-		sakura.shortcut.remove("Left");
-		sakura.shortcut.remove("Right");
+		Chinachu.shortcuts.remove("Left");
+		Chinachu.shortcuts.remove("Right");
 
-		document.stopObserving('chinachu:schedule', this.onNotify);
-		document.stopObserving('chinachu:reserves', this.onNotify);
-		document.stopObserving('chinachu:recording', this.onNotify);
-		document.stopObserving('chinachu:recorded', this.onNotify);
+		Chinachu.off(document, 'chinachu:schedule', this.onNotify);
+		Chinachu.off(document, 'chinachu:reserves', this.onNotify);
+		Chinachu.off(document, 'chinachu:recording', this.onNotify);
+		Chinachu.off(document, 'chinachu:recorded', this.onNotify);
 
 		this.app.view.mainBody.entity.style.backgroundImage = '';
 
@@ -63,7 +63,7 @@ P = Class.create(P, {
 
 		this.view.toolbar.add({
 			key: null,
-			ui : new sakura.ui.Button({
+			ui : new ChinachuUI.ActionButton({
 				label  : 'ルールを作成',
 				icon   : './icons/regular-expression.png',
 				onClick: function() {
@@ -76,7 +76,7 @@ P = Class.create(P, {
 			if (program.isManualReserved) {
 				this.view.toolbar.add({
 					key: null,
-					ui : new sakura.ui.Button({
+					ui : new ChinachuUI.ActionButton({
 						label   : '予約取消',
 						icon    : './icons/cross-script.png',
 						onClick: function() {
@@ -88,7 +88,7 @@ P = Class.create(P, {
 			if (program.isSkip) {
 				this.view.toolbar.add({
 					key: null,
-					ui : new sakura.ui.Button({
+					ui : new ChinachuUI.ActionButton({
 						label   : 'スキップの取消',
 						icon    : './icons/tick-circle.png',
 						onClick: function() {
@@ -99,7 +99,7 @@ P = Class.create(P, {
 			} else {
 				this.view.toolbar.add({
 					key: null,
-					ui : new sakura.ui.Button({
+					ui : new ChinachuUI.ActionButton({
 						label   : 'スキップ',
 						icon    : './icons/exclamation-red.png',
 						onClick: function() {
@@ -112,7 +112,7 @@ P = Class.create(P, {
 			if (!program._isRecorded) {
 				this.view.toolbar.add({
 					key: null,
-					ui : new sakura.ui.Button({
+					ui : new ChinachuUI.ActionButton({
 						label   : '手動予約',
 						icon    : './icons/plus-circle.png',
 						onClick: function() {
@@ -126,7 +126,7 @@ P = Class.create(P, {
 		if (program._isRecording) {
 			this.view.toolbar.add({
 				key: null,
-				ui : new sakura.ui.Button({
+				ui : new ChinachuUI.ActionButton({
 					label   : '録画中止',
 					icon    : './icons/cross.png',
 					onClick: function() {
@@ -139,7 +139,7 @@ P = Class.create(P, {
 		if (program._isRecorded) {
 			this.view.toolbar.add({
 				key: null,
-				ui : new sakura.ui.Button({
+				ui : new ChinachuUI.ActionButton({
 					label  : '削除',
 					icon   : './icons/cross-script.png',
 					onClick: function() {
@@ -153,7 +153,7 @@ P = Class.create(P, {
 			if (global.chinachu.status.feature.filer) {
 				this.view.toolbar.add({
 					key: 'download',
-					ui : new sakura.ui.Button({
+					ui : new ChinachuUI.ActionButton({
 						label  : 'ダウンロード',
 						icon   : './icons/disk.png',
 						onClick: function() {
@@ -166,7 +166,7 @@ P = Class.create(P, {
 			if (global.chinachu.status.feature.streamer && !program.tuner.isScrambling) {
 				this.view.toolbar.add({
 					key: 'streaming',
-					ui : new sakura.ui.Button({
+					ui : new ChinachuUI.ActionButton({
 						label  : 'ストリーミング再生',
 						icon   : './icons/film-youtube.png',
 						onClick: function() {
@@ -180,53 +180,74 @@ P = Class.create(P, {
 		return this;
 	},
 
-	draw: function() {
+	appendDescription: function(parent, value) {
+		var text = String(value || '');
+		var pattern = /https?:\/\/[^\s<>"']+|ｈｔｔｐｓ?：／／[^\s<>"'＜＞＂＇]+/gi;
+		var offset = 0;
+		var match;
+		while ((match = pattern.exec(text))) {
+			parent.appendChild(document.createTextNode(text.slice(offset, match.index)));
+			var source = match[0];
+			var normalized = source.replace(/[！-～]/g, function(character) {
+				return String.fromCharCode(character.charCodeAt(0) - 0xFEE0);
+			});
+			try {
+				var url = new URL(normalized);
+				if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('Unsupported URL');
+				var link = document.createElement('a');
+				link.href = url.href;
+				link.target = '_blank';
+				link.rel = 'noopener noreferrer';
+				link.textContent = source;
+				parent.appendChild(link);
+			} catch (error) {
+				parent.appendChild(document.createTextNode(source));
+			}
+			offset = pattern.lastIndex;
+		}
+		parent.appendChild(document.createTextNode(text.slice(offset)));
+	},
 
-		console.log(this.program);
+	draw: function() {
 
 		var program = this.program;
 
-		this.view.content.className = 'ex';
+		this.view.content.className = 'ex program-page';
 		this.view.content.update();
 
-		var titleHtml = program.flags.invoke('sub', /.+/, '<span class="flag #{0}">#{0}</span>').join('') + program.title;
-		if (program.subTitle && program.title.indexOf(program.subTitle) === -1) {
-			titleHtml += ' <span class="subtitle">' + program.subTitle + '</span>';
+		var title = document.createDocumentFragment();
+		function titlePart(text, className) {
+			var span = document.createElement('span');
+			span.className = className;
+			span.textContent = text;
+			title.appendChild(span);
 		}
-		if (typeof program.episode !== 'undefined' && program.episode !== null) {
-			titleHtml += ' <span class="episode">#' + program.episode + '</span>';
-		}
-		titleHtml += ' <span class="id">#' + program.id + '</span>';
-
-		if (program.isManualReserved) {
-			titleHtml = ' <span class="flag manual">手動</span>' + titleHtml;
-		}
-
-		if (program.isSkip) {
-			titleHtml = ' <span class="flag skip">スキップ</span>' + titleHtml;
-		}
-
-		setTimeout(function() {
-			this.view.title.update(titleHtml);
-		}.bind(this), 0);
+		if (program.isManualReserved) titlePart('手動', 'flag manual');
+		if (program.isSkip) titlePart('スキップ', 'flag skip');
+		(program.flags || []).forEach(function(flag) { titlePart(flag, 'flag ' + flag); });
+		title.appendChild(document.createTextNode(program.title || ''));
+		if (program.subTitle && program.title.indexOf(program.subTitle) === -1) titlePart(' ' + program.subTitle, 'subtitle');
+		if (program.episode !== undefined && program.episode !== null) titlePart(' #' + program.episode, 'episode');
+		titlePart(' #' + program.id, 'id');
+		this.view.title.update(title);
 
 		if (program._isReserves) {
 			if (program.isSkip) {
-				new sakura.ui.Alert({
+				new ChinachuUI.Alert({
 					title       : 'スキップ',
 					type        : 'yellow',
 					body        : 'この番組はスキップするように設定されています',
 					disableClose: true
 				}).render(this.view.content);
 			} else if (program.isConflict) {
-				new sakura.ui.Alert({
+				new ChinachuUI.Alert({
 					title       : '競合',
 					type        : 'red',
 					body        : 'この番組は録画予約されていますが競合のため録画できない可能性があります',
 					disableClose: true
 				}).render(this.view.content);
 			} else {
-				new sakura.ui.Alert({
+				new ChinachuUI.Alert({
 					title       : '予約済',
 					type        : 'blue',
 					body        : 'この番組は録画予約されています',
@@ -236,7 +257,7 @@ P = Class.create(P, {
 		}
 
 		if (program._isRecording) {
-			new sakura.ui.Alert({
+			new ChinachuUI.Alert({
 				title       : '録画中',
 				type        : 'red',
 				body        : program.recorded,
@@ -245,59 +266,32 @@ P = Class.create(P, {
 		}
 
 		// create layout grid
-		var container = flagrate.createElement("div", { "class": "container-fluid" }).insertTo(this.view.content);
-		var r1 = flagrate.createElement("div", { "class": "row" }).insertTo(container);
-		var r1L = flagrate.createElement("div", { "class": "col-md-8" }).insertTo(r1);
-		var r1R = flagrate.createElement("div", { "class": "col-md-4" }).insertTo(r1);
-		var r2 = flagrate.createElement("div", { "class": "row" }).insertTo(container);
-		var r2F = flagrate.createElement("div", { "class": "col-md-12" }).insertTo(r2);
+		var container = ChinachuUI.createElement("div", { "class": "page-layout" }).insertTo(this.view.content);
+		var r1 = ChinachuUI.createElement("div", { "class": "layout-row" }).insertTo(container);
+		var r1L = ChinachuUI.createElement("div", { "class": "layout-main" }).insertTo(r1);
+		var r1R = ChinachuUI.createElement("div", { "class": "layout-third" }).insertTo(r1);
+		var r2 = ChinachuUI.createElement("div", { "class": "layout-row" }).insertTo(container);
+		var r2F = ChinachuUI.createElement("div", { "class": "layout-full" }).insertTo(r2);
 
-		var meta = new flagrate.Element('div', { 'class': 'program-meta' }).update(
-			' &ndash; ' +
-			dateFormat(new Date(program.end), 'HH:MM') +
-			' (' + (program.seconds / 60) + '分間)<br>' +
-			'<small><span class="label label-cat-' + program.category + '">' + program.category + '</span> ' +
-			'<span class="label label-type-' + program.channel.type + '">' + program.channel.type + ': ' +
-			'<a href="#!/search/top/skip=1&chid=' + program.channel.id + '/">' + program.channel.name + '</a></span>' +
-			'</small>'
-		).insertTo(r1L);
+		var meta = ChinachuUI.createElement('div', { 'class': 'program-meta' }).insertTo(r1L);
+		meta.appendChild(new chinachu.ui.DynamicTime({ tagName: 'span', type: 'full', time: program.start }).entity);
+		meta.appendChild(document.createTextNode(' – ' + Chinachu.formatDate(program.end, 'HH:MM') + ' (' + (program.seconds / 60) + '分間)'));
+		meta.appendChild(document.createElement('br'));
+		var category = ChinachuUI.createElement('span', { 'class': 'badge label-cat-' + program.category }).insertText(program.category).insertTo(meta);
+		var channel = ChinachuUI.createElement('span', { 'class': 'badge label-type-' + program.channel.type }).insertText(program.channel.type + ': ').insertTo(meta);
+		ChinachuUI.createElement('a', { href: '#!/search/top/skip=1&chid=' + encodeURIComponent(program.channel.id) + '/' }).insertText(program.channel.name).insertTo(channel);
 
-		meta.insert({ top:
-			new chinachu.ui.DynamicTime({
-				tagName: 'span',
-				type   : 'full',
-				time   : program.start
-			}).entity
-		});
+		// Program data is plain text. Construct links as DOM nodes so quotes and markup
+		// can never create attributes, even after normalizing full-width URLs.
+		var detail = ChinachuUI.createElement('p', { 'class': 'program-detail' }).insertTo(r1L);
+		this.appendDescription(detail, program.detail);
 
-		// 番組情報
-		new flagrate.Element('p', { 'class': 'program-detail' }).update(
-			program.detail
-				.stripScripts().escapeHTML()
-				.replace(/(https?:\/\/[\x21-\x7e]+)/gi, function (url) {
-					// リンク
-					return '<a href="' + url + '" target="_blank">' + url + '</a>';
-				})
-				.replace(/(ｈｔｔｐｓ?：／／[\uFF01-\uFF5E]+)/g, function (src) {
-					// 全角を半角に直してリンク
-					var url = src
-						.replace(/(.)/g, function (s) {
-							return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
-						})
-						.stripScripts().stripTags();
-					return '<a href="' + url + '" target="_blank">' + src + '</a>';
-				})
-		).insertTo(r1L);
-
-		new sakura.ui.Alert({
-			title       : '完全なタイトル',
-			type        : 'white',
-			body        : program.fullTitle,
-			disableClose: true
-		}).render(r1L);
+		var fullTitle = ChinachuUI.createElement('div', { 'class': 'program-full-title' }).insertTo(r1L);
+		ChinachuUI.createElement('div', { 'class': 'program-full-title-label' }).insertText('完全なタイトル').insertTo(fullTitle);
+		ChinachuUI.createElement('p', { 'class': 'program-full-title-text' }).insertText(program.fullTitle || '').insertTo(fullTitle);
 
 		if (program.command) {
-			new sakura.ui.Alert({
+			new ChinachuUI.Alert({
 				title       : '録画パラメーター',
 				type        : 'white',
 				body        : program.command,
@@ -306,7 +300,7 @@ P = Class.create(P, {
 		}
 
 		if (program._isRecorded) {
-			var alertRecorded = new sakura.ui.Alert({
+			var alertRecorded = new ChinachuUI.Alert({
 				title       : '録画済',
 				type        : 'green',
 				body        : program.recorded,
@@ -314,13 +308,13 @@ P = Class.create(P, {
 			});
 			this.view.content.insert({ top: alertRecorded.entity });
 
-			new Ajax.Request('./api/recorded/' + program.id + '/file.json', {
+			Chinachu.request('./api/recorded/' + program.id + '/file.json', {
 				method: 'get',
 				onSuccess: function(t) {
 
 					if (this.app.pm.p.id !== this.id) return;
 
-					new sakura.ui.Alert({
+					new ChinachuUI.Alert({
 						title       : 'ファイルサイズ',
 						type        : 'white',
 						body        : (t.responseJSON.size / 1024 / 1024 / 1024 / 1).toFixed(2) + 'GB',
@@ -330,18 +324,18 @@ P = Class.create(P, {
 					// 録画済みサムネイル
 					var imgurl = "./api/recorded/" + program.id + "/preview.jpg?width=480&height=270";
 
-					flagrate.createElement("img", {
-						"class": "img-thumbnail img-responsive",
+					ChinachuUI.createElement("img", {
+						"class": "program-thumbnail",
 						src: imgurl + "&pos=3"
 					}).insertTo(r1R);
 
-					flagrate.createElement("img", {
-						"class": "img-thumbnail img-responsive",
+					ChinachuUI.createElement("img", {
+						"class": "program-thumbnail",
 						src: imgurl + "&pos=" + Math.floor(program.seconds / 2)
 					}).insertTo(r1R);
 
-					flagrate.createElement("img", {
-						"class": "img-thumbnail img-responsive",
+					ChinachuUI.createElement("img", {
+						"class": "program-thumbnail",
 						src: imgurl + "&pos=" + (program.seconds - 3)
 					}).insertTo(r1R);
 				}.bind(this),
@@ -350,15 +344,17 @@ P = Class.create(P, {
 					if (this.app.pm.p.id !== this.id) return;
 
 					if (t.status === 410) {
-						var alert = new sakura.ui.Alert({
+						var alert = new ChinachuUI.Alert({
 							type        : 'red',
 							body        : 'この番組の録画ファイルは移動または削除されています',
 							disableClose: true
 						});
 						alertRecorded.entity.insert({ after: alert.entity });
 
-						this.view.toolbar.one('download').disable();
-						this.view.toolbar.one('streaming').disable();
+						['download', 'streaming'].forEach(function(key) {
+							var button = this.view.toolbar.one(key);
+							if (button) button.disable();
+						}, this);
 					}
 				}.bind(this)
 			});
@@ -368,15 +364,15 @@ P = Class.create(P, {
 			// 録画中サムネイル
 			var imgurl = "./api/recording/" + program.id + "/preview.jpg?width=480&height=270";
 
-			flagrate.createElement("img", {
-				"class": "img-thumbnail img-responsive",
+			ChinachuUI.createElement("img", {
+				"class": "program-thumbnail",
 				src: imgurl
 			}).insertTo(r1R);
 		}
 
 		// pager
-		var nav = flagrate.createElement("nav").insertTo(r2F);
-		var pager = flagrate.createElement("ul", { "class": "pager" }).insertTo(nav);
+		var nav = ChinachuUI.createElement("nav").insertTo(r2F);
+		var pager = ChinachuUI.createElement("ul", { "class": "program-pager" }).insertTo(nav);
 		var programs = null;
 
 		if (program._isRecorded) {
@@ -403,29 +399,29 @@ P = Class.create(P, {
 				}
 			}
 
-			var prevLi = flagrate.createElement("li", { "class": "previous" }).insertTo(pager);
-			var nextLi = flagrate.createElement("li", { "class": "next" }).insertTo(pager);
+			var prevLi = ChinachuUI.createElement("li", { "class": "previous" }).insertTo(pager);
+			var nextLi = ChinachuUI.createElement("li", { "class": "next" }).insertTo(pager);
 
 			if (prev) {
-				flagrate.createElement("a", {
+				ChinachuUI.createElement("a", {
 					id: "program-view-link-to-prev",
 					title: prev.fullTitle,
 					href: "#!/program/view/id=" + prev.id + "/"
 				})
-					.insert("<span>&larr;</span> " + prev.title)
+					.insertText("← " + prev.title)
 					.insertTo(prevLi);
 			}
 			if (next) {
-				flagrate.createElement("a", {
+				ChinachuUI.createElement("a", {
 					id: "program-view-link-to-next",
 					title: next.fullTitle,
 					href: "#!/program/view/id=" + next.id + "/"
 				})
-					.insert(next.title + " <span>&rarr;</span>")
+					.insertText(next.title + " →")
 					.insertTo(nextLi);
 			}
 
-			flagrate.createElement("p", {
+			ChinachuUI.createElement("p", {
 				className: "muted"
 			}).insert("ホットキー [ページ移動]: <code>←</code> / <code>→</code>").insertTo(r2F);
 		}

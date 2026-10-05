@@ -1,4 +1,4 @@
-P = Class.create(P, {
+Chinachu.definePage({
 
 	init: function _initPage() {
 
@@ -9,17 +9,18 @@ P = Class.create(P, {
 		this.initToolbar();
 		this.draw();
 
-		this.onNotify = this.refresh.bindAsEventListener(this);
-		document.observe('chinachu:schedule', this.onNotify);
+		this.onNotify = this.refresh.bind(this);
+		Chinachu.on(document, 'chinachu:schedule', this.onNotify);
 
 		return this;
 	},
 
 	deinit: function _deinit() {
+		if (this.pointerCleanup) this.pointerCleanup();
 
-		document.stopObserving('chinachu:schedule', this.onNotify);
+		Chinachu.off(document, 'chinachu:schedule', this.onNotify);
 
-		this.tick = Prototype.emptyFunction;
+		this.tick = function () {};
 		if (this.view.drawerDt) this.view.drawerDt.remove();
 		if (this.view.clock) this.view.clock.remove();
 
@@ -28,7 +29,7 @@ P = Class.create(P, {
 
 	refresh: function _refresh() {
 
-		document.stopObserving('chinachu:schedule', this.onNotify);
+		Chinachu.off(document, 'chinachu:schedule', this.onNotify);
 
 		this.app.pm.realizeHash(true);
 
@@ -40,8 +41,8 @@ P = Class.create(P, {
 		/*
 		this.view.toolbar.add({
 			key: 'yesterday',
-			ui : new sakura.ui.Button({
-				label  : 'TO {0}'.__('YESTERDAY'.__()),
+			ui : new ChinachuUI.ActionButton({
+				label  : Chinachu.t('TO {0}', Chinachu.t('YESTERDAY')),
 				icon   : './icons/arrow-180-medium.png',
 				onClick: function() {
 
@@ -51,8 +52,8 @@ P = Class.create(P, {
 
 		this.view.toolbar.add({
 			key: 'tomorrow',
-			ui : new sakura.ui.Button({
-				label  : 'TO {0}'.__('TOMORROW'.__()),
+			ui : new ChinachuUI.ActionButton({
+				label  : Chinachu.t('TO {0}', Chinachu.t('TOMORROW')),
 				icon   : './icons/arrow-000-medium.png',
 				onClick: function() {
 
@@ -62,8 +63,8 @@ P = Class.create(P, {
 
 		this.view.toolbar.add({
 			key: 'config',
-			ui : new sakura.ui.Button({
-				label  : 'CONFIG {0}'.__('VIEW'.__()),
+			ui : new ChinachuUI.ActionButton({
+				label  : Chinachu.t('CONFIG {0}', Chinachu.t('VIEW')),
 				icon   : './icons/wrench-screwdriver.png',
 				onClick: function() {
 
@@ -77,28 +78,27 @@ P = Class.create(P, {
 
 	draw: function _draw() {
 
-		this.view.clock = new sakura.ui.Container({className: 'clock'}).render(this.app.view.mainHead);
+		this.view.clock = new ChinachuUI.Container({className: 'clock'}).render(this.app.view.mainHead);
 
 		this.view.content.className = 'fullscreen timeline noscroll';
 		this.view.content.update();
 
-		this.view.board  = new sakura.ui.Container({className: 'board'}).render(this.view.content);
+		this.view.board  = new ChinachuUI.Container({className: 'board'}).render(this.view.content);
 
 		if (global.chinachu.schedule.length === 0) {
 			return;
 		}
-
-		//this.data.scrolls     = eval(window.sessionStorage.getItem('schedule-param-scrolls') || "[0, 0]");
 		var isScrolling = false;
 		this.data.scrollStart = [0, 0];
 		this.data.scrollEnd   = [0, 0];
+		this.data.scrollDelta = [0, 0];
 		this.data.target      = null;
 
 		var unitlen = this.unitlen = 25;
 		var linelen      = 25;
-		var types        = eval(window.localStorage.getItem('schedule-param-types') || "['GR','BS','CS','SKY']");
-		var categories = this.categories = eval(window.localStorage.getItem('schedule-param-categories') || "['anime', 'information', 'news', 'sports', 'variety', 'drama', 'music', 'cinema', 'etc']");
-		var hideChannels = eval(window.localStorage.getItem('schedule-param-hide-channels') || "[]");
+		var types = JSON.parse(localStorage.getItem('schedule.visible.types') || '["GR","BS","CS","SKY"]');
+		var categories = this.categories = JSON.parse(localStorage.getItem('schedule.visible.categories') || '["anime","information","news","sports","variety","drama","theater","hobby","welfare","documentary","music","cinema","etc"]');
+		var hideChannels = JSON.parse(localStorage.getItem('schedule.hide.channels') || "[]");
 
 		var total  = 0;
 		var count  = 0;
@@ -109,7 +109,7 @@ P = Class.create(P, {
 
 		var k = 0;
 
-		this.view.head = new sakura.ui.Container({className: 'head'}).render(this.view.content);
+		this.view.head = new ChinachuUI.Container({className: 'head'}).render(this.view.content);
 
 		global.chinachu.schedule.forEach(function(channel, i) {
 			if (channel.programs.length === 0) return;
@@ -121,12 +121,13 @@ P = Class.create(P, {
 			var posY   = (5 + y * (5 + linelen));
 			var height = linelen;
 
-			var ch = new sakura.ui.Container({
+			var ch = new ChinachuUI.Container({
 				style: {
 					top   : posY + 'px',
 					height: height + 'px'
 				}
-			}).insert(channel.name).render(this.view.head);
+			}).render(this.view.head);
+				ch.entity.textContent = channel.name;
 
 			// ライブ視聴用コンテキストメニュー
 			var contextMenuItems = [
@@ -138,23 +139,22 @@ P = Class.create(P, {
 					}
 				}
 			];
-			flagrate.createContextMenu({
+			ChinachuUI.createContextMenu({
 				target: ch.entity,
 				items : contextMenuItems
 			});
 
 			ch.entity.observe('click', function() {
-				console.log(channel);
 				window.location.hash = '!/search/top/skip=1&chid=' + channel.id + '/';
 			});
 
 			channel.programs.forEach(function(program, j) {
 				if ((program.end - this.time) < 0) {
-					channel.programs = channel.programs.without(program);
+					channel.programs = channel.programs.filter(function (item) { return item !== program; });
 					return;
 				}
 				//if ((program.start - this.time) > 1000 * 60 * 60 * 24) {
-				//	channel.programs = channel.programs.without(program);
+				//	channel.programs = channel.programs.filter(function (item) { return item !== program; });
 				//	return;
 				//}
 
@@ -182,6 +182,10 @@ P = Class.create(P, {
 			total += channel.programs.length;
 		}.bind(this));
 
+		var extentWidth = Math.max(150, 150 + (maxlen - this.time) / 1000000 * unitlen);
+		var extentHeight = 5 + k * (5 + linelen);
+		ChinachuUI.createElement('div', { 'class': 'timeline-extent', 'aria-hidden': 'true' }).setStyle({ width: extentWidth + 'px', height: extentHeight + 'px' }).insertTo(this.view.board.entity);
+
 		global.chinachu.reserves.forEach(function(program) {
 			if (typeof piece[program.id] === 'undefined') return;
 
@@ -198,12 +202,13 @@ P = Class.create(P, {
 		});
 
 		// 現在時刻表示線
-		this.view.hand = new sakura.ui.Container({className: 'handline'}).render(this.view.board);
+		this.view.hand = new ChinachuUI.Container({className: 'handline'}).render(this.view.board);
 		this.view.hand.entity.style.left   = 150 + 'px';
 		this.view.hand.entity.style.height = (5 + k * (5 + linelen)) + 'px';
 
 		// スケール
-		this.view.timescale = new sakura.ui.Container({className: 'timescale'}).render(this.view.content);
+		this.view.timescale = new ChinachuUI.Container({className: 'timescale'}).render(this.view.content);
+		ChinachuUI.createElement('div', { 'class': 'timeline-extent', 'aria-hidden': 'true' }).setStyle({ width: Math.max(0, extentWidth - 150) + 'px', height: '1px' }).insertTo(this.view.timescale.entity);
 
 		var ld  = -1;
 		var lm  = -1;
@@ -217,7 +222,7 @@ P = Class.create(P, {
 				lm = m;
 
 				this.view.timescale.insert(
-					new Element('div', { className: 'long h' + date.getHours() }).setStyle({
+					ChinachuUI.createElement('div', { className: 'long h' + date.getHours() }).setStyle({
 						left: ((i - this.time) / 1000 / 1000 * unitlen) + 'px'
 					}).insert(date.getHours() + 'h')
 				);
@@ -227,7 +232,7 @@ P = Class.create(P, {
 				lm = m;
 
 				this.view.timescale.insert(
-					new Element('div', { className: 'middle' }).setStyle({
+					ChinachuUI.createElement('div', { className: 'middle' }).setStyle({
 						left: ((i - this.time) / 1000 / 1000 * unitlen) + 'px'
 					})
 				);
@@ -237,7 +242,7 @@ P = Class.create(P, {
 				lm = m;
 
 				this.view.timescale.insert(
-					new Element('div', { className: 'short' }).setStyle({
+					ChinachuUI.createElement('div', { className: 'short' }).setStyle({
 						left: ((i - this.time) / 1000 / 1000 * unitlen) + 'px'
 					})
 				);
@@ -246,7 +251,7 @@ P = Class.create(P, {
 			if (ld !== d) {
 				ld = d;
 
-				(m === 0) && new sakura.ui.Container({
+				(m === 0) && new ChinachuUI.Container({
 					className: 'cutline',
 					style    : {
 						left  : (150 + (i - this.time) / 1000 / 1000 * unitlen) + 'px',
@@ -255,13 +260,13 @@ P = Class.create(P, {
 				}).render(this.view.board);
 
 				(m === 0) && this.view.timescale.insert(
-					new Element('div', { className: 'long h' + date.getHours() + ' date' }).setStyle({
+					ChinachuUI.createElement('div', { className: 'long h' + date.getHours() + ' date' }).setStyle({
 						left: ((i - this.time) / 1000 / 1000 * unitlen) + 'px'
 					}).insert(d + 'd')
 				);
 
 				(m !== 0) && this.view.timescale.insert(
-					new Element('div', { className: 'date' }).setStyle({
+					ChinachuUI.createElement('div', { className: 'date' }).setStyle({
 						left: ((i - this.time) / 1000 / 1000 * unitlen) + 'px'
 					}).insert(d + 'd')
 				);
@@ -269,10 +274,10 @@ P = Class.create(P, {
 		}
 
 		// drawer
-		this.view.drawer = new sakura.ui.Container({className: 'drawer hide'}).render(this.view.content);
-		this.view.drawerHead = new sakura.ui.Container({className: 'head'}).render(this.view.drawer);
-		this.view.drawerBody = new sakura.ui.Container({className: 'body'}).render(this.view.drawer);
-		this.view.drawerFoot = new sakura.ui.Container({className: 'foot'}).render(this.view.drawer);
+		this.view.drawer = new ChinachuUI.Container({className: 'drawer hide'}).render(this.view.content);
+		this.view.drawerHead = new ChinachuUI.Container({className: 'head'}).render(this.view.drawer);
+		this.view.drawerBody = new ChinachuUI.Container({className: 'body'}).render(this.view.drawer);
+		this.view.drawerFoot = new ChinachuUI.Container({className: 'foot'}).render(this.view.drawer);
 
 		// events
 		var viewDrawer = function() {
@@ -286,12 +291,8 @@ P = Class.create(P, {
 
 			this.view.drawerHead.update();
 
-			this.view.drawerHead.insert(
-				'<div class="date">' +
-				dateFormat(this.data.target.start, 'mm/dd HH:MM') +
-				'<small>&plus;' + (this.data.target.seconds/ 60) +
-				'min</small></div>'
-			);
+			var drawerDate = ChinachuUI.createElement('div', { 'class': 'date' }).insertText(Chinachu.formatDate(this.data.target.start, 'mm/dd HH:MM')).insertTo(this.view.drawerHead.entity);
+			ChinachuUI.createElement('small').insertText('+' + (this.data.target.seconds / 60) + 'min').insertTo(drawerDate);
 
 			if (this.view.drawerDt) this.view.drawerDt.remove();
 			this.view.drawerDt = new chinachu.ui.DynamicTime({
@@ -300,18 +301,19 @@ P = Class.create(P, {
 				time   : this.data.target.start
 			});
 
-			this.view.drawerHead.insert(this.view.drawerDt);
+			this.view.drawerHead.insert(this.view.drawerDt.entity);
 
-			this.view.drawerHead.insert(' <span class="channel">' + this.data.target.channel.type + ': ' + this.data.target.channel.name + '</span>');
+			ChinachuUI.createElement('span', { 'class': 'channel' }).insertText(this.data.target.channel.type + ': ' + this.data.target.channel.name).insertTo(this.view.drawerHead.entity || this.view.drawerHead);
 
 			this.view.drawerBody.update();
-
-			this.view.drawerBody.insert('<div class="title"><span class="bg-cat-' + this.data.target.category + '">' + this.data.target.category + '</span>' + this.data.target.title + '</div>');
-			this.view.drawerBody.insert('<div class="detail">' + (this.data.target.detail || '') + '</div>');
-			this.view.drawerBody.insert('<div class="id">' + this.data.target.id + '</div>');
+			var drawerTitle = ChinachuUI.createElement('div', { 'class': 'title' }).insertTo(this.view.drawerBody.entity || this.view.drawerBody);
+			ChinachuUI.createElement('span', { 'class': 'label-cat-' + this.data.target.category }).insertText(this.data.target.category).insertTo(drawerTitle);
+			drawerTitle.insertText(' ' + this.data.target.title);
+			ChinachuUI.createElement('div', { 'class': 'detail' }).insertText(this.data.target.detail || '').insertTo(this.view.drawerBody.entity || this.view.drawerBody);
+			ChinachuUI.createElement('div', { 'class': 'id' }).insertText(this.data.target.id).insertTo(this.view.drawerBody.entity || this.view.drawerBody);
 
 			this.view.drawerFoot.update(
-				new flagrate.Button({
+				new ChinachuUI.Button({
 					label   : '番組詳細',
 					color   : '@pink',
 					onSelect: function() {
@@ -321,18 +323,6 @@ P = Class.create(P, {
 			);
 		}.bind(this);
 
-		var onClick = function(e) {
-
-			var targetId = e.target.getAttribute('rel') || (e.target.parentNode || e.target.parentElement).getAttribute('rel') || null;
-
-			this.data.target = null;
-
-			if (targetId === null) {
-				return;
-			};
-
-			this.data.target = piece[targetId].program;
-		}.bind(this);
 
 		var onMousewheel = function(e) {
 
@@ -369,6 +359,7 @@ P = Class.create(P, {
 		}.bind(this);
 
 		var onKeydown = function(e) {
+				if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable], wa-input, wa-select, wa-dialog')) return;
 
 			var deltaX = 0;
 			var deltaY = 0;
@@ -384,13 +375,18 @@ P = Class.create(P, {
 				}
 
 				if (e.keyCode === 37 || e.keyCode === 65) {
-					this.data.target = chinachu.util.getPrevProgramById(this.data.target.id);
-					deltaX = this.data.piece[this.data.target.id]._rect.getWidth() * 0.365 + 1;
+					var previous = chinachu.util.getPrevProgramById(this.data.target.id);
+					if (previous && this.data.piece[previous.id]) {
+						this.data.target = previous;
+						deltaX = this.data.piece[previous.id].width * 0.365 + 1;
+					}
 				}
-
 				if (e.keyCode === 39 || e.keyCode === 68) {
-					deltaX = -(this.data.piece[this.data.target.id]._rect.getWidth() * 0.365 + 1);
-					this.data.target = chinachu.util.getNextProgramById(this.data.target.id);
+					var next = chinachu.util.getNextProgramById(this.data.target.id);
+					if (next && this.data.piece[next.id]) {
+						deltaX = -(this.data.piece[this.data.target.id].width * 0.365 + 1);
+						this.data.target = next;
+					}
 				}
 
 				viewDrawer();
@@ -416,142 +412,84 @@ P = Class.create(P, {
 			inertiaScroll();
 		}.bind(this);
 
-		var onMousedown = function(e) {
+		this.bindPointerEvents(this.view.board.entity, viewDrawer);
+		Chinachu.on(this.view.board.entity, 'wheel', onMousewheel, { passive: false });
 
-			e.preventDefault();
-			e.stopPropagation();
-
-			this.data.scrollStat  = [e.clientX, e.clientY].join(',');
-			this.data.scrollStart = this.data.scrollEnd = [e.clientX, e.clientY];
-
-			$(document.body).observe('mousemove', onMousemove);
-			$(document.body).observe('mouseup',   onMouseup);
-
-			this.scroller();
-		}.bind(this);
-
-		var onMousemove = function(e) {
-
-			e.preventDefault();
-			e.stopPropagation();
-
-			this.data.scrollEnd = [e.clientX, e.clientY];
-
-			this.scroller();
-		}.bind(this);
-
-		var onMouseup = function(e) {
-
-			e.preventDefault();
-			e.stopPropagation();
-
-			if (this.data.scrollStat === [e.clientX, e.clientY].join(',')) {
-				setTimeout(viewDrawer, 25);
-			}
-
-			if (
-				this.data.scrollDelta[0] !== 0 ||
-				this.data.scrollDelta[1] !== 0
-			) {
-				clearTimeout(this.timer.inertiaScroll);
-				var inertiaScroll = function() {
-					var x = this.data.scrollDelta[0] * 0.75;
-					var y = this.data.scrollDelta[1] * 0.75;
-
-					if ((x > 1 || x < -1) || (y > 1 || y < -1)) {
-						this.data.scrollEnd[0] += x;
-						this.data.scrollEnd[1] += y;
-						this.scroller();
-						this.timer.inertiaScroll = setTimeout(inertiaScroll, 30);
-					}
-				}.bind(this);
-				inertiaScroll();
-			}
-
-			$(document.body).stopObserving('mousemove', onMousemove);
-			$(document.body).stopObserving('mouseup',   onMouseup);
-		}.bind(this);
-
-		var onTouchstart = function(e) {
-
-			this.data.scrollStat  = 0;
-			this.data.scrollStart = this.data.scrollEnd = [e.touches[0].pageX, e.touches[0].pageY];
-		}.bind(this);
-
-		var onTouchmove = function(e) {
-
-			e.preventDefault();
-			e.stopPropagation();
-
-			this.data.scrollStat = 1;
-			this.data.scrollEnd  = [e.touches[0].pageX, e.touches[0].pageY];
-
-			this.scroller();
-		}.bind(this);
-
-		var onTouchend = function(e) {
-
-			if (this.data.scrollStat === 0) {
-				onClick(e);
-				setTimeout(viewDrawer, 100);
-			}
-
-			if (
-				this.data.scrollDelta[0] !== 0 ||
-				this.data.scrollDelta[1] !== 0
-			) {
-				clearTimeout(this.timer.inertiaScroll);
-				var inertiaScroll = function() {
-					var x = this.data.scrollDelta[0] * 0.5;
-					var y = this.data.scrollDelta[1] * 0.5;
-
-					if ((x > 1 || x < -1) || (y > 1 || y < -1)) {
-						this.data.scrollEnd[0] += x;
-						this.data.scrollEnd[1] += y;
-						this.scroller();
-						this.timer.inertiaScroll = setTimeout(inertiaScroll, 25);
-					}
-				}.bind(this);
-				inertiaScroll();
-			}
-		}.bind(this);
-
-		if (Prototype.Browser.MobileSafari) {
-			this.view.board.entity.observe('touchstart', onTouchstart);
-			this.view.board.entity.observe('touchmove',  onTouchmove);
-			this.view.board.entity.observe('touchend',   onTouchend);
-		} else {
-			if (Prototype.Browser.WebKit) {
-				this.view.board.entity.observe('touchstart', onTouchstart);
-				this.view.board.entity.observe('touchmove',  onTouchmove);
-				this.view.board.entity.observe('touchend',   onTouchend);
-				this.view.board.entity.observe('mousewheel', onMousewheel);
-			}
-
-			if (Prototype.Browser.Gecko) {
-				this.view.board.entity.observe('wheel', onMousewheel);
-			}
-
-			if (Prototype.Browser.IE) {
-				this.view.board.entity.addEventListener('mousewheel', onMousewheel);
-			}
-
-			this.view.board.entity.observe('click',      onClick);
-			this.view.board.entity.observe('mousedown',  onMousedown);
-		}
-
-		Event.observe(window, 'keydown', onKeydown);
+		Chinachu.on(window, 'keydown', onKeydown);
 		var removeListenerOnUnload = function() {
-			Event.stopObserving(window, 'keydown', onKeydown);
-			document.stopObserving('sakurapanel:pm:unload', removeListenerOnUnload);
+			Chinachu.off(window, 'keydown', onKeydown);
+			Chinachu.off(document, 'chinachu:page:unload', removeListenerOnUnload);
 		};
-		document.observe('sakurapanel:pm:unload', removeListenerOnUnload);
+		Chinachu.on(document, 'chinachu:page:unload', removeListenerOnUnload);
 
 		// start
 		this.tick();
 
 		return this;
 	},//<--draw
+
+
+	bindPointerEvents: function(surface, showDetails) {
+		if (this.pointerCleanup) this.pointerCleanup();
+		var page = this;
+		var active = null;
+		var origin;
+		function down(event) {
+			if (event.isPrimary === false || event.button !== 0 || event.target.closest('button, wa-button, input, a, .drawer')) return;
+			clearTimeout(page.timer.inertiaScroll);
+			active = event.pointerId;
+			origin = [event.clientX, event.clientY];
+			page.data.scrollStart = origin.slice();
+			page.data.scrollEnd = origin.slice();
+			page.data.scrollDelta = [0, 0];
+			var target = event.target.closest('[rel]');
+			var item = target && page.data.piece[target.getAttribute('rel')];
+			page.data.target = item ? item.program : null;
+			surface.setPointerCapture(active);
+			event.preventDefault();
+		}
+		function move(event) {
+			if (event.pointerId !== active) return;
+			page.data.scrollEnd = [event.clientX, event.clientY];
+			page.scroller();
+			event.preventDefault();
+		}
+		function up(event) {
+			if (event.pointerId !== active) return;
+			if (surface.hasPointerCapture(active)) surface.releasePointerCapture(active);
+			active = null;
+			if (event.type !== 'pointerup') return;
+			if (Math.hypot(event.clientX - origin[0], event.clientY - origin[1]) <= 5) {
+				showDetails();
+				return;
+			}
+			function inertia() {
+				var x = page.data.scrollDelta[0] * 0.75;
+				var y = page.data.scrollDelta[1] * 0.75;
+				if (Math.abs(x) <= 1 && Math.abs(y) <= 1) return;
+				page.data.scrollEnd[0] += x;
+				page.data.scrollEnd[1] += y;
+				page.scroller();
+				page.timer.inertiaScroll = setTimeout(inertia, 30);
+			}
+			inertia();
+		}
+		surface.style.touchAction = 'none';
+		surface.addEventListener('pointerdown', down);
+		surface.addEventListener('pointermove', move);
+		surface.addEventListener('pointerup', up);
+		surface.addEventListener('pointercancel', up);
+		surface.addEventListener('lostpointercapture', up);
+		this.pointerCleanup = function() {
+			active = null;
+			clearTimeout(page.timer.inertiaScroll);
+			surface.removeEventListener('pointerdown', down);
+			surface.removeEventListener('pointermove', move);
+			surface.removeEventListener('pointerup', up);
+			surface.removeEventListener('pointercancel', up);
+			surface.removeEventListener('lostpointercapture', up);
+		};
+	},
 
 	scroller: function _scroller() {
 		if (
@@ -593,6 +531,9 @@ P = Class.create(P, {
 
 	render: function _render() {
 
+		this.view.timescale.entity.scrollLeft = this.view.board.entity.scrollLeft;
+		this.view.head.entity.scrollTop = this.view.board.entity.scrollTop;
+		this.view.hand.entity.style.left = (150 + (Date.now() - this.time) / 1000000 * this.unitlen) + 'px';
 		var left   = this.view.board.entity.scrollLeft - 200;
 		var top    = this.view.board.entity.scrollTop - 200;
 		var right  = left + this.view.content.getWidth() + 400;
@@ -600,15 +541,15 @@ P = Class.create(P, {
 
 		this.data.pieces.forEach(function(a, i) {
 			// 表示範囲か
-			if ((a.posX > left) && (a.posY > top) && (a.posX < right) && (a.posY < bottom)) {
+			if ((a.posX + a.width > left) && (a.posY + a.height > top) && (a.posX < right) && (a.posY < bottom)) {
 				if (typeof a._rect === 'undefined') {
-					a._rect              = document.createElement('div');
+					a._rect              = ChinachuUI.createElement('div');
 					a._rect.className    = 'rect bg-cat-' + a.program.category + ((this.categories.indexOf(a.program.category) === -1) ? ' muted' : '');
 					a._rect.style.left   = a.posX + 'px';
 					a._rect.style.top    = a.posY + 'px';
 					a._rect.style.width  = a.width + 'px';
 					a._rect.style.height = a.height + 'px';
-					a._rect.innerHTML    = '<div>' + a.program.title + '</div>';
+					ChinachuUI.createElement('div').insertText(a.program.title).insertTo(a._rect);
 
 					if (a.program.detail) a._rect.title = a.program.detail;
 
@@ -617,12 +558,7 @@ P = Class.create(P, {
 					if (a.isReserved) a._rect.addClassName('reserved');
 					if (a.isRecording) a._rect.addClassName('recording');
 
-					if (Prototype.Browser.MobileSafari) {
-						clearTimeout(this.timer['appendChild_' + a.id]);
-						this.timer['appendChild_' + a.id] = setTimeout(function() {
-							this.view.board.entity.appendChild(a._rect);
-						}.bind(this), 100);
-					} else {
+					{
 						this.view.board.entity.appendChild(a._rect);
 
 						var contextMenuItems = [
@@ -703,7 +639,7 @@ P = Class.create(P, {
 							});
 						}
 
-						new flagrate.ContextMenu({
+						new ChinachuUI.ContextMenu({
 							target: a._rect,
 							items : contextMenuItems
 						});
@@ -713,14 +649,7 @@ P = Class.create(P, {
 				}
 
 				if (a.isVisible === false) {
-					if (Prototype.Browser.MobileSafari) {
-						clearTimeout(this.timer['show_' + a.id]);
-						this.timer['show_' + a.id] = setTimeout(function() {
-							a._rect.style.display = '';
-						}.bind(this), 100);
-					} else {
-						a._rect.style.display = '';
-					}
+					a._rect.style.display = '';
 					a.isVisible = true;
 				}
 
@@ -731,20 +660,13 @@ P = Class.create(P, {
 				}
 			} else {
 				if (a._rect && a.isVisible === true) {
-					if (Prototype.Browser.MobileSafari) {
-						clearTimeout(this.timer['hide_' + a.id]);
-						this.timer['hide_' + a.id] = setTimeout(function() {
-							a._rect.style.display = 'none';
-						}.bind(this), 100);
-					} else {
-						a._rect.style.display = 'none';
-					}
+					a._rect.style.display = 'none';
 					a.isVisible = false;
 				}
 			}
 		}.bind(this));
 
-		this.view.clock.entity.innerHTML = (
+		this.view.clock.entity.textContent = (
 			chinachu.dateToString(
 				new Date(this.time + (this.view.board.entity.scrollLeft * 1000 * 1000 / this.unitlen))
 			)

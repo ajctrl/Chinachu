@@ -1,15 +1,15 @@
-P = Class.create(P, {
+Chinachu.definePage({
 
 	init: function() {
 
 		this.view.content.className = 'loading';
 
-		this.onNotify = this.refresh.bindAsEventListener(this);
-		document.observe('chinachu:recording', this.onNotify);
-		document.observe('chinachu:recorded', this.onNotify);
+		this.onNotify = this.refresh.bind(this);
+		Chinachu.on(document, 'chinachu:recording', this.onNotify);
+		Chinachu.on(document, 'chinachu:recorded', this.onNotify);
 
 		if (!this.self.query.id) {
-			this.modal = new flagrate.Modal({
+			this.modal = new ChinachuUI.Modal({
 				title: 'チャンネルが見つかりません',
 				text : 'チャンネルが見つかりません',
 				buttons: [
@@ -41,8 +41,8 @@ P = Class.create(P, {
 
 		if (this.modal) setTimeout(function() { this.modal.close(); }.bind(this), 0);
 
-		document.stopObserving('chinachu:recording', this.onNotify);
-		document.stopObserving('chinachu:recorded', this.onNotify);
+		Chinachu.off(document, 'chinachu:recording', this.onNotify);
+		Chinachu.off(document, 'chinachu:recorded', this.onNotify);
 
 		return this;
 	}
@@ -108,7 +108,7 @@ P = Class.create(P, {
 						var url = location.host + location.pathname.replace(/\/[^\/]*$/, '');
 
 						url += '/api/channel/';
-						url += this.channelId + '/watch.' + d.ext + '?' + Object.toQueryString(d);
+						url += this.channelId + '/watch.' + d.ext + '?' + Chinachu.serializeQuery(d);
 
 						if (/Android/.test(navigator.userAgent) === true) {
 							location.href = "intent://" + url + "#Intent;package=org.videolan.vlc;type=video;scheme=" + location.protocol.replace(':','') + ';end';
@@ -131,7 +131,7 @@ P = Class.create(P, {
 						saveSettings(d);
 
 						if (d.ext === 'm2ts') {
-							new flagrate.Modal({
+							new ChinachuUI.Modal({
 								title: 'エラー',
 								text : 'MPEG-2 TSコンテナの再生はサポートしていません。'
 							}).show();
@@ -160,14 +160,14 @@ P = Class.create(P, {
 						d.prefix += '/api/channel/' + this.channelId + '/';
 						url += '/api/channel/';
 
-						url += this.channelId + '/watch.xspf?' + Object.toQueryString(d);
+						url += this.channelId + '/watch.xspf?' + Chinachu.serializeQuery(d);
 						location.href = url;
 					}.bind(this));
 				}.bind(this)
 			});
 		}
 
-		var modal = this.modal = new flagrate.Modal({
+		var modal = this.modal = new ChinachuUI.Modal({
 			disableCloseByMask: true,
 			disableCloseButton: true,
 			target: this.view.content,
@@ -187,7 +187,7 @@ P = Class.create(P, {
 			value     : 'mp4'
 		});
 
-		this.form = flagrate.createForm({
+		this.form = ChinachuUI.createForm({
 			fields: [
 				{
 					key: "ext",
@@ -356,18 +356,18 @@ P = Class.create(P, {
 
 			var r = window.location.protocol + '//' + window.location.host + window.location.pathname.replace(/\/[^\/]*$/, '');
 			r += '/api/channel/' + this.channelId + '/watch.' + d.ext;
-			var q = Object.toQueryString(d);
+			var q = Chinachu.serializeQuery(d);
 
 			return r + '?' + q;
 		}.bind(this);
 
 		// create video view
 
-		var videoContainer = new flagrate.Element('div', {
+		var videoContainer = new ChinachuUI.Element('div', {
 			'class': 'video-container'
 		}).insertTo(this.view.content);
 
-		var video = this.video = new flagrate.Element('video', {
+		var video = this.video = new ChinachuUI.Element('video', {
 			src: getRequestURI(),
 			autoplay: true,
 			controls: false
@@ -392,16 +392,16 @@ P = Class.create(P, {
 
 		// create control view
 
-		var control = new flagrate.Toolbar({
+		var control = new ChinachuUI.Toolbar({
 			className: 'video-control',
 			items: [
 				{
 					key: "status",
-					element: new flagrate.Element("span").insert("...")
+					element: new ChinachuUI.Element("span").insert("...")
 				},
 				{
 					key    : 'vol',
-					element: new flagrate.Slider({ value: 10, max: 10 })
+					element: new ChinachuUI.Slider({ value: 10, max: 10 })
 				}
 			]
 		}).insertTo(this.view.content);

@@ -1,330 +1,358 @@
-/* Virtual rows for the list screens. Keep Flagrate's column layout and actions. */
-(function (root) {
+/* Chinachu's list model backed by Tabulator's virtual renderer. */
+(function(root) {
 	'use strict';
 
-	var Base = flagrate.Grid;
-	var overscan = 300;
-
-	// Prefix sums with O(log n) height updates and viewport lookups.
-	function Heights(values) {
-		this.values = values.slice();
-		this.tree = new Array(values.length + 1).fill(0);
-		for (var i = 1; i < this.tree.length; i++) {
-			this.tree[i] += values[i - 1];
-			var parent = i + (i & -i);
-			if (parent < this.tree.length) this.tree[parent] += this.tree[i];
-		}
-	}
-	Heights.prototype.sum = function (end) {
-		var total = 0;
-		for (var i = end; i > 0; i -= i & -i) total += this.tree[i];
-		return total;
-	};
-	Heights.prototype.set = function (index, height) {
-		var delta = height - this.values[index];
-		this.values[index] = height;
-		for (var i = index + 1; i < this.tree.length; i += i & -i) this.tree[i] += delta;
-	};
-	Heights.prototype.at = function (offset) {
-		var index = 0, step = 1;
-		while (step < this.tree.length) step *= 2;
-		for (; step >= 1; step /= 2) {
-			var next = index + step;
-			if (next < this.tree.length && this.tree[next] <= offset) {
-				offset -= this.tree[next];
-				index = next;
-			}
-		}
-		return Math.min(index, Math.max(0, this.values.length - 1));
-	};
-
-	function VirtualGrid(options) {
-		this._mounted = new Set();
-		this._heights = new Heights([]);
-		this._keys = [];
-		this._keyIndexes = new Map();
-		this._dirty = true;
+	function Grid(options) {
+		this._opt = options;
+		this._scope = root.Chinachu && root.Chinachu.scope;
+		this._rows = [];
+		this._selectedRows = [];
+		this._renderedModels = new Set();
 		this._storageKey = 'chinachu.virtual-grid.' + options.stateKey;
-		try { this._saved = JSON.parse(root.sessionStorage.getItem(this._storageKey)); } catch (e) { /* optional storage */ }
-		if (!this._saved && options.legacyPage > 0) {
-			this._saved = { index: Math.floor(options.legacyPage) * 20, offset: 0 };
-		}
-		options.pagination = false;
-		options.fill = true;
-		Base.call(this, options);
-		this.element.addClassName('chinachu-virtual-grid');
-		this._body.tabIndex = 0;
-		this._topSpacer = this._spacer();
-		this._bottomSpacer = this._spacer();
-		this._paritySpacer = this._spacer();
-		this._body.addEventListener('scroll', this._onScroll = this._requestRender.bind(this));
-		root.addEventListener('resize', this._onResize = this._resize.bind(this));
-		if (root.ResizeObserver) {
-			this._observer = new root.ResizeObserver(this._requestRender.bind(this));
-			this._observer.observe(this._body);
-			this._cols.forEach(function (col) { this._observer.observe(col._th); }, this);
-		}
+		this.element = document.createElement('div');
+		this.element.className = 'chinachu-virtual-grid';
+		this.element.setAttribute('aria-label', '番組・ルール一覧');
+		try { this._saved = JSON.parse(root.sessionStorage.getItem(this._storageKey)); } catch (error) { /* Storage is optional. */ }
+		if (!this._saved && options.legacyPage > 0) this._saved = { index: Math.floor(options.legacyPage) * 20 };
+		this.onSelect = options.onSelect;
+		this.onDeselect = options.onDeselect;
 	}
-	VirtualGrid.prototype = Object.create(Base.prototype);
-	VirtualGrid.prototype.constructor = VirtualGrid;
-	VirtualGrid.Heights = Heights;
-
-	VirtualGrid.prototype._spacer = function () {
-		var row = document.createElement('tr');
-		row.className = 'virtual-spacer';
-		row.setAttribute('aria-hidden', 'true');
-		// A cell per column preserves the fixed table's column widths, even when empty.
-		if (this._checkbox) row.appendChild(document.createElement('td')).className = 'flagrate-grid-cell-checkbox';
-		this._cols.forEach(function (col) {
-			row.appendChild(document.createElement('td')).className = col._id;
-		});
-		row.appendChild(document.createElement('td')).className = this._id + '-col-last';
-		return row;
+	Object.defineProperty(Grid.prototype, 'rows', { get: function() { return this._rows; } });
+	Grid.prototype.insertTo = function(parent) {
+		(parent.entity || parent).appendChild(this.element);
+		this._build();
+		return this;
 	};
-	VirtualGrid.prototype._requestRender = function () {
-		if (this._disposed || this._frame) return this;
-		this._frame = root.requestAnimationFrame(function () {
+	Grid.prototype._build = function() {
+		var grid = this;
+		var options = this._opt;
+		var columns = options.cols.map(function(column) {
+			return {
+				title: column.label, field: column.key, width: column.width, minWidth: column.width || 160,
+				headerSort: !column.disableSort, resizable: !column.disableResize,
+				hozAlign: column.align || 'left', variableHeight: true,
+				formatter: function(cell) { return grid._formatCell(cell, column); },
+				sorter: function(a, b) {
+					if (typeof a === 'number' && typeof b === 'number') return a - b;
+					return String(a == null ? '' : a).localeCompare(String(b == null ? '' : b), 'ja', { numeric: true });
+				}
+			};
+		});
+		if (!options.disableSelect) columns.unshift({
+			title: '', field: '_selection', width: 36, minWidth: 36, headerSort: false, resizable: false,
+			titleFormatter: function() {
+				var checkbox = grid._selectAll = document.createElement('input');
+				checkbox.type = 'checkbox';
+				checkbox.setAttribute('aria-label', 'すべて選択');
+				checkbox.addEventListener('click', function(event) { event.stopPropagation(); });
+				checkbox.addEventListener('change', function() { grid[checkbox.checked ? 'selectAll' : 'deselectAll'](); });
+				return checkbox;
+			},
+			formatter: function(cell) {
+				var model = cell.getRow().getData()._model;
+				var checkbox = model._checkbox = document.createElement('input');
+				checkbox.type = 'checkbox';
+				checkbox.checked = !!model.isSelected;
+				checkbox.setAttribute('aria-label', '行を選択');
+				checkbox.addEventListener('click', function(event) { event.stopPropagation(); });
+				checkbox.addEventListener('change', function() { grid[checkbox.checked ? 'select' : 'deselect'](model); });
+				return checkbox;
+			}
+		});
+		if (options.disableSelect) columns.push({
+			title: '', field: '_menu', width: 34, minWidth: 34, headerSort: false, resizable: false,
+			formatter: function(cell) {
+				var model = cell.getRow().getData()._model;
+				if (!model.menuItems || !model.menuItems.length) return '';
+				var button = document.createElement('button');
+				button.type = 'button';
+				button.className = 'chinachu-grid-menu';
+				button.textContent = '⋮';
+				button.setAttribute('aria-label', '番組の操作');
+				button.addEventListener('click', function(event) {
+					event.stopPropagation();
+					var rect = button.getBoundingClientRect();
+					grid._showMenu({ clientX: rect.left, clientY: rect.bottom }, model);
+				});
+				return button;
+			}
+		});
+		var initialSort = this._saved && options.cols.some(function(col) { return col.key === grid._saved.sort; }) ?
+			[{ column: this._saved.sort, dir: this._saved.ascending === false ? 'desc' : 'asc' }] : [];
+		// Capture the visible program before Tabulator remeasures wrapped cells on resize.
+		if (root.ResizeObserver) {
+			this._width = this.element.getBoundingClientRect().width;
+			this._resizeObserver = new root.ResizeObserver(function() {
+				var width = grid.element.getBoundingClientRect().width;
+				if (!grid._ready || grid._disposed || width === grid._width) return;
+				grid._width = width;
+				grid._resizeAnchor = grid._resizeAnchor || grid._anchor();
+				if (grid._resizeFrame) return;
+				grid._resizeFrame = root.requestAnimationFrame(function() {
+					grid._resizeFrame = null;
+					var anchor = grid._resizeAnchor;
+					grid._resizeAnchor = null;
+					if (!grid._disposed) grid._restore(anchor).catch(function(error) { console.error(error); });
+				});
+			});
+			this._resizeObserver.observe(this.element);
+		}
+		this.table = new root.Tabulator(this.element, {
+			index: '_key', height: '100%', layout: 'fitColumns', renderVertical: 'virtual', renderVerticalBuffer: 300,
+			placeholder: '該当する項目がありません', columns: columns, data: [],
+			selectableRows: false, initialSort: initialSort,
+			rowFormatter: function(row) {
+				var model = row.getData()._model;
+				model._tr = row.getElement();
+				(model._tr._chinachuClasses || []).forEach(function(name) { model._tr.classList.remove(name); });
+				model._tr._chinachuClasses = (model.className || '').split(/\s+/).filter(Boolean);
+				model._tr._chinachuClasses.forEach(function(name) { model._tr.classList.add(name); });
+				if (model.attribute) Object.keys(model.attribute).forEach(function(name) { model._tr.setAttribute(name, model.attribute[name]); });
+				grid._selectionStyle(model);
+				grid._renderedModels.add(model);
+			}
+		});
+		this.table.on('tableBuilt', function() {
+			if (grid._disposed) { grid.table.destroy(); return; }
+			grid._ready = true;
+			grid._body = grid.element.querySelector('.tabulator-tableholder');
+			grid._body.tabIndex = 0;
+			grid._body.addEventListener('scroll', grid._onScroll = function() { grid._closeMenu(); });
+			grid._queueRender();
+		});
+		this.table.on('rowClick', function(event, row) { grid._click(event, row.getData()._model, false); });
+		this.table.on('rowDblClick', function(event, row) { grid._click(event, row.getData()._model, true); });
+		['rowContext', 'rowTapHold'].forEach(function(name) {
+			grid.table.on(name, function(event, row) { event.preventDefault(); grid._showMenu(event, row.getData()._model); });
+		});
+		this.table.on('renderComplete', function() { grid._syncContent(); });
+		this.table.on('dataSorted', function(sorters) {
+			if (sorters.length) { grid._sortedByKey = sorters[0].field; grid._sortedByAsc = sorters[0].dir === 'asc'; }
+		});
+	};
+	Grid.prototype._showMenu = function(event, model) {
+		this._closeMenu();
+		if (!model.menuItems || !model.menuItems.length) return;
+		this._menu = new root.ChinachuUI.ContextMenu({ items: model.menuItems });
+		this._menu.open(event);
+	};
+	Grid.prototype._closeMenu = function() {
+		if (this._menu) this._menu.remove();
+		this._menu = null;
+	};
+	Grid.prototype._click = function(event, model, doubleClick) {
+		if (event.target.closest && event.target.closest('a, button, input, select, wa-button')) return;
+		if (!doubleClick && !this._opt.disableSelect) this[model.isSelected ? 'deselect' : 'select'](model);
+		var callback = doubleClick ? 'onDblClick' : 'onClick';
+		if (model[callback]) model[callback](event, model, this);
+		if (this._opt[callback]) this._opt[callback](event, model, this);
+	};
+	Grid.prototype._formatCell = function(component, column) {
+		var model = component.getRow().getData()._model;
+		var cell = model.cell[column.key];
+		if (!cell || typeof cell !== 'object') cell = model.cell[column.key] = { text: cell == null ? '' : cell };
+		if (cell._content) { cell._content.remove(); delete cell._content; }
+		var element = cell._td = component.getElement();
+		if (cell.className) cell.className.split(/\s+/).filter(Boolean).forEach(function(name) { element.classList.add(name); });
+		if (cell.attribute) Object.keys(cell.attribute).forEach(function(name) { element.setAttribute(name, cell.attribute[name]); });
+		if (cell.style) Object.assign(element.style, cell.style);
+		var content = cell._div = document.createElement('div');
+		if (cell.html !== undefined) content.innerHTML = cell.html;
+		else if (cell.element) content.appendChild(cell.element.entity || cell.element);
+		else content.textContent = cell.text == null ? '' : cell.text;
+		if (cell.createElement) this._createContent(cell);
+		if (cell.onClick) element.onclick = function(event) { cell.onClick(event, cell, this); }.bind(this);
+		if (cell.postProcess) cell.postProcess(element, cell, this);
+		return content;
+	};
+	Grid.prototype._createContent = function(cell) {
+		cell._content = cell.createElement();
+		cell._div.replaceChildren(cell._content.entity || cell._content);
+	};
+	Grid.prototype._syncContent = function() {
+		this._renderedModels.forEach(function(model) {
+			var mounted = model._tr && model._tr.isConnected;
+			Object.keys(model.cell).forEach(function(key) {
+				var cell = model.cell[key];
+				if (!cell || !cell.createElement) return;
+				if (!mounted && cell._content) { cell._content.remove(); delete cell._content; }
+				if (mounted && !cell._content && cell._div) this._createContent(cell);
+			}, this);
+		}, this);
+	};
+	Grid.prototype._disposeModel = function(model) {
+		Object.keys(model.cell || {}).forEach(function(key) {
+			var cell = model.cell[key];
+			if (cell && cell._content) { cell._content.remove(); delete cell._content; }
+		});
+		this._renderedModels.delete(model);
+		delete model._tr;
+		delete model._checkbox;
+	};
+	Grid.prototype._identity = function(model) {
+		return model.data && model.data.id !== undefined ? model.data.id + ':' + model.data.start : JSON.stringify(model.data);
+	};
+	Grid.prototype._data = function() {
+		var occurrences = new Map();
+		return this._rows.map(function(model) {
+			var identity = this._identity(model);
+			var count = occurrences.get(identity) || 0;
+			occurrences.set(identity, count + 1);
+			model._key = identity + ':' + count;
+			var data = { _key: model._key, _model: model };
+			this._opt.cols.forEach(function(column) {
+				var cell = model.cell[column.key];
+				data[column.key] = cell && typeof cell === 'object' ?
+					(cell.sortAlt !== undefined ? cell.sortAlt : cell.sortKey !== undefined ? cell.sortKey : cell.text || '') : cell || '';
+			});
+			return data;
+		}, this);
+	};
+	Grid.prototype._anchor = function() {
+		if (!this._ready) return this._saved || { index: 0 };
+		var body = this._body;
+		var top = body.getBoundingClientRect().top;
+		var rows = this.table.getRows('visible');
+		var row = rows.find(function(row) { return row.getElement().getBoundingClientRect().bottom > top; });
+		var all = this.table.getRows('active');
+		return {
+			key: row && row.getData()._key, index: row ? all.indexOf(row) : 0,
+			offset: row ? top - row.getElement().getBoundingClientRect().top : 0,
+			left: body.scrollLeft, sort: this._sortedByKey, ascending: this._sortedByAsc
+		};
+	};
+	Grid.prototype._restore = async function(anchor) {
+		if (this._disposed || !this._rows.length || !anchor) return;
+		var rows = this.table.getRows('active');
+		var row = rows.find(function(row) { return row.getData()._key === anchor.key; }) || rows[Math.min(anchor.index || 0, rows.length - 1)];
+		if (row) {
+			await this.table.scrollToRow(row, 'top', false);
+			if (this._disposed) return;
+			// Variable-height rows can be remeasured during scrollToRow; correct its estimate from the mounted row.
+			var rect = row.getElement().getBoundingClientRect();
+			this._body.scrollTop += rect.top - this._body.getBoundingClientRect().top + Math.max(0, Math.min(anchor.offset || 0, rect.height - 1));
+		}
+		this._body.scrollLeft = anchor.left || 0;
+	};
+	Grid.prototype._queueRender = function() {
+		if (!this._ready || this._disposed || this._frame || this._rendering) return;
+		this._frame = root.requestAnimationFrame(function() {
 			this._frame = null;
 			this._render();
 		}.bind(this));
-		return this;
 	};
-	VirtualGrid.prototype._anchor = function () {
-		var index = this._heights.at(this._body.scrollTop);
-		return {
-			key: this._keys[index], index: index,
-			offset: this._body.scrollTop - this._heights.sum(index),
-			left: this._body.scrollLeft,
-			sort: this._sortedByKey, ascending: this._sortedByAsc
-		};
-	};
-	VirtualGrid.prototype._anchorTop = function (anchor) {
-		var index = this._keyIndexes.has(anchor.key) ? this._keyIndexes.get(anchor.key) : (anchor.index || 0);
-		index = Math.max(0, Math.min(index, this._rows.length - 1));
-		return this._heights.sum(index) + Math.max(0, Math.min(anchor.offset || 0, (this._heights.values[index] || 1) - 1));
-	};
-	VirtualGrid.prototype._resize = function () {
-		this._pendingAnchor = this._pendingAnchor || this._anchor();
-		this._rows.forEach(function (row) { delete row._virtualHeight; });
-		this._dirty = true;
-		this._requestRender();
-	};
-	VirtualGrid.prototype.sort = function (key, ascending) {
-		this._pendingAnchor = { index: 0, offset: 0, left: this._body.scrollLeft };
-		this._dirty = true;
-		return Base.prototype.sort.call(this, key, ascending);
-	};
-	VirtualGrid.prototype.splice = function (index, count, rows) {
+	Grid.prototype._render = async function() {
+		if (this._disposed || !this._ready) return;
+		this._rendering = true;
+		var revision = this._revision;
 		var anchor = this._pendingAnchor || this._saved || this._anchor();
-		// Keep the current rows mounted until the next render. Removing them here
-		// leaves the viewport empty for a frame whenever the data is refreshed.
-		// _render() removes the old row objects before mounting the new visible set.
-		var removed = Base.prototype.splice.call(this, index, count, rows);
-		var removedSet = new Set(removed);
-		this._selectedRows = this._selectedRows.filter(function (row) { return !removedSet.has(row); });
-		if (this._checkbox && !this._selectedRows.length) this._checkbox.uncheck();
-		if (this._saved && this._rows.length) {
-			if (this._cols.some(function (col) { return col.key === this._saved.sort; }, this)) {
-				Base.prototype.sort.call(this, this._saved.sort, this._saved.ascending);
+		this._pendingAnchor = null;
+		this._saved = null;
+		try {
+			var data = this._data();
+			var previous = this._lastData || [];
+			var sameOrder = data.length === previous.length && data.every(function(row, i) { return row._key === previous[i]._key; });
+			var changed = sameOrder ? data.filter(function(row, i) { return row._model !== previous[i]._model; }) : data;
+			// Keep unaffected DOM during small live updates. A settings change can replace every row;
+			// use the linear full-data path instead of thousands of individual row lookups.
+			if (sameOrder && changed.length <= Math.max(50, data.length / 10)) {
+				if (changed.length) {
+					changed.forEach(function(row) {
+						var old = previous.find(function(item) { return item._key === row._key; });
+						if (old) this._disposeModel(old._model);
+					}, this);
+					await this.table.updateData(changed);
+					changed.forEach(function(row) {
+						var component = this.table.getRow(row._key);
+						if (component) {
+							component.reformat();
+						}
+					}, this);
+				}
+			} else {
+				previous.forEach(function(row) { this._disposeModel(row._model); }, this);
+				await this.table.replaceData(data);
 			}
-			this._saved = null;
+			this._lastData = data;
+			await this._restore(anchor);
+			this._syncContent();
+		} catch (error) {
+			if (!this._disposed) console.error('一覧の更新に失敗しました', error);
+		} finally {
+			this._rendering = false;
+			if (revision !== this._revision) this._queueRender();
 		}
-		this._pendingAnchor = anchor;
-		this._dirty = true;
+	};
+	Grid.prototype.splice = function(index, count, rows) {
+		this._closeMenu();
+		this._pendingAnchor = this._pendingAnchor || this._saved || this._anchor();
+		var removed = this._rows.splice.apply(this._rows, [index, count === undefined ? this._rows.length - index : count].concat(rows || []));
+		this._selectedRows = this._selectedRows.filter(function(row) { return this._rows.indexOf(row) !== -1; }, this);
+		this._updateSelectionHeader();
+		this._revision = (this._revision || 0) + 1;
+		this._queueRender();
 		return removed;
 	};
-
-	// Flagrate's selection methods depend on mounted DOM and can duplicate selected
-	// rows. Store selection on the model so select-all also includes unmounted rows.
-	VirtualGrid.prototype._select = function (selected, args) {
+	Grid.prototype.sort = function(key, ascending) {
+		this._sortedByKey = key;
+		this._sortedByAsc = ascending !== false;
+		if (this._ready) this.table.setSort(key, ascending === false ? 'desc' : 'asc');
+		return this;
+	};
+	Grid.prototype._selectionStyle = function(row) {
+		if (row._tr) row._tr.classList.toggle('tabulator-selected', !!row.isSelected);
+		if (row._checkbox) row._checkbox.checked = !!row.isSelected;
+	};
+	Grid.prototype._updateSelectionHeader = function() {
+		if (!this._selectAll) return;
+		this._selectAll.checked = this._rows.length > 0 && this._selectedRows.length === this._rows.length;
+		this._selectAll.indeterminate = this._selectedRows.length > 0 && !this._selectAll.checked;
+	};
+	Grid.prototype._select = function(selected, args) {
 		var rows = Array.isArray(args[0]) ? args[0] : Array.prototype.slice.call(args);
 		if (selected && !this._opt.multiSelect) this.deselectAll();
-		rows.forEach(function (row) {
+		rows.forEach(function(row) {
 			if (typeof row === 'number') row = this._rows[row];
 			if (!row || !!row.isSelected === selected) return;
 			row.isSelected = selected;
 			if (selected) this._selectedRows.push(row);
-			else {
-				var index = this._selectedRows.indexOf(row);
-				if (index !== -1) this._selectedRows.splice(index, 1);
-			}
+			else this._selectedRows = this._selectedRows.filter(function(item) { return item !== row; });
 			this._selectionStyle(row);
 			var callback = selected ? 'onSelect' : 'onDeselect';
-			if (row[callback]) row[callback].call(this, root.event, row, this);
-			if (this[callback]) this[callback](root.event, row, this);
+			if (row[callback]) row[callback](undefined, row, this);
+			if (this[callback]) this[callback](undefined, row, this);
 		}, this);
-		if (this._checkbox) this._checkbox[this._selectedRows.length ? 'check' : 'uncheck']();
-		this.element.fire('change', { targetGrid: this });
+		this._updateSelectionHeader();
 		return this;
 	};
-	VirtualGrid.prototype.select = function () { return this._select(true, arguments); };
-	VirtualGrid.prototype.deselect = function () { return this._select(false, arguments); };
-	VirtualGrid.prototype._selectionStyle = function (row) {
-		if (row._tr) row._tr.classList.toggle('flagrate-grid-row-selected', !!row.isSelected);
-		root.clearTimeout(row._selectionTimer);
-		if (row._checkbox) {
-			row._checkbox[row.isSelected ? 'check' : 'uncheck']();
-			// The inherited click handler cancels the input's default action, which
-			// rolls back checked after dispatch (including Space-key activation).
-			row._selectionTimer = root.setTimeout(function () {
-				delete row._selectionTimer;
-				if (!this._disposed && row._checkbox) {
-					row._checkbox[row.isSelected ? 'check' : 'uncheck']();
-				}
-			}.bind(this), 0);
-		}
-	};
-
-	VirtualGrid.prototype._mount = function (row) {
-		row._grid = this;
-		row._tr = flagrate.createElement('tr', row.attribute || {});
-		if (row.id) row._tr.id = row.id;
-		if (row.className) row._tr.className = row.className;
-		if (row.style) row._tr.setStyle(row.style);
-		if (!this._opt.disableSelect) row._tr.addClassName('flagrate-grid-row-selectable');
-		if (row.onClick || this.onClick) row._tr.addClassName('flagrate-grid-row-clickable');
-		row._tr.onclick = this._createRowOnClickHandler(row);
-		row._tr.ondblclick = this._createRowOnDblClickHandler(row);
-		if (this._checkbox) {
-			row._checkbox = flagrate.createCheckbox({ onChange: this._createRowOnCheckHandler(row) });
-			row._checkbox.insertTo(flagrate.createElement('td', { 'class': 'flagrate-grid-cell-checkbox' }).insertTo(row._tr));
-		}
-		this._selectionStyle(row);
-		this._cols.forEach(function (col) {
-			var cell = row.cell[col.key];
-			if (!cell || typeof cell !== 'object') cell = row.cell[col.key] = { text: cell == null ? '' : cell };
-			cell._td = flagrate.createElement('td', cell.attribute || {}).insertTo(row._tr);
-			cell._td.className = col._id + ' ' + (cell.className || '');
-			if (cell.id) cell._td.id = cell.id;
-			if (cell.style) cell._td.setStyle(cell.style);
-			if (col.align) cell._td.style.textAlign = col.align;
-			cell._div = flagrate.createElement('div').insertTo(cell._td);
-			if (cell.text !== undefined) cell._div.updateText(cell.text);
-			if (cell.html) cell._div.update(cell.html);
-			if (cell.element) cell._div.update(cell.element);
-			if (cell.createElement) {
-				cell._content = cell.createElement();
-				cell._div.update(cell._content.entity);
-			}
-			if (cell.icon) {
-				cell._div.addClassName('flagrate-icon');
-				cell._div.style.backgroundImage = 'url(' + cell.icon + ')';
-			}
-			if (cell.onClick) {
-				cell._td.addClassName('flagrate-grid-cell-clickable');
-				cell._td.onclick = this._createCellOnClickHandler(cell);
-			}
-			if (cell.onDblClick) cell._td.ondblclick = this._createCellOnDblClickHandler(cell);
-			if (cell.postProcess) cell.postProcess.call(this, cell._td, cell, this);
-		}, this);
-		row._last = flagrate.createElement('td', { 'class': this._id + '-col-last' }).insertTo(row._tr);
-		if (row.menuItems) this._updateRowMenu(row, row.menuItems);
-		if (row.postProcess) row.postProcess.call(this, row._tr, row, this);
-		if (this.postProcessOfRow) this.postProcessOfRow(row._tr, row, this);
-		this._mounted.add(row);
-		if (this._observer) this._observer.observe(row._tr);
-	};
-	VirtualGrid.prototype._unmount = function (row) {
-		root.clearTimeout(row._selectionTimer);
-		delete row._selectionTimer;
-		if (this._observer) this._observer.unobserve(row._tr);
-		if (row._menu) row._menu.remove();
-		Object.keys(row.cell).forEach(function (key) {
-			var cell = row.cell[key];
-			if (!cell || typeof cell !== 'object') return;
-			if (cell._content) cell._content.remove();
-			delete cell._content;
-			delete cell._td;
-			delete cell._div;
-		});
-		row._tr.remove();
-		delete row._tr;
-		delete row._checkbox;
-		delete row._last;
-		delete row._menu;
-		delete row._grid;
-		this._mounted.delete(row);
-	};
-
-	VirtualGrid.prototype._render = function () {
-		if (this._disposed || !this._topSpacer) return this;
-		if (this.onRender && this.onRender(this) === false) return this;
-		var widths = this._cols.map(function (col) { return col._th.getBoundingClientRect().width; }).join(',');
-		if (this._widths !== undefined && widths !== this._widths) this._resize();
-		this._widths = widths;
-		if (this._dirty) {
-			this._keyIndexes.clear();
-			var occurrences = new Map();
-			this._keys = this._rows.map(function (row, index) {
-				var identity = row.data && row.data.id !== undefined ? row.data.id + ':' + row.data.start : JSON.stringify(row.data);
-				var occurrence = occurrences.get(identity) || 0;
-				occurrences.set(identity, occurrence + 1);
-				var key = identity + ':' + occurrence;
-				this._keyIndexes.set(key, index);
-				return key;
-			}, this);
-			this._heights = new Heights(this._rows.map(function (row) {
-				return row._virtualHeight || (/reserve-description-row/.test(row.className) ? 100 : 30);
-			}));
-			this._dirty = false;
-		}
-		var anchor = this._pendingAnchor || this._anchor();
-		var top = this._pendingAnchor ? this._anchorTop(anchor) : this._body.scrollTop;
-		var viewport = this._body.clientHeight || 600;
-		top = Math.max(0, Math.min(top, this._heights.sum(this._rows.length) - viewport));
-		var from = this._heights.at(Math.max(0, top - overscan));
-		var to = this._rows.length ? this._heights.at(top + viewport + overscan) + 1 : 0;
-		var visible = new Set(this._rows.slice(from, to));
-		this._mounted.forEach(function (row) { if (!visible.has(row)) this._unmount(row); }, this);
-		this._tbody.insertBefore(this._topSpacer, this._tbody.firstChild);
-		this._tbody.appendChild(this._bottomSpacer);
-		// Keep nth-child striping aligned with the row's index in the full list.
-		if (from % 2 === 0) this._tbody.insertBefore(this._paritySpacer, this._topSpacer);
-		else if (this._paritySpacer.parentNode) this._paritySpacer.remove();
-		var cursor = this._topSpacer.nextSibling;
-		for (var i = from; i < to; i++) {
-			var row = this._rows[i];
-			if (!row._tr) this._mount(row);
-			if (cursor !== row._tr) this._tbody.insertBefore(row._tr, cursor);
-			cursor = row._tr.nextSibling;
-			row._tr.setAttribute('aria-rowindex', i + 2);
-		}
-		this._tbody.parentNode.setAttribute('aria-rowcount', this._rows.length + 1);
-		var changed = false;
-		for (var j = from; j < to; j++) {
-			var height = this._rows[j]._tr.getBoundingClientRect().height;
-			if (height > 0 && Math.abs(height - this._heights.values[j]) > 0.1) {
-				this._rows[j]._virtualHeight = height;
-				this._heights.set(j, height);
-				changed = true;
-			}
-		}
-		this._topSpacer.firstChild.style.height = this._heights.sum(from) + 'px';
-		this._bottomSpacer.firstChild.style.height = (this._heights.sum(this._rows.length) - this._heights.sum(to)) + 'px';
-		// Removing old rows can temporarily shrink scrollHeight and clamp scrollTop.
-		this._body.scrollTop = this._pendingAnchor || changed ? this._anchorTop(anchor) : top;
-		if (anchor.left !== undefined) this._body.scrollLeft = anchor.left;
-		this._pendingAnchor = null;
-		this._head.style.right = (this._body.offsetWidth - this._body.clientWidth) + 'px';
-		this._head.scrollLeft = this._body.scrollLeft;
-		this._requestUpdateLayout();
-		if (changed) this._requestRender();
-		if (this.onRendered) this.onRendered(this);
-		return this;
-	};
-	VirtualGrid.prototype.destroy = function () {
+	Grid.prototype.select = function() { return this._select(true, arguments); };
+	Grid.prototype.deselect = function() { return this._select(false, arguments); };
+	Grid.prototype.selectAll = function() { return this.select(this._rows); };
+	Grid.prototype.deselectAll = function() { return this.deselect(this._selectedRows.slice()); };
+	Grid.prototype.getSelectedRows = function() { return this._selectedRows.slice(); };
+	Grid.prototype.destroy = function() {
 		if (this._disposed) return;
-		try { root.sessionStorage.setItem(this._storageKey, JSON.stringify(this._anchor())); } catch (e) { /* optional storage */ }
+		try { root.sessionStorage.setItem(this._storageKey, JSON.stringify(this._anchor())); } catch (error) { /* Storage is optional. */ }
 		this._disposed = true;
+		this._closeMenu();
+		if (this._body) this._body.removeEventListener('scroll', this._onScroll);
 		root.cancelAnimationFrame(this._frame);
-		clearTimeout(this._renderTimer);
-		clearTimeout(this._layoutTimer);
-		clearInterval(this._layoutInterval);
-		this._body.removeEventListener('scroll', this._onScroll);
-		this._body.onscroll = null;
-		root.removeEventListener('resize', this._onResize);
-		if (this._observer) this._observer.disconnect();
-		this._mounted.forEach(this._unmount.bind(this));
+		root.cancelAnimationFrame(this._resizeFrame);
+		if (this._resizeObserver) this._resizeObserver.disconnect();
+		this._renderedModels.forEach(this._disposeModel.bind(this));
+		// Tabulator initializes on the next turn. Destroying it earlier would let that
+		// pending initialization recreate DOM and listeners after the page has gone.
+		if (this.table && this._ready) this.table.destroy();
 	};
-	root.ChinachuVirtualGrid = VirtualGrid;
+	// Tabulator dispatches outside page initialization. Restore the owning page
+	// when actions create dialogs or requests, so navigation can clean them up.
+	['_click', '_showMenu', '_select'].forEach(function(name) {
+		var method = Grid.prototype[name];
+		Grid.prototype[name] = function() {
+			if (this._disposed || this._scope && this._scope._disposed) return;
+			var args = arguments, grid = this;
+			return root.Chinachu ? root.Chinachu.withScope(this._scope, function() { return method.apply(grid, args); }) : method.apply(this, args);
+		};
+	});
+	root.ChinachuVirtualGrid = Grid;
 }(window));

@@ -11,7 +11,7 @@ html, body {
 	bottom          : 0;
 	left            : 0;
 	cursor          : url(pointer.cur), default;
-	background-color: rgb(194,65,134);
+	background-color: #fff;
 	-webkit-text-size-adjust: none;
 	scrollbar-base-color    : #d67fae; }
 
@@ -19,9 +19,7 @@ html, body {
 	--chinachu-font-sans: "Noto Sans JP", "Noto Sans CJK JP", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif;
 }
 
-body, input, button, select, textarea,
-a.sakura-square-button > span.note,
-div.sakura-alert > div > button {
+body, input, button, select, textarea {
 	font-family: var(--chinachu-font-sans); }
 
 a {
@@ -40,7 +38,8 @@ div.fullmask {
 	background-position: center center; }
 
 div.fullmask.loading {
-	background-image   : url(./loading-circular-d67fae-444444.gif); }
+	background-color   : rgba(255,255,255,0.85);
+	background-image   : url(./loading-circular-2b2b2b-ffffff.gif); }
 
 div.fullmask.panic {
 	background-image   : none;
@@ -167,569 +166,9 @@ div.content-loading {
 			height          : 8px;
 			background-color: #c24186; }
 
-/**
- *  main styles ----------------------------------------------------------------------------------------------------
-**/
-/* common */
-nav.header,
-div.middle,
-div.footer {
-	position        : absolute;
-	right           : 0;
-	left            : 0;
-	margin          : 0;
-	padding         : 0; }
-
-div.middle > div,
-div.footer > div {
-	position        : absolute;
-	top             : 0;
-	right           : 0;
-	bottom          : 0;
-	left            : 0;
-	margin          : 0;
-	padding         : 0; }
-
-/* header */
-nav.header {
-	position  : absolute;
-	top       : 0;
-	right     : 0;
-	left      : 0;
-	height    : 40px;
-	min-height: 40px;
-	color     : #fff;
-	background: rgb(194,65,134);
-	border    : 0;
-	padding   : 0 5 0 5px;
-	overflow  : visible; }
-
-	div.navbar-header {
-		height: 40px; }
-
-	a.navbar-brand {
-		height: 40px;
-		padding: 9px 15px;
-		font-size: 16px;
-		line-height: 16px;
-		color: rgba(255,255,255,0.6) !important;
-		text-shadow: 0 -1px 0 rgba(0,0,0,0.3);
-		cursor: default; }
-
-	a.navbar-brand i {
-		font-style: normal;
-		vertical-align: super;
-		font-size: 10px;
-		margin-left: 2px; }
-
-	label.navbar-toggle {
-		margin: 5px 10px 0;
-		padding: 7px 8px;
-		height: 30px; }
-
-	#navbar-toggle-cbox:checked ~ .collapse {
-		display: block; }
-
-	#navbar-toggle-cbox {
-		display: none; }
-
-	nav.header > div#navbar {
-		background: rgb(194,65,134); }
-
-		div#navbar > ul.nav > li.selected {
-			background: rgb(179,0,95); }
-
-			div#navbar > ul.nav > li > a {
-				padding: 11px 10px 9px 10px;
-				line-height: 20px;
-				font-size: 13px;
-				color: rgba(255,255,255,0.8); }
-
-			div#navbar > ul.nav > li > a:hover {
-				color: rgba(255,255,255,1); }
-
-			div#navbar > ul.nav > li > a.warning::after {
-				display: inline-block;
-				content: "!";
-				text-align: center;
-				width: 13px;
-				height: 15px;
-				line-height: 17px;
-				font-size: 13px;
-				font-weight: bold;
-				border-radius: 2px;
-				margin-left: 2px;
-				color: white;
-				box-shadow: 0 0 2px 0 white;
-				background: rgb(177, 20, 20); }
-
-				div#navbar > ul.nav > li > a > span {
-					margin-right: 5px; }
-
-				div#navbar > ul.nav > li > a > i.badge {
-					margin-left: 4px;
-					padding: 0;
-					font-style: normal;
-					font-weight: 100;
-					font-size: 10px;
-					color: white;
-					background: none; }
-
-@media (min-width: 768px) {
-
-	div#navbar > ul.nav {
-		float: none; }
-
-		div#navbar > ul.nav > li.category-search,
-		div#navbar > ul.nav > li.category-pref {
-			float: right; }
-}
-
-/* middle */
-div.middle {
-	top             : 40px;
-	bottom          : 0;
-	background-color: #fff; }
-
-	div.middle > div {
-		position : absolute; }
-
-	div.middle > div.side {
-		top      : 0;
-		left     : 0;
-		bottom   : 0;
-		width    : 140px;
-		overflow : hidden; }
-
-	div.middle.extend > div.side {
-		width    : 40px; }
-
-	div.middle.noside > div.side {
-		width    : 0; }
-
-		div.middle > div.side > div {
-			position  : absolute; }
-
-		div.middle > div.side > div.side-body {
-			top       : 0;
-			right     : 0;
-			bottom    : 0;
-			left      : 0;
-			padding   : 10px 0 10px 10px;
-			overflow  : auto;
-			overflow-x: hidden;
-			overflow-y: auto;
-			background: #e0e0e0; }
-
-		div.middle.extend > div.side > div.side-body {
-			top       : 0;
-			padding   : 5px 0; }
-
-			div.middle > div.side > div.side-body > a.sakura-button {
-				display      : block;
-				border       : none;
-				background   : transparent no-repeat 10px center;
-				text-shadow  : none;
-				color        : #777;
-				text-align   : right;
-				font-size    : 13px;
-				padding      : 6px 10px 5px 30px;
-				border-left  : 1px solid transparent;
-				border-top   : 1px solid transparent;
-				border-bottom: 1px solid transparent;
-				box-shadow   : none;
-				white-space  : nowrap; }
-
-			div.middle.extend > div.side > div.side-body > a.sakura-button {
-				text-indent  : 50px;
-				color        : transparent; }
-
-			div.middle > div.side > div.side-body > a.sakura-button:hover {
-				color        : black; }
-
-			div.middle > div.side > div.side-body > a.sakura-button.sakura-button-selected {
-				color            : #2b2b2b;
-				background-color : white;
-				border           : none; }
-
-	div.middle > div.main {
-		top      : 0;
-		right    : 0;
-		bottom   : 0;
-		left     : 140px; }
-
-	div.middle.extend > div.main {
-		left     : 40px; }
-
-	div.middle.noside > div.main {
-		left     : 0; }
-
-		div.middle > div.main > div {
-			position: absolute; }
-
-		div.middle > div.main > div.main-head {
-			z-index   : 5;
-			top       : 0;
-			right     : 0;
-			left      : 0;
-			height    : 40px;
-			background: rgb(194,65,134);
-			color     : #fff;
-			overflow  : hidden; }
-
-		div.middle > div.main.nohead > div.main-head {
-			height    : 0;
-			color     : rgb(194,65,134); }
-
-		div.middle > div.main > div.main-head.overline {
-			z-index      : 100;
-			box-shadow   : 0 4px 0 rgba(0,0,0,0.1); }
-
-			div.middle > div.main > div.main-head > div.main-head-title {
-				margin: 10px 10px 0 10px; }
-
-				div.middle > div.main > div.main-head > div.main-head-title > h1 {
-					margin     : 0;
-					line-height: 22px;
-					font-weight: normal;
-					font-size  : 19px;
-					white-space: nowrap; }
-
-					div.middle > div.main > div.main-head > div.main-head-title > h1 > span.flag {
-						margin-right  : 4px;
-						font-size     : 12px;
-						background    : rgba(0,0,0,0.1);
-						vertical-align: top;
-						padding       : 0 2px; }
-
-					div.middle > div.main > div.main-head > div.main-head-title > h1 > span.flag.skip {
-						background    : #777; }
-
-					div.middle > div.main > div.main-head > div.main-head-title > h1 > span.flag.manual {
-						background    : #2b2b2b; }
-
-					div.middle > div.main > div.main-head > div.main-head-title > h1 > span.subtitle {
-						font-size     : 14px;
-						background    : rgba(0,0,0,0.1);
-						color         : rgba(255,255,255,0.8);
-						vertical-align: top;
-						padding       : 0 5px; }
-
-					div.middle > div.main > div.main-head > div.main-head-title > h1 > span.episode {
-						font-size     : 12px;
-						background    : rgba(255,255,255,0.8);
-						color         : rgb(194,65,134);
-						vertical-align: top;
-						padding       : 0 2px; }
-
-					div.middle > div.main > div.main-head > div.main-head-title > h1 > span.id {
-						font-size     : 12px;
-						color         : rgba(255,255,255,0.5);
-						vertical-align: top;
-						padding       : 0 2px; }
-
-			div.middle > div.main > div.main-head > div.main-head-toolbar {
-				position  : absolute;
-				top       : 0;
-				right     : 0;
-				bottom    : 0;
-				padding   : 0 10px;
-				background: rgb(194,65,134);
-				box-shadow: -2px 0 0 rgba(194,65,134,0.7),
-				            -4px 0 0 rgba(194,65,134,0.7),
-				            -6px 0 0 rgba(194,65,134,0.7); }
-
-				div.middle > div.main > div.main-head > div.main-head-toolbar > div.navbar {
-					min-height: 40px;
-					height: 40px;
-					margin: 0; }
-
-					div.middle > div.main > div.main-head > div.main-head-toolbar > div.navbar .flagrate-checkbox {
-						color: white; }
-
-					div.middle > div.main > div.main-head > div.main-head-toolbar > div.navbar > * {
-						vertical-align: inherit; }
-
-					div.middle > div.main > div.main-head > div.main-head-toolbar > div.navbar > hr {
-						width  : 0;
-						display: inline-block;
-						margin : 0 5px;
-						padding: 0;
-						border : none; }
-
-					div.middle > div.main > div.main-head > div.main-head-toolbar > div.navbar > a.sakura-button {
-						border     : none;
-						background : transparent no-repeat 5px center;
-						font-size  : 13px;
-						color      : inherit;
-						box-shadow : none;
-						line-height: 15px;
-						padding    : 11px 5px 9px 5px;
-						border     : 2px solid transparent;
-						text-shadow: none;
-						transition : none; }
-
-					div.middle > div.main > div.main-head > div.main-head-toolbar > div.navbar > a.sakura-button.day {
-						color: rgba(255,255,255,0.7); }
-
-					div.middle > div.main > div.main-head > div.main-head-toolbar > div.navbar > a.sakura-button.selected {
-						color: #fff;
-						background: rgba(179,0,95,0.25);
-						box-shadow: 0 3px 0 rgb(179,0,95); }
-
-						div.middle > div.main > div.main-head > div.main-head-toolbar > div.navbar > a.sakura-button > span {
-							color         : #aaa;
-							font-size     : 10px;
-							line-height   : 10px;
-							vertical-align: top; }
-
-						div.middle > div.main > div.main-head > div.main-head-toolbar > div.navbar > a.sakura-button:hover > span {
-							color         : #555; }
-
-					div.middle > div.main > div.main-head > div.main-head-toolbar > div.navbar > a.sakura-button.sakura-button-icon {
-						padding-left: 25px; }
-
-					div.middle > div.main > div.main-head > div.main-head-toolbar > div.navbar > a.sakura-button:hover {
-						background-color: rgba(0,0,0,0.2);
-						color           : #fff; }
-
-					div.middle > div.main > div.main-head > div.main-head-toolbar > div.navbar > a.sakura-button.sakura-button-disabled {
-						cursor          : default;
-						color           : #aaa;
-						opacity         : 0.5; }
-
-					div.middle > div.main > div.main-head > div.main-head-toolbar > div.navbar > a.sakura-button.sakura-button-disabled:hover {
-						background-color: transparent; }
-
-					@media screen and (max-width: 880px){
-					div.middle > div.main > div.main-head > div.main-head-toolbar > div.navbar > a.sakura-button {
-						font-size  : 11px; }
-					}
-
-					@media screen and (max-width: 800px){
-					div.middle > div.main > div.main-head > div.main-head-toolbar > div.navbar > a.sakura-button {
-						overflow           : hidden;
-						width              : 0px;
-						white-space        : nowrap;
-						background-position: center center;
-						text-indent        : 100px; }
-
-					div.middle > div.main > div.main-head > div.main-head-toolbar > div.navbar > a.sakura-button:hover {
-						width              : auto;
-						white-space        : nowrap;
-						background-position: 5px center;
-						text-indent        : 0; }
-					}
-
-					@media screen and (max-width: 500px){
-					div.middle > div.main > div.main-head > div.main-head-toolbar > div.navbar > a.sakura-button-icon {
-						padding-left       : 20px !important; }
-					}
-
-			div.middle > div.main > div.main-head > div.clock {
-				position        : absolute;
-				top             : 6px;
-				bottom          : 6px;
-				left            : 145px;
-				background-color: rgba(0,0,0,0.5);
-				font-size       : 18px;
-				line-height     : 18px;
-				padding         : 6px 10px 4px; }
-
-			div.middle > div.main > div.main-head > div.clock::before {
-				content         : "";
-				top             : 100%;
-				left            : 5px;
-				position        : absolute;
-				border-left     : 3px solid rgba(0,0,0,0.5);
-				border-top      : 3px solid rgba(0,0,0,0.5);
-				border-right    : 3px solid transparent;
-				border-bottom   : 3px solid transparent; }
-
-		div.middle > div.main > div.main-body {
-			top     : 40px;
-			right   : 0;
-			bottom  : 0;
-			left    : 0;
-			overflow: auto;
-			background-size    : cover;
-			background-position: center center; }
-
-		div.middle > div.main.nohead > div.main-body {
-			top     : 0; }
-
-		div.middle > div.main > div.main-body.overline::after {
-			z-index   : 100;
-			height    : 4px;
-			display   : block;
-			content   : "";
-			position  : absolute;
-			bottom    : 0;
-			right     : 0;
-			left      : 0;
-			background: rgba(0,0,0,0.15); }
-
-			div.middle > div.main > div.main-body > div {
-				position: absolute;
-				top     : 0;
-				right   : 0;
-				bottom  : 0;
-				left    : 0;
-				overflow: auto;
-				padding : 10px 10px 28px; }
-
-			div.middle > div.main > div.main-body > div.ex {
-				padding : 0 0 10px;
-				background: #fafafa; }
-
-			div.middle > div.main > div.main-body > div.loading {
-				background: no-repeat center center url(./loading-circular-2b2b2b-ffffff.gif); }
-
-			div.middle > div.main > div.main-body > div.failure {
-				background: rgba(255,0,0,0.1); }
-
-				div.middle > div.main > div.main-body div.program-meta {
-					font-size    : 13px;
-					margin       : 10px 0 15px;
-					line-height  : 20px;
-					color        : #777; }
-
-					div.middle > div.main > div.main-body div.program-meta > span.dynamic-time.soon {
-						color       : green; }
-
-					div.middle > div.main > div.main-body div.program-meta > span.dynamic-time.now {
-						color       : red; }
-
-				div.middle > div.main > div.main-body p.program-detail {
-					font-size    : 13px;
-					white-space  : pre-wrap; }
-
-				@media (min-width: 992px) {
-				div.middle > div.main > div.main-body p.program-detail {
-					overflow: auto;
-					height: calc(100vh - 400px); }
-				}
-
-				div.middle > div.main > div.main-body div.ex .row > div > img {
-					margin-top: 10px; }
-
-				@media (min-width: 992px) {
-				div.middle > div.main > div.main-body div.ex .row > div:last-child > img {
-					max-height: calc(100vh / 3 - 80px);
-					float: right; }
-				}
-
-/* footer */
-div.footer {
-	z-index         : 10;
-	right           : 0;
-	bottom          : 0;
-	left            : auto;
-	height          : auto;
-	padding         : 0 10px; }
-
-	div.footer > a.sakura-button {
-		margin-right    : 5px;
-		border          : none;
-		display         : block;
-		float           : left;
-		width           : auto;
-		font-size       : 11px;
-		line-height     : 15px;
-		height          : 15px;
-		padding         : 5px 10px;
-		background-color: rgba(194,65,134,0.4);
-		box-shadow      : none;
-		box-sizing      : initial;
-		text-shadow     : none }
-
-	div.footer > a.sakura-button.sakura-button-icon {
-		padding-left    : 25px; }
-
-	div.footer > a.sakura-button:hover {
-		color           : white;
-		background-color: rgba(194,65,134,1); }
-
-	div.footer > a.sakura-button.sakura-button-selected {
-		color           : white;
-		background-color: rgba(194,65,134,1); }
-
-/* hyperform */
-
-.hyperform button.selected {
-	border-color    : #000 !important;
-	border-color    : rgba(0, 0, 0, 0.5) !important;
-	background-color: #c24186 !important; }
-
-	.hyperform button.selected > label {
-		color: #fff; }
-
-.hyperform div.checkbox {
-	margin: 0 0 -2px 0 !important; }
-
-	.hyperform div.checkbox > button {
-		margin: 0 5px 2px 0 !important; }
-
-.hyperform div.slider > .slider-base {
-	background-image: none !important;
-	background-color: #fff !important;
-	border-color    : #000 !important; }
-
-.hyperform div.slider > .slider-display {
-	color           : #c24186 !important; }
-
-	.hyperform div.slider > .slider-base > .slider-fill {
-		background-image: none !important;
-		background-color: #c24186 !important; }
-
-		.hyperform div.slider > .slider-base > .slider-fill > .slider-handle {
-			border-color    : #000 !important;
-			background-image: none !important;
-			background-color: #d67fae !important; }
-
-/* flagrate */
-
-label.flagrate-checkbox > div,
-label.flagrate-radio > div {
-	border-color    : rgba(179,0,95,0.9); }
-
-label.flagrate-checkbox > input:checked+div,
-label.flagrate-radio > input:checked+div {
-	background-color: rgb(179,0,95);
-	border-color    : rgb(179,0,95); }
-
-div.flagrate-grid > div > table > tbody > tr.flagrate-grid-row-selected,
-div.flagrate-select > div.flagrate-grid > div > table > tbody > tr.flagrate-grid-row-selecte {
-	background-color: rgba(179,0,95,0.25); }
-
-div.flagrate-grid > div > table > tbody > tr:nth-child(odd).flagrate-grid-row-selected {
-	background-color: rgba(179,0,95,0.30); }
-
-div.flagrate-grid > div > table > tbody > tr.flagrate-grid-row-selected:hover,
-div.flagrate-select > div.flagrate-grid > div > table > tbody > tr.flagrate-grid-row-selected:hover {
-	background-color: rgba(179,0,95,0.35); }
-
-div.flagrate-grid > div > table > tbody > tr:nth-child(odd).flagrate-grid-row-selected:hover {
-	background-color: rgba(179,0,95,0.40); }
-
-div.flagrate-grid td.types,
-div.flagrate-grid td.categories {
-	text-overflow: unset; }
-
-div.flagrate-toolbar > div.flagrate-progress {
-	margin: 0 0 0 5px; }
-
-div.flagrate-progress > div {
-	background-color: rgb(194,65,134); }
-
-button.flagrate-button > span > span.glyphicon {
-	margin-right: 4px;
-	line-height: 1;
-	font-family: 'Glyphicons Halflings'; }
-
 /* page */
 
-button.toggle-channels {
+wa-button.toggle-channels {
 	margin: 10px;
 	background-color: #f7f7f7;
 	box-shadow: 1px 1px 1px #ddd, inset -2px -2px 0 rgba(0,0,0,0.15);
@@ -738,7 +177,7 @@ button.toggle-channels {
 	border-right-color: #999;
 	border-bottom-color: #999; }
 
-button.toggle-channels.dent {
+wa-button.toggle-channels.dent {
 	background-color: #eee;
 	box-shadow: inset 2px 2px 0 rgba(0,0,0,0.15);
 	border-top-color: #999;
@@ -775,54 +214,54 @@ div.channel-cards {
 			background-repeat: no-repeat;
 			padding-left: 55px; }
 
-			div.channel-cards div.channel-card > div.channel > button.live {
+			div.channel-cards div.channel-card > div.channel > wa-button.live {
 				position: absolute;
 				top: 0;
 				right: 0;
 				font-size: 11px;
 				background: rgba(255,255,255,0.25); }
 
-		div.channel-cards div.channel-card > .flagrate-progress {
+		div.channel-cards div.channel-card > wa-progress-bar {
 			height: 2px; }
 
-		div.channel-cards div.channel-card > button.program {
+		div.channel-cards div.channel-card > wa-button.program {
 			width: 100%;
 			height: 40px;
 			text-align: left; }
 
-			div.channel-cards div.channel-card > button.program > span > span {
+			div.channel-cards div.channel-card > wa-button.program > span > span {
 				padding: 0 2px;
 				margin-right: 4px;
 				border-radius: 2px;
 				font-size: 10px; }
 
-			div.channel-cards div.channel-card > button.program > span > span:hover {
+			div.channel-cards div.channel-card > wa-button.program > span > span:hover {
 				text-decoration: none !important; }
 
 div.program-cards {
 	padding: 0 10px; }
 
-	div.program-cards ul > li.list-group-item.skip {
+	div.program-cards ul > li.program-list-item.skip {
 		opacity: 0.5; }
 
-	div.program-cards ul > li.list-group-item.conflict {
+	div.program-cards ul > li.program-list-item.conflict {
 		color: red; }
 
-	div.program-cards ul > li.list-group-item:hover {
+	div.program-cards ul > li.program-list-item:hover {
 		cursor: pointer;
 		background: #fafafa; }
 
-	div.program-cards ul > li.list-group-item > div.title {
+	div.program-cards ul > li.program-list-item > div.title {
 		cursor: pointer;
 		margin-bottom: 5px;
 		white-space: nowrap;
 		text-overflow: ellipsis;
 		overflow: hidden; }
 
-	div.program-cards ul > li.list-group-item.skip > div.title {
+	div.program-cards ul > li.program-list-item.skip > div.title {
 		text-decoration: line-through; }
 
-		div.program-cards ul > li.list-group-item > div.title > span {
+		div.program-cards ul > li.program-list-item > div.title > span {
 			vertical-align  : top;
 			background-color: #eee;
 			font-size       : 10px;
@@ -830,37 +269,37 @@ div.program-cards {
 			padding         : 0 2px;
 			border-radius   : 2px; }
 
-		div.program-cards ul > li.list-group-item > div.title > span[rel="新"] {
+		div.program-cards ul > li.program-list-item > div.title > span[rel="新"] {
 			color           : #23ab16; }
 
-		div.program-cards ul > li.list-group-item > div.title > span[rel="終"] {
+		div.program-cards ul > li.program-list-item > div.title > span[rel="終"] {
 			color           : #d02e54; }
 
-		div.program-cards ul > li.list-group-item > div.title > span[rel="再"] {
+		div.program-cards ul > li.program-list-item > div.title > span[rel="再"] {
 			color           : #951ac6; }
 
-		div.program-cards ul > li.list-group-item > div.title > span.episode {
+		div.program-cards ul > li.program-list-item > div.title > span.episode {
 			background : #fff;
 			padding    : 2px 4px 1px 3px;
 			margin-left: 5px;
 			color      : #d02e54; }
 
-	div.program-cards ul > li.list-group-item > span.dynamic-time {
+	div.program-cards ul > li.program-list-item > span.dynamic-time {
 		color       : #999;
 		font-size   : 11px;
 		margin-right: 5px; }
 
-	div.program-cards ul > li.list-group-item > span.dynamic-time.soon {
+	div.program-cards ul > li.program-list-item > span.dynamic-time.soon {
 		color       : #68e400; }
 
-	div.program-cards ul > li.list-group-item > span.dynamic-time.now {
+	div.program-cards ul > li.program-list-item > span.dynamic-time.now {
 		color       : #c6a21a; }
 
-	div.program-cards ul > li.list-group-item > img {
+	div.program-cards ul > li.program-list-item > img {
 		display: block;
 		margin-bottom: 5px; }
 
-	div.program-cards ul > li.list-group-item > span.label {
+	div.program-cards ul > li.program-list-item > span.badge {
 		font-size: 10px;
 		font-weight: normal;
 		padding: 0 2px; }
@@ -1060,7 +499,7 @@ div.timetable > div.board {
 	div.drawer > div.foot {
 		margin: 10px 0 0 0; }
 
-		div.drawer > div.foot > button {
+		div.drawer > div.foot > wa-button {
 			display: block;
 			width  : 100%; }
 
@@ -1101,7 +540,7 @@ div.timetable > div.timescale {
 	background: #444;
 	box-shadow: inset 1px 0 0 #222, -2px 0 0 rgba(0,0,0,0.1), inset -2px 0 0 #333; }
 
-	div.timetable > div.timescale > button {
+	div.timetable > div.timescale > wa-button {
 		position   : absolute;
 		left       : 0;
 		width      : 100%;
@@ -1109,10 +548,10 @@ div.timetable > div.timescale {
 		padding    : 0;
 		font-size  : 10px; }
 
-	div.timetable > div.timescale > button.prev {
+	div.timetable > div.timescale > wa-button.prev {
 		top: 0; }
 
-	div.timetable > div.timescale > button.next {
+	div.timetable > div.timescale > wa-button.next {
 		bottom: 0; }
 
 	div.timetable > div.timescale > div {
@@ -1180,93 +619,82 @@ div.timetable > div.timescale {
 		border-color: #63c;
 		background  : #63c; }
 
-tr.disabled > td {
+.tabulator-row.disabled > .tabulator-cell {
 	opacity         : 0.4; }
 
-td.id > div {
+.tabulator-cell.id > div {
 	color      : #aaa;
 	font-size  : 11px; }
 
-td.default > div {
+.tabulator-cell.default > div {
 	color     : #aaa;
 	font-style: italic;
 	font-size : 11px; }
 
-td.types > div > span {
+.tabulator-cell.types > div > span {
 	padding      : 0 3px;
 	font-size    : 11px;
 	margin-right : 2px;
 	color        : #eee;
 	border-radius: 2px; }
 
-td.categories > div > span {
+.tabulator-cell.categories > div > span {
 	padding      : 0 2px;
 	font-size    : 11px;
 	margin-right : 2px;
 	border-radius: 2px; }
 
-td > div > div.dynamic-time {
+.tabulator-cell > div > div.dynamic-time {
 	line-height: inherit; }
 
-td > div > span.flag,
-td > div > div.reserve-title > span.flag {
+.tabulator-cell > div > span.flag,
+.tabulator-cell > div > div.reserve-title > span.flag {
 	margin-right: 2px;
 	padding     : 1px 2px 0;
 	color       : #fff;
 	font-size   : 11px;
 	background  : #999; }
 
-td > div > span.flag.conflict,
-td > div > div.reserve-title > span.flag.conflict {
+.tabulator-cell > div > span.flag.conflict,
+.tabulator-cell > div > div.reserve-title > span.flag.conflict {
 	background: #f00; }
 
-td > div > span.flag.manual,
-td > div > div.reserve-title > span.flag.manual {
+.tabulator-cell > div > span.flag.manual,
+.tabulator-cell > div > div.reserve-title > span.flag.manual {
 	background  : #000; }
 
-td > div > span.flag.新,
-td > div > div.reserve-title > span.flag.新 {
+.tabulator-cell > div > span.flag.新,
+.tabulator-cell > div > div.reserve-title > span.flag.新 {
 	background  : #6ed02e; }
 
-td > div > span.flag.終,
-td > div > div.reserve-title > span.flag.終 {
+.tabulator-cell > div > span.flag.終,
+.tabulator-cell > div > div.reserve-title > span.flag.終 {
 	background  : #d02e54; }
 
-td > div > span.flag.再,
-td > div > div.reserve-title > span.flag.再 {
+.tabulator-cell > div > span.flag.再,
+.tabulator-cell > div > div.reserve-title > span.flag.再 {
 	background  : #2a45c0; }
 
-td > div > span.subtitle,
-td > div > div.reserve-title > span.subtitle {
+.tabulator-cell > div > span.subtitle,
+.tabulator-cell > div > div.reserve-title > span.subtitle {
 	margin-left : 4px;
 	padding     : 1px 2px 0;
 	color       : #e95295;
 	font-size   : 11px;
 	font-weight : bold; }
 
-td > div > span.episode,
-td > div > div.reserve-title > span.episode {
+.tabulator-cell > div > span.episode,
+.tabulator-cell > div > div.reserve-title > span.episode {
 	margin-left    : 2px;
 	padding        : 1px 2px 0;
 	color          : #d02e54;
 	font-size      : 11px; }
 
-td > div > span.id,
-td > div > div.reserve-title > span.id {
+.tabulator-cell > div > span.id,
+.tabulator-cell > div > div.reserve-title > span.id {
 	margin-left    : 4px;
 	color          : #aaa;
 	font-size      : 10px; }
-
-.flagrate-modal > div > div {
-	max-width: 500px; }
-
-.flagrate-modal-visible form.flagrate-form {
-	margin-left : 12px;
-	margin-right: 12px;
-	pointer-events: none; }
-
-.flagrate-modal-visible div.flagrate-form-field-input {
-	pointer-events: all; }
 
 div.video-container {
 	position        : absolute;
@@ -1295,20 +723,8 @@ div.video-control {
 	div.video-control > span {
 		padding-top: 9px; }
 
-	div.video-control > button.flagrate-button {
-		font-family: "Glyphicons Halflings";
-		color: #388dd6; }
-
-	div.video-control > button.flagrate-button:hover {
-		color: black; }
-
-	div.video-control .seek {
-		width: -webkit-calc(100% - 450px) !important;
-		width: -moz-calc(100% - 450px) !important;
-		width: -ms-calc(100% - 450px) !important;
-		width: calc(100% - 450px) !important; }
-
 div.console {
+	white-space: pre-wrap;
 	position   : absolute;
 	top        : 0;
 	right      : 0;
@@ -1328,46 +744,6 @@ div.editor {
 	bottom     : 0;
 	left       : 0; }
 
-.hyperform * {
-	box-sizing: initial; }
-
-/* ui:sakura-alert */
-div.sakura-alert {
-	margin-bottom   : 5px;
-	background-color: rgba(0,0,0,0.6);
-	color           : white; }
-
-.ex > div.sakura-alert {
-	margin-bottom: 0; }
-
-div.sakura-alert-white {
-	background-color: #fff;
-	color           : #555; }
-
-div.sakura-alert-info,
-div.sakura-alert-blue {
-	background-color: #6ba0de; }
-
-div.sakura-alert-caution,
-div.sakura-alert-yellow {
-	color           : #555;
-	background-color: #ffe881; }
-
-div.sakura-alert-warning,
-div.sakura-alert-red {
-	background-color: #d9534f; }
-
-div.sakura-alert-success,
-div.sakura-alert-green {
-	background-color: #61d67e; }
-
-	div.sakura-alert > div {
-		padding         : 8px 8px 7px;
-		border          : 2px solid transparent;
-		font-size       : 13px; }
-
-	div.sakura-alert > div:hover {
-		border-color    : transparent; }
 /* Browser preferences and server settings */
 /* Storage capacity */
 div.middle > div.main > div.main-body > div.storage-page {
@@ -1441,14 +817,14 @@ div.middle > div.main > div.main-body > div.storage-page {
 .description-switch { display: inline-flex; align-items: center; gap: 5px; margin: 5px 10px; cursor: pointer; font-weight: normal; }
 .description-switch input { margin: 0; }
 /* Match the vertical position and text size of the toolbar buttons. */
-.main-head-toolbar .description-switch { position: relative; top: 4px; font-size: 13px; line-height: 15px; white-space: nowrap; }
+.main-head-toolbar .description-switch { margin: 0 10px; min-height: 40px; font-size: 13px; line-height: 15px; white-space: nowrap; }
 @media screen and (max-width: 880px) {
  .main-head-toolbar .description-switch { font-size: 11px; }
 }
 .preference-error, .config-error, .config-field-error { color: #a51d38; }
-div.flagrate-grid td.reserve-description-cell { white-space: normal; }
-div.flagrate-grid .reserve-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #30343b; font-size: 14px; font-weight: 500; line-height: 1.3; }
-div.flagrate-grid .reserve-description { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; white-space: normal; overflow-wrap: anywhere; line-height: 1.2; max-height: 2.4em; margin-top: 3px; margin-left: 4px; border-left: 2px solid #c4cbd3; padding-left: 8px; color: #68707c; font-size: 12px; font-weight: normal; }
+div.chinachu-virtual-grid .tabulator-cell.reserve-description-cell { white-space: normal; }
+div.chinachu-virtual-grid .reserve-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #30343b; font-size: 14px; font-weight: 500; line-height: 1.3; }
+div.chinachu-virtual-grid .reserve-description { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; white-space: normal; overflow-wrap: anywhere; line-height: 1.2; max-height: 2.4em; margin-top: 3px; margin-left: 4px; border-left: 2px solid #c4cbd3; padding-left: 8px; color: #68707c; font-size: 12px; font-weight: normal; }
 .config-settings { display: flex; flex-direction: column; overflow: hidden !important; }
 .config-status { flex: none; padding: 12px 16px; background: #f4f4f4; border-bottom: 1px solid #ddd; white-space: pre-wrap; max-height: 150px; overflow: auto; }
 .config-form { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
@@ -1478,7 +854,7 @@ div.flagrate-grid .reserve-description { display: -webkit-box; -webkit-box-orien
 .reservation-click-setting select, .reservation-description-font-setting select { margin: 5px; padding: 6px; max-width: 100%; }
 .reserve-details { display: inline-block; padding: 1px 8px; border: 1px solid #aaa; border-radius: 3px; background: #fff; color: #333; text-decoration: none; }
 .reserve-details:hover { background: #eee; }
-div.flagrate-grid tr.reserve-pending > td { background: #fff7e8; cursor: progress; }
+div.chinachu-virtual-grid .tabulator-row.reserve-pending > .tabulator-cell { background: #fff7e8; cursor: progress; }
 .reserve-pending-spinner {
  display: inline-block;
  box-sizing: border-box;
@@ -1521,25 +897,18 @@ div.flagrate-grid tr.reserve-pending > td { background: #fff7e8; cursor: progres
 .channel-selector [disabled] { cursor: default; opacity: .5; }
 .channel-selector summary:focus-visible, .channel-selector button:focus-visible { outline: 2px solid #b3005f; outline-offset: 2px; }
 
-/* Spacers retain scroll height without creating offscreen rows. */
-div.chinachu-virtual-grid > div.flagrate-grid-body { overflow-anchor: none; }
-div.chinachu-virtual-grid > div > table > tbody > tr.virtual-spacer > td {
- height: 0; padding: 0; border: 0; line-height: 0; box-shadow: none; background: transparent;
-}
-div.chinachu-virtual-grid > div > table > tbody > tr.virtual-spacer > td::after { display: none; }
-
 /* Keep each reservation distinct when descriptions are shown. */
-div.flagrate-grid tr.reserve-description-row > td {
+div.chinachu-virtual-grid .tabulator-row.reserve-description-row > .tabulator-cell {
  padding-top: 3px;
  padding-bottom: 3px;
- border-bottom: 1px solid #bfc5cc;
+ border-bottom: 0;
 }
-div.flagrate-grid tr.reserve-description-row:not(.reserve-skipped):not(.reserve-pending) > td { background-color: #fff; }
-div.flagrate-grid tr.reserve-description-row:nth-child(even):not(.reserve-skipped):not(.reserve-pending) > td { background-color: #f0f2f5; }
-div.flagrate-grid tr.reserve-description-row:not(.reserve-skipped):not(.reserve-pending):hover > td { background-color: #e3edf8; }
-div.flagrate-grid tr.reserve-description-row.disabled > td { opacity: 1; }
-div.flagrate-grid tr.reserve-description-row.disabled > td > div { opacity: 0.4; }
-div.flagrate-grid tr.reserve-description-row.reserve-skipped:not(.reserve-pending) > td { background-color: #fff0f3; }
-div.flagrate-grid tr.reserve-description-row.reserve-skipped:nth-child(even):not(.reserve-pending) > td { background-color: #f3e5ea; }
-div.flagrate-grid tr.reserve-description-row.reserve-skipped:not(.reserve-pending):hover > td { background-color: #ffe3eb; }
-div.flagrate-grid tr.reserve-description-row.reserve-skipped:nth-child(even):not(.reserve-pending):hover > td { background-color: #ead5de; }
+div.chinachu-virtual-grid .tabulator-row.reserve-description-row:not(.reserve-skipped):not(.reserve-pending) > .tabulator-cell { background-color: #fff; }
+div.chinachu-virtual-grid .tabulator-row.reserve-description-row.tabulator-row-even:not(.reserve-skipped):not(.reserve-pending) > .tabulator-cell { background-color: #f0f2f5; }
+div.chinachu-virtual-grid .tabulator-row.reserve-description-row:not(.reserve-skipped):not(.reserve-pending):hover > .tabulator-cell { background-color: #fff5fa; }
+div.chinachu-virtual-grid .tabulator-row.reserve-description-row.disabled > .tabulator-cell { opacity: 1; }
+div.chinachu-virtual-grid .tabulator-row.reserve-description-row.disabled > .tabulator-cell > div { opacity: 0.4; }
+div.chinachu-virtual-grid .tabulator-row.reserve-description-row.reserve-skipped:not(.reserve-pending) > .tabulator-cell { background-color: #fff0f3; }
+div.chinachu-virtual-grid .tabulator-row.reserve-description-row.reserve-skipped.tabulator-row-even:not(.reserve-pending) > .tabulator-cell { background-color: #f3e5ea; }
+div.chinachu-virtual-grid .tabulator-row.reserve-description-row.reserve-skipped:not(.reserve-pending):hover > .tabulator-cell { background-color: #ffe3eb; }
+div.chinachu-virtual-grid .tabulator-row.reserve-description-row.reserve-skipped.tabulator-row-even:not(.reserve-pending):hover > .tabulator-cell { background-color: #ead5de; }

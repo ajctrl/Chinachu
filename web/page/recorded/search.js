@@ -1,4 +1,4 @@
-P = Class.create(P, {
+Chinachu.definePage({
 
 	init: function() {
 
@@ -7,20 +7,21 @@ P = Class.create(P, {
 		this.initToolbar();
 		this.draw();
 
-		this.onNotify = this.refresh.bindAsEventListener(this);
-		document.observe('chinachu:recorded', this.onNotify);
+		this.onNotify = this.refresh.bind(this);
+		Chinachu.on(document, 'chinachu:recorded', this.onNotify);
 
 		return this;
 	}
 	,
 	deinit: function() {
+		if (this.searchModal) this.searchModal.close();
 
 		if (this.grid) this.grid.destroy();
 
 		this.descriptionSwitch.destroy();
 		this.unsubscribeDescriptionFontSize();
 
-		document.stopObserving('chinachu:recorded', this.onNotify);
+		Chinachu.off(document, 'chinachu:recorded', this.onNotify);
 
 		return this;
 	}
@@ -36,13 +37,13 @@ P = Class.create(P, {
 
 		this.descriptionSwitch = ChinachuPreferences.createSwitch(this.drawMain.bind(this), 'recorded.search');
 		this.unsubscribeDescriptionFontSize = ChinachuPreferences.subscribeDescriptionFontSize(this.drawMain.bind(this));
-		var control = new sakura.ui.Element({ tagName: 'span' });
+		var control = new ChinachuUI.ElementView({ tagName: 'span' });
 		control.entity.appendChild(this.descriptionSwitch.element);
 		this.view.toolbar.add({ key: 'show-description', ui: control });
 
 		this.view.toolbar.add({
 			key: 'search',
-			ui : new sakura.ui.Button({
+			ui : new ChinachuUI.ActionButton({
 				label  : '録画番組検索',
 				icon   : './icons/magnifier-zoom.png',
 				onClick: this.viewSearchModal.bind(this)
@@ -183,7 +184,7 @@ P = Class.create(P, {
 			return a.start - b.start;
 		});
 
-		programs.each(function(program, i) {
+		programs.forEach(function(program, i) {
 
 			var row = {
 				className: showDescription ? 'reserve-description-row' : '',
@@ -236,13 +237,13 @@ P = Class.create(P, {
 			row.cell.type = {
 				sortAlt  : program.channel.type,
 				className: 'types',
-				html     : '<span class="label-type-' + program.channel.type + '">' + program.channel.type + '</span>'
+				html     : '<span class="label-type-' + Chinachu.escapeHTML(program.channel.type) + '">' + Chinachu.escapeHTML(program.channel.type) + '</span>'
 			};
 
 			row.cell.category = {
 				sortAlt    : program.category,
 				className  : 'categories',
-				html       : '<span class="label-cat-' + program.category + '">' + program.category + '</span>'
+				html       : '<span class="label-cat-' + Chinachu.escapeHTML(program.category) + '">' + Chinachu.escapeHTML(program.category) + '</span>'
 			};
 
 			row.cell.channel = {
@@ -253,14 +254,14 @@ P = Class.create(P, {
 				}
 			};
 
-			var titleHtml = program.flags.invoke('sub', /.+/, '<span class="flag #{0}">#{0}</span>').join('') + program.title;
+			var titleHtml = (program.flags || []).map(function(flag) { return '<span class="flag ' + Chinachu.escapeHTML(flag) + '">' + Chinachu.escapeHTML(flag) + '</span>'; }).join('') + Chinachu.escapeHTML(program.title);
 			if (typeof program.episode !== 'undefined' && program.episode !== null) {
-				titleHtml += '<span class="episode">#' + program.episode + '</span>';
+				titleHtml += '<span class="episode">#' + Chinachu.escapeHTML(program.episode) + '</span>';
 			}
-			titleHtml += '<span class="id">#' + program.id + '</span>';
+			titleHtml += '<span class="id">#' + Chinachu.escapeHTML(program.id) + '</span>';
 
 			if (showDescription && program.detail) {
-				titleHtml = '<div class="reserve-title">' + titleHtml + '</div><div class="reserve-description" style="font-size: ' + descriptionFontSize + '">' + String(program.detail).replace(/\r\n|\r|\n/g, ' ').escapeHTML() + '</div>';
+				titleHtml = '<div class="reserve-title">' + titleHtml + '</div><div class="reserve-description" style="font-size: ' + descriptionFontSize + '">' + Chinachu.escapeHTML(String(program.detail).replace(/\r\n|\r|\n/g, ' ')) + '</div>';
 			}
 
 			row.cell.title = {
@@ -291,137 +292,7 @@ P = Class.create(P, {
 	}
 	,
 	viewSearchModal: function() {
-
-		var modal = new flagrate.Modal({
-			title  : '録画番組検索',
-			buttons: [
-				{
-					label   : '検索',
-					color   : '@pink',
-					onSelect: function(e, modal) {
-						e.targetButton.disable();
-
-						var result = viewSearchForm.result();
-
-						this.self.query = Object.extend(this.self.query, result);
-						this.self.query.skip = 1;
-
-						modal.close();
-
-						window.location.hash = '!/recorded/search/' + Object.toQueryString(this.self.query) + '/';
-						//todo
-					}.bind(this)
-				}
-			]
-		}).show();
-
-		var viewSearchForm = new Hyperform({
-			formWidth  : '100%',
-			labelWidth : '100px',
-			labelAlign : 'right',
-			fields     : [
-				{
-					key   : 'cat',
-					label : 'カテゴリー',
-					input : {
-						type : 'pulldown',
-						items: (function() {
-							var array = [];
-
-							[
-								'anime', 'information', 'news', 'sports',
-								'variety', 'drama', 'music', 'cinema', 'etc'
-							].each(function(a) {
-								array.push({
-									label     : a,
-									value     : a,
-									isSelected: (this.self.query.cat === a)
-								});
-							}.bind(this));
-
-							return array;
-						}.bind(this))()
-					}
-				},
-				{
-					key   : 'title',
-					label : 'タイトル',
-					input : {
-						type : 'text',
-						value: this.self.query.title || ''
-					}
-				},
-				{
-					key   : 'desc',
-					label : '説明',
-					input : {
-						type : 'text',
-						value:  this.self.query.desc || ''
-					}
-				},
-				{
-					key   : 'type',
-					label : 'タイプ',
-					input : {
-						type : 'pulldown',
-						items: (function() {
-							var array = [];
-
-							['GR', 'BS', 'CS', 'SKY'].each(function(a) {
-								array.push({
-									label     : a,
-									value     : a,
-									isSelected: ((this.self.query.type || []).indexOf(a) !== -1)
-								});
-							}.bind(this));
-
-							return array;
-						}.bind(this))()
-					}
-				},
-				{
-					key   : 'start',
-					label : '何時から',
-					input : {
-						type      : 'text',
-						width     : 25,
-						maxlength : 2,
-						appendText: '時',
-						value   : this.self.query.start || '',
-						isNumber: true
-					}
-				},
-				{
-					key   : 'end',
-					label : '何時まで',
-					input : {
-						type      : 'text',
-						width     : 25,
-						maxlength : 2,
-						appendText: '時',
-						value     : this.self.query.end || '',
-						isNumber  : true
-					}
-				},
-				{
-					key   : 'pgid',
-					label : 'プログラムID',
-					input : {
-						type : 'text',
-						value:  this.self.query.pgid || ''
-					}
-				},
-				{
-					key   : 'chid',
-					label : 'チャンネルID',
-					input : {
-						type : 'text',
-						value:  this.self.query.chid || ''
-					}
-				}
-			]
-		}).render(modal.content);
-
+		ChinachuSearchForm.show(this, { recorded: true });
 		return this;
 	}
 });

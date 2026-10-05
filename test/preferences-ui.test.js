@@ -123,10 +123,11 @@ describe('browser display preferences and reservation descriptions', function() 
 	it('escapes descriptions, omits empty descriptions and keeps navigation to program details', function() {
 		const ctx = browser();
 		vm.runInContext(`
-			var P = {}, Class = { create: function(parent, definition) { return definition; } };
-			Array.prototype.each = Array.prototype.forEach;
-			Array.prototype.invoke = function() { return []; };
-			String.prototype.escapeHTML = function() { return this.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+			var P = {};
+			var Chinachu = {
+				definePage: function(methods) { P = methods; },
+				escapeHTML: function(text) { return String(text == null ? '' : text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+			};
 			var ChinachuReservationActions = { isPending: function() { return false; } };
 			var chinachu = { ui: { DynamicTime: function() { this.entity = {}; } } };
 			var global = { chinachu: { reserves: [
@@ -134,7 +135,7 @@ describe('browser display preferences and reservation descriptions', function() 
 				{ id: 'two', title: '説明なし', flags: [], channel: {}, seconds: 60, start: 2 },
 				{ id: 'manual', title: '手動予約', flags: [], channel: {}, seconds: 60, start: 3, isManualReserved: true, isSkip: true }
 			] } };
-			var flagrate = { Grid: function(options) {
+			var ChinachuVirtualGrid = function(options) {
 				this.options = options;
 				this.rows = [];
 				this.destroy = function() {};
@@ -143,9 +144,8 @@ describe('browser display preferences and reservation descriptions', function() 
 					count = typeof count === 'undefined' ? this.rows.length - start : count;
 					return this.rows.splice.apply(this.rows, [start, count].concat(rows));
 				};
-			} };
+			};
 		`, ctx);
-		vm.runInContext('var ChinachuVirtualGrid = flagrate.Grid;', ctx);
 		vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/page/reserves/list.js'), 'utf8'), ctx);
 		vm.runInContext('P.view = { content: { update: function() {} } }; P.self = { query: {} }; P.draw();', ctx);
 		assert.ok(!ctx.P.grid.rows[0].cell.title.html.includes('reserve-description'));

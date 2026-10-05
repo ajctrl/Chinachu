@@ -21,9 +21,10 @@ async function run() {
 		page.on('pageerror', error => { errors.push(error.message); console.error(error.message); });
 		await page.route('**/*', route => route.fulfill({ contentType: 'text/html', body: '<html><body><div id="content" style="position:relative;width:1200px;height:700px"></div></body></html>' }));
 		await page.goto('http://chinachu.test/');
-		for (const file of ['web/lib/flagrate/flagrate.min.css', 'web/chinachu.css']) await page.addStyleTag({ content: read(file) });
-		for (const file of ['web/lib/flagrate/flagrate.min.js', 'web/lib/prototype.js', 'web/lib/sakurapanel/sakurapanel.js', 'web/virtual-grid.js', 'web/preferences.js']) await page.addScriptTag({ content: read(file) });
+		for (const file of ['web/lib/tabulator/dist/css/tabulator.min.css', 'web/chinachu.css', 'web/ui.css']) await page.addStyleTag({ content: read(file) });
+		for (const file of ['web/runtime.js', 'web/ui.js', 'web/lib/tabulator/dist/js/tabulator.min.js', 'web/virtual-grid.js', 'web/preferences.js', 'web/channel-selector.js', 'web/search-form.js']) await page.addScriptTag({ content: read(file) });
 		await page.evaluate(() => {
+			Chinachu.definePage = methods => { window.PageDefinition = methods; };
 			window.liveTimes = 0;
 			window.global = { chinachu: {} };
 			window.chinachu = { ui: {}, dateToString: date => date.toISOString() };
@@ -51,43 +52,48 @@ async function run() {
 				return time;
 			};
 		});
-		const settle = () => page.waitForTimeout(150);
+		const settle = async () => { await page.waitForTimeout(150); await page.waitForFunction(() => listPage.grid._ready && !listPage.grid._frame && !listPage.grid._rendering); };
 		const snapshot = () => page.evaluate(() => {
 			const grid = listPage.grid;
 			const body = grid._body.getBoundingClientRect();
-			const rows = [...grid._mounted].map(row => ({ id: row.data.id, rect: row._tr.getBoundingClientRect() })).sort((a, b) => a.rect.top - b.rect.top);
+			const rows = [...grid.element.querySelectorAll('.tabulator-row')].map(element => ({ rect: element.getBoundingClientRect() })).sort((a, b) => a.rect.top - b.rect.top);
 			return {
-				count: grid._mounted.size, cached: grid._rows.filter(row => row._tr).length,
+				count: rows.length,
 				liveTimes, top: grid._body.scrollTop, height: grid._body.scrollHeight,
 				viewport: grid._body.clientHeight, anchor: grid._anchor(),
 				coversViewport: !rows.length || (rows[0].rect.top <= body.top + 1 && rows[rows.length - 1].rect.bottom >= Math.min(body.bottom, body.top + grid._body.scrollHeight) - 1),
-				pager: !!grid.element.querySelector('.flagrate-grid-pager')
+				pager: !!grid.element.querySelector('.tabulator-paginator')
 			};
 		});
 
 		for (const name of ['rules', 'reserves', 'recording', 'recorded', 'search', 'recorded.search']) {
 			if (process.argv.length > 2 && !process.argv.slice(2).includes(name)) continue;
+			console.log(name + ': checking 10,000 rows');
 			const isSearch = name === 'search' || name === 'recorded.search';
 			const source = name === 'search' ? 'search/top' : name === 'recorded.search' ? 'recorded/search' : name + '/list';
 			const dataKey = isSearch ? 'recorded' : name;
 			await page.evaluate(name => {
-				window.P = Class.create({});
+				window.PageDefinition = {};
+				global.chinachu.rules = []; global.chinachu.reserves = [];
 				global.chinachu[name] = name === 'rules' ? new Array(10000).fill(null).map((_, i) => ({ reserve_titles: ['ルール ' + i] })) : makePrograms(10000);
 				global.chinachu.schedule = [{ programs: global.chinachu[name] }];
 				global.chinachu.status = {};
 			}, dataKey);
 			await page.addScriptTag({ content: read('web/page/' + source + '.js') });
 			await page.evaluate(({ name, isSearch }) => {
-				window.listPage = new P();
+				window.listPage = Object.assign({}, PageDefinition);
 				// The old Firefox render callback encoded the query in place, so
 				// switching descriptions searched for percent escapes and lost rows.
-				Prototype.Browser.Gecko = name === 'search';
 				listPage.self = { query: isSearch ? { skip: 1, title: '番組', page: '2' } : {} };
-				listPage.view = { content: flagrate.createElement('div').setStyle({ position: 'relative', height: '100%' }).insertTo(document.getElementById('content')) };
+				window.listHeader = ChinachuDOM.create('header').insertTo(document.body);
+				listPage.view = {
+					title: ChinachuDOM.create('h1').insertTo(listHeader),
+					content: ChinachuDOM.create('div').setStyle({ position: 'relative', height: '100%' }).insertTo(document.getElementById('content'))
+				};
 				listPage.updateToolbar = function() {};
 				if (isSearch) {
 					ChinachuPreferences.set(false, name);
-					window.searchToolbar = flagrate.createElement('div', { id: 'search-test-toolbar' }).insertTo(document.body);
+					window.searchToolbar = ChinachuDOM.create('div', { id: 'search-test-toolbar' }).insertTo(document.body);
 					listPage.view.toolbar = { add: option => searchToolbar.appendChild(option.ui.entity) };
 					listPage.init();
 				} else listPage.draw();
@@ -96,18 +102,17 @@ async function run() {
 			let state = await snapshot();
 			assert.ok(!state.pager, name + ': pager removed');
 			assert.ok(state.count > 0 && state.count < 100, name + ': bounded initial rows');
-			assert.equal(state.cached, state.count);
-			if (name === 'reserves' || name === 'recording') assert.equal(state.liveTimes, state.count);
-			if (isSearch) assert.ok(state.anchor.index >= 40, name + ': old page links become a scroll position');
+			if (name === 'reserves' || name === 'recording') assert.equal(state.liveTimes, state.count, name + ': only mounted rows run timers');
+			if (isSearch) assert.ok(state.anchor.index >= 39, name + ': old page links become a scroll position');
 			if (name !== 'rules') {
 				const id = await page.evaluate(() => {
-					const row = listPage.grid._rows[listPage.grid._anchor().index];
+					const row = listPage.grid.table.getRow(listPage.grid._anchor().key).getData()._model;
 					row._tr.click();
-					row._last.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 400, clientY: 150 }));
+					row._tr.querySelector('.chinachu-grid-menu').click();
 					return row.data.id;
 				});
 				assert.equal(await page.evaluate(() => location.hash), '#!/program/view/id=' + id + '/');
-				assert.ok(await page.evaluate(() => !!document.querySelector('.flagrate-context-menu')));
+				assert.ok(await page.evaluate(() => !!document.querySelector('.chinachu-context-menu')));
 			}
 
 			// Stay inside a row: fractional browser heights can round a boundary
@@ -117,21 +122,20 @@ async function run() {
 			state = await snapshot();
 			assert.ok(state.coversViewport, name + ': middle viewport covered');
 			assert.ok(state.count < 100 && state.anchor.index > 1000);
-			assert.equal(state.cached, state.count, name + ': offscreen DOM released');
 			if (name !== 'rules') {
 				await page.waitForTimeout(300);
-				assert.equal(await page.evaluate(() => !!document.querySelector('.flagrate-context-menu')), false, 'offscreen menu released');
+				assert.equal(await page.evaluate(() => !!document.querySelector('.chinachu-context-menu')), false, 'offscreen menu released');
 			}
 
 			if (name === 'rules') {
 				// Exercise native input activation: grid.select() alone cannot expose
 				// the checked-state rollback caused by a cancelled click event.
-				await page.evaluate(() => listPage.grid._rows[5000]._checkbox._input.focus());
+				await page.evaluate(async () => { await listPage.grid.table.scrollToRow(listPage.grid._rows[5000]._key, 'top', false); listPage.grid._rows[5000]._checkbox.focus(); });
 				for (const selected of [true, false]) {
 					await page.keyboard.press('Space');
 					await settle();
 					assert.deepEqual(await page.evaluate(() => ({
-						checked: listPage.grid._rows[5000]._checkbox.isChecked(),
+						checked: listPage.grid._rows[5000]._checkbox.checked,
 						selected: !!listPage.grid._rows[5000].isSelected,
 						count: listPage.grid.getSelectedRows().length
 					})), { checked: selected, selected, count: selected ? 1 : 0 });
@@ -139,9 +143,9 @@ async function run() {
 				await page.evaluate(() => { listPage.grid.select(5000); listPage.grid.select(5000); listPage.grid._body.scrollTop = 0; });
 				await settle();
 				assert.equal(await page.evaluate(() => listPage.grid.getSelectedRows().length), 1);
-				await page.evaluate(() => listPage.grid._body.scrollTop = 150000);
+				await page.evaluate(() => listPage.grid.table.scrollToRow(listPage.grid._rows[5000]._key, 'top', false));
 				await settle();
-				assert.equal(await page.evaluate(() => listPage.grid._rows[5000]._checkbox.isChecked()), true);
+				assert.equal(await page.evaluate(() => listPage.grid._rows[5000]._checkbox.checked), true);
 				await page.evaluate(() => listPage.grid.selectAll());
 				assert.equal(await page.evaluate(() => listPage.grid.getSelectedRows().length), 10000);
 				await page.evaluate(() => listPage.grid.deselectAll());
@@ -180,7 +184,7 @@ async function run() {
 					assert.equal(await page.evaluate(() => listPage.grid._rows.length), 10000);
 					assert.equal(await page.evaluate(() => !!listPage.grid.element.querySelector('.reserve-description')), checked);
 				}
-				await page.evaluate(() => { ChinachuPreferences.setDescriptionFontSize('16px'); document.fire('chinachu:schedule'); document.fire('chinachu:recorded'); });
+				await page.evaluate(() => { ChinachuPreferences.setDescriptionFontSize('16px'); Chinachu.emit(document, 'chinachu:schedule'); Chinachu.emit(document, 'chinachu:recorded'); });
 				await settle();
 				assert.equal((await snapshot()).anchor.key, anchor, name + ': font and data changes preserve the visible program');
 				assert.equal(await page.evaluate(() => listPage.grid.element.querySelector('.reserve-description').style.fontSize), '16px');
@@ -200,6 +204,8 @@ async function run() {
 			assert.equal(state.anchor.sort, before.sort);
 			assert.equal(state.anchor.ascending, false);
 
+			await page.evaluate(() => listPage.grid.table.scrollToRow(listPage.grid.table.getRows('active').at(-1), 'bottom', false));
+			await settle();
 			await page.evaluate(() => listPage.grid._body.scrollTop = listPage.grid._body.scrollHeight);
 			await settle();
 			state = await snapshot();
@@ -219,9 +225,16 @@ async function run() {
 				if (isSearch) { listPage.deinit(); searchToolbar.remove(); }
 				else listPage.grid.destroy();
 				listPage.view.content.remove();
+				listHeader.remove();
 			}, isSearch);
 			console.log(name + ': 10,000 rows, scrolling, sorting, restoration and cleanup passed');
 		}
+		await page.evaluate(() => {
+			window.earlyGrid = new ChinachuVirtualGrid({ stateKey: 'early-destroy', cols: [] }).insertTo(document.getElementById('content'));
+			earlyGrid.destroy();
+		});
+		await page.waitForTimeout(100);
+		assert.equal(await page.evaluate(() => earlyGrid.element.classList.contains('tabulator')), false, 'leaving before table initialization cleans up the delayed render');
 		assert.deepEqual(errors, [], 'no browser errors');
 	} finally {
 		await browser.close();

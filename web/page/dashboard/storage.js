@@ -1,9 +1,9 @@
-P = Class.create(P, {
+Chinachu.definePage({
 	init: function() {
 		this.closed = false;
-		this.onNotify = this.refresh.bindAsEventListener(this);
+		this.onNotify = this.refresh.bind(this);
 		['chinachu:storage', 'chinachu:recorded', 'chinachu:recording'].forEach(function(event) {
-			document.observe(event, this.onNotify);
+			Chinachu.on(document, event, this.onNotify);
 		}, this);
 		this.draw();
 		this.refresh();
@@ -16,7 +16,7 @@ P = Class.create(P, {
 		this.closed = true;
 		clearInterval(this.timer.storage);
 		['chinachu:storage', 'chinachu:recorded', 'chinachu:recording'].forEach(function(event) {
-			document.stopObserving(event, this.onNotify);
+			Chinachu.off(document, event, this.onNotify);
 		}, this);
 		if (this.request) this.request.transport.abort();
 		return this;
@@ -41,18 +41,18 @@ P = Class.create(P, {
 		this.view.content.className = 'storage-page';
 		this.view.content.update();
 		this.card = this.node('section', this.view.content, undefined, 'storage-card');
-		this.card.setAttribute('aria-label', 'STORAGE USAGE'.__());
+		this.card.setAttribute('aria-label', Chinachu.t('STORAGE USAGE'));
 		var header = this.node('div', this.card, undefined, 'storage-card-header');
-		this.node('h2', header, 'RECORDING STORAGE'.__());
-		this.refreshButton = this.node('button', header, 'REFRESH'.__(), 'storage-refresh');
+		this.node('h2', header, Chinachu.t('RECORDING STORAGE'));
+		this.refreshButton = this.node('button', header, Chinachu.t('REFRESH'), 'storage-refresh');
 		this.refreshButton.type = 'button';
 		this.refreshButton.addEventListener('click', this.refresh.bind(this));
 		var summary = this.node('div', this.card, undefined, 'storage-summary');
 		var free = this.node('div', summary);
-		this.node('div', free, 'AVAILABLE SPACE'.__(), 'storage-label');
+		this.node('div', free, Chinachu.t('AVAILABLE SPACE'), 'storage-label');
 		this.freeValue = this.node('strong', free, '—', 'storage-free-value');
 		var total = this.node('div', summary, undefined, 'storage-total');
-		this.node('div', total, 'TOTAL CAPACITY'.__(), 'storage-label');
+		this.node('div', total, Chinachu.t('TOTAL CAPACITY'), 'storage-label');
 		this.totalValue = this.node('strong', total, '—');
 		this.bar = this.node('div', this.card, undefined, 'storage-bar');
 		this.bar.hidden = true;
@@ -63,7 +63,7 @@ P = Class.create(P, {
 		this.warning.setAttribute('role', 'status');
 		this.warning.hidden = true;
 		var footer = this.node('div', this.card, undefined, 'storage-card-footer');
-		var link = this.node('a', footer, 'OPEN RECORDED PROGRAMS'.__(), 'storage-recorded-link');
+		var link = this.node('a', footer, Chinachu.t('OPEN RECORDED PROGRAMS'), 'storage-recorded-link');
 		link.href = '#!/recorded/list/';
 		this.status = this.node('p', footer, '', 'storage-status');
 		this.status.setAttribute('role', 'status');
@@ -75,8 +75,8 @@ P = Class.create(P, {
 		this.refreshButton.disabled = true;
 		this.card.setAttribute('aria-busy', 'true');
 		this.status.className = 'storage-status';
-		this.status.textContent = 'LOADING STORAGE'.__();
-		this.request = new Ajax.Request('./api/storage.json', {
+		this.status.textContent = Chinachu.t('LOADING STORAGE');
+		this.request = Chinachu.request('./api/storage.json', {
 			method: 'get',
 			onSuccess: function(response) {
 				var data;
@@ -99,13 +99,13 @@ P = Class.create(P, {
 		});
 		if (error || !valid || data.size === 0) {
 			this.status.className = 'storage-status storage-error';
-			this.status.textContent = 'STORAGE LOAD FAILED'.__();
-			if (this.hasData) this.status.textContent += ' ' + 'SHOWING PREVIOUS STORAGE'.__();
+			this.status.textContent = Chinachu.t('STORAGE LOAD FAILED');
+			if (this.hasData) this.status.textContent += ' ' + Chinachu.t('SHOWING PREVIOUS STORAGE');
 			return;
 		}
 		this.renderUsage(data);
 		this.hasData = true;
-		this.status.textContent = 'LAST UPDATED'.__() + ': ' + new Date().toLocaleTimeString();
+		this.status.textContent = Chinachu.t('LAST UPDATED') + ': ' + new Date().toLocaleTimeString();
 	},
 	renderUsage: function(data) {
 		var used = Math.min(data.used, data.size);
@@ -113,11 +113,11 @@ P = Class.create(P, {
 		var available = Math.min(data.avail, data.size - used);
 		var reserved = Math.max(0, data.size - used - available);
 		var categories = [
-			{ label: 'RECORDED'.__(), value: recorded, className: 'storage-recorded' },
-			{ label: 'OTHER STORAGE USAGE'.__(), value: used - recorded, className: 'storage-other' },
-			{ label: 'AVAILABLE SPACE'.__(), value: available, className: 'storage-available' }
+			{ label: Chinachu.t('RECORDED'), value: recorded, className: 'storage-recorded' },
+			{ label: Chinachu.t('OTHER STORAGE USAGE'), value: used - recorded, className: 'storage-other' },
+			{ label: Chinachu.t('AVAILABLE SPACE'), value: available, className: 'storage-available' }
 		];
-		if (reserved > 0) categories.push({ label: 'RESERVED SPACE'.__(), value: reserved, className: 'storage-reserved' });
+		if (reserved > 0) categories.push({ label: Chinachu.t('RESERVED SPACE'), value: reserved, className: 'storage-reserved' });
 		this.freeValue.textContent = this.readableFilesize(available);
 		this.totalValue.textContent = this.readableFilesize(data.size);
 		this.bar.textContent = '';
@@ -138,7 +138,7 @@ P = Class.create(P, {
 		var threshold = data.lowSpaceThreshold;
 		var lowSpace = available === 0 || (typeof threshold === 'number' && isFinite(threshold) && threshold > 0 && available < threshold);
 		this.warning.hidden = !lowSpace;
-		this.warning.textContent = available === 0 ? 'NO AVAILABLE SPACE'.__() : 'LOW AVAILABLE SPACE'.__();
+		this.warning.textContent = available === 0 ? Chinachu.t('NO AVAILABLE SPACE') : Chinachu.t('LOW AVAILABLE SPACE');
 		this.card.className = 'storage-card' + (lowSpace ? ' storage-low-space' : '');
 		return this;
 	}

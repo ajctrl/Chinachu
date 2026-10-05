@@ -1,0 +1,107 @@
+/* Application-specific layout for Web Awesome controls. */
+:root {
+    --wa-font-family-body: var(--chinachu-font-sans);
+    --wa-font-family-heading: var(--chinachu-font-sans);
+    --chinachu-radius-control: 4px;
+    --chinachu-radius-panel: 8px;
+    --chinachu-space-small: 8px;
+    --chinachu-space-medium: 12px;
+    --chinachu-space-large: 16px;
+    --wa-border-radius-s: var(--chinachu-radius-control);
+    --wa-border-radius-m: var(--chinachu-radius-control);
+    --wa-border-radius-l: var(--chinachu-radius-panel);
+    --wa-form-control-border-radius: var(--chinachu-radius-control);
+    --wa-panel-border-radius: var(--chinachu-radius-panel);
+    --wa-color-brand-fill-loud: #b3005f;
+    --wa-color-brand-fill-normal: #f4d9e7;
+    --wa-color-brand-fill-quiet: #fff0f6;
+    --wa-color-brand-border-loud: #b3005f;
+    --wa-color-brand-on-loud: #fff;
+    --wa-color-brand-on-normal: #8b004a;
+    --wa-color-brand-on-quiet: #8b004a;
+    --wa-color-focus: #b3005f;
+    --wa-font-size-s: 13px;
+    --wa-form-control-height-small: 32px;
+}
+[hidden] { display: none !important; }
+.chinachu-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--chinachu-space-small); min-width: 0; }
+.chinachu-toolbar-separator { align-self: stretch; border-inline-start: 1px solid #ccc; margin-inline: 4px; }
+.chinachu-button { vertical-align: middle; }
+.chinachu-button::part(base) { min-height: 32px; padding-inline: var(--chinachu-space-medium); font-size: 13px; font-family: var(--chinachu-font-sans); border-radius: var(--chinachu-radius-control); }
+.chinachu-button-icon { width: 16px; height: 16px; object-fit: contain; }
+.chinachu-dialog { --width: 760px; --spacing: var(--chinachu-space-large); }
+.chinachu-dialog::part(body) { overflow: auto; }
+.chinachu-dialog.without-close-button::part(close-button) { display: none; }
+.chinachu-dialog-content { min-width: 0; }
+.chinachu-dialog-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.chinachu-dialog-subtitle { color: #666; font-size: 12px; }
+.chinachu-about-dialog { --width: 420px; }
+.chinachu-about-label { color: #777; font-size: 12px; }
+.chinachu-about-version { margin: 4px 0 20px; font-size: 20px; font-weight: 500; overflow-wrap: anywhere; }
+.chinachu-about-environment { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; margin: 0; font-size: 12px; }
+.chinachu-about-environment dt { color: #777; }
+.chinachu-about-environment dd { margin: 0; overflow-wrap: anywhere; }
+.chinachu-dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.chinachu-callout { display: block; margin: 10px; }
+.chinachu-callout strong { display: block; }
+#chinachu-notifications { position: fixed; z-index: 10000; inset: auto 12px 35px auto; width: min(360px, calc(100vw - 24px)); pointer-events: none; }
+#chinachu-notifications > * { pointer-events: auto; }
+.chinachu-context-menu { z-index: 10001; display: flex; flex-direction: column; min-width: 180px; max-width: calc(100vw - 8px); max-height: calc(100vh - 8px); overflow: auto; padding: 5px; background: #fff; border: 1px solid #aaa; border-radius: var(--chinachu-radius-panel); box-shadow: 0 5px 20px #0003; }
+.chinachu-context-menu .chinachu-button { display: block; width: 100%; }
+.chinachu-context-menu .chinachu-button::part(base) { width: 100%; justify-content: flex-start; border: 0; }
+.chinachu-context-menu hr { border: 0; border-top: 1px solid #ddd; margin: 4px 0; width: 100%; }
+.chinachu-popover { position: fixed; inset: auto; margin: 0; padding: 0; border: 1px solid #aaa; border-radius: var(--chinachu-radius-panel); box-shadow: 0 5px 20px #0003; background: white; max-width: min(450px, calc(100vw - 8px)); max-height: calc(100vh - 8px); overflow: auto; }
+.chinachu-form { margin: 0; padding: 0; }
+.chinachu-form-field { display: grid; grid-template-columns: minmax(110px, 27%) minmax(0, 1fr); gap: 12px; align-items: start; padding: var(--chinachu-space-medium) 0; border-bottom: 1px solid #eee; }
+.chinachu-form-label { padding-top: 5px; font-size: 12px; overflow-wrap: anywhere; }
+.chinachu-form-input { min-width: 0; }
+.chinachu-form-input > wa-input, .chinachu-form-input > wa-select, .chinachu-form-input > wa-textarea { width: 100%; }
+.chinachu-form-error { color: #a11; font-size: 12px; }
+.chinachu-choice-group { display: flex; gap: 7px 14px; flex-wrap: wrap; }
+.chinachu-radio { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 4px 0; cursor: pointer; }
+.chinachu-radio input { margin: 0; accent-color: #b3005f; }
+.chinachu-tokenizer { display: flex; flex-direction: column; gap: 6px; }
+.chinachu-token-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.chinachu-token-list:empty { display: none; }
+.chinachu-token-list .chinachu-button::part(base) { white-space: normal; overflow-wrap: anywhere; }
+.chinachu-tabs { height: 100%; }
+.chinachu-tabs::part(base) { height: 100%; }
+.chinachu-tabs::part(body) { min-height: 0; flex: 1; }
+.chinachu-tabs wa-tab-panel { height: 100%; }
+.chinachu-tabs wa-tab-panel::part(base) { height: 100%; padding: 0; }
+.chinachu-slider wa-slider { display: block; width: 100%; }
+.video-control .chinachu-slider { width: 90px; min-width: 40px; }
+.video-control .chinachu-slider.seek { flex: 1; }
+@media (max-width: 600px) {
+    .chinachu-form-field { grid-template-columns: 1fr; gap: 5px; }
+    .chinachu-dialog { --spacing: 12px; }
+    .chinachu-dialog-actions { gap: 5px; }
+}
+
+/* Neutral actions use the same white surfaces and pink accents as the shell. */
+.chinachu-button::part(base) { background: #fff; border-color: #d6ced3; color: #333; }
+.chinachu-button:hover:not([disabled])::part(base) { background: #fff0f6; border-color: #c24186; }
+.chinachu-button[data-color] { --button-fill: #388dd6; --button-hover: #287bc2; }
+.chinachu-button[data-color="@pink"] { --button-fill: #d67fae; --button-hover: #cd649d; }
+.chinachu-button[data-color="@red"], .chinachu-button[data-color="@danger"] { --button-fill: #d2322d; --button-hover: #b52b27; }
+.chinachu-button[data-color="@orange"], .chinachu-button[data-color="@warning"] { --button-fill: #faa732; --button-hover: #f9980f; }
+.chinachu-button[data-color="@green"], .chinachu-button[data-color="@success"] { --button-fill: #5bb75b; --button-hover: #49a649; }
+.chinachu-button[data-color="@lightblue"], .chinachu-button[data-color="@info"] { --button-fill: #11c2e2; --button-hover: #0fa5c1; }
+.chinachu-button[data-color="@inverse"] { --button-fill: #444; --button-hover: #323232; }
+.chinachu-button[data-color]::part(base) { background: var(--button-fill); border-color: var(--button-fill); color: #fff; }
+.chinachu-button[data-color]:hover:not([disabled])::part(base) { background: var(--button-hover); border-color: var(--button-hover); }
+.chinachu-button[data-color="@transparent"]::part(base), .chinachu-button[appearance="plain"]::part(base) { background: transparent; border-color: transparent; color: #2b2b2b; }
+.chinachu-button[data-color="@transparent"]:hover:not([disabled])::part(base), .chinachu-button[appearance="plain"]:hover:not([disabled])::part(base) { background: #fff0f6; border-color: transparent; }
+.chinachu-button.selected::part(base) { background: #c24186; border-color: #b3005f; color: #fff; }
+.chinachu-button.selected:hover:not([disabled])::part(base) { background: #b3005f; border-color: #b3005f; color: #fff; }
+.chinachu-context-menu .chinachu-button::part(base) { background: #fff; color: #2b2b2b; }
+.chinachu-context-menu .chinachu-button:hover::part(base) { background: #f4f4f4; }
+
+.chinachu-icon { display: inline-flex; width: 16px; height: 16px; flex: none; vertical-align: -.15em; color: inherit; }
+.chinachu-icon svg { display: block; width: 100%; height: 100%; }
+.chinachu-icon[data-icon="online"] { color: #398247; }
+.chinachu-icon[data-icon="offline"] { color: #777; }
+.chinachu-dialog::part(dialog) { border-radius: var(--chinachu-radius-panel); }
+.chinachu-dialog::part(title) { font-size: 16px; font-weight: 600; }
+.chinachu-dialog::part(body) { font-size: 13px; line-height: 1.6; }
+.chinachu-form-label { font-weight: 500; }

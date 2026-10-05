@@ -1,27 +1,13 @@
 {
   "name": "chinachu",
   "description": "Most Lovely DVR Software in Japan.",
-  "version": "0.10.7-gamma.1",
+  "version": "0.20.0",
   "private": true,
-  "homepage": "https://chinachu.moe/",
-  "author": {
-    "name": "Yuki KAN",
-    "email": "re@pixely.jp",
-    "url": "https://github.com/kanreisa"
-  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/kanreisa/Chinachu.git"
+    "url": "git+https://github.com/ajctrl/Chinachu.git"
   },
-  "licenses": [
-    {
-      "type": "MIT",
-      "url": "https://github.com/kanreisa/Chinachu/blob/master/LICENSE"
-    }
-  ],
-  "bugs": {
-    "url": "https://github.com/kanreisa/Chinachu/issues"
-  },
+  "license": "MIT",
   "dependencies": {
     "chinachu-common": "file:common",
     "bonjour-service": "1.4.4",

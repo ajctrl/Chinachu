@@ -1,4 +1,4 @@
-P = Class.create(P, {
+Chinachu.definePage({
 
 	init: function() {
 
@@ -7,15 +7,16 @@ P = Class.create(P, {
 		this.ruleEvent = 'chinachu:' + this.ruleResource;
 		this.exclusionRules = [];
 		this.disposed = false;
+		this.refreshGeneration = 0;
 		this.view.content.className = 'loading';
 
 		this.initToolbar();
 		this.draw();
 
-		this.onNotify = this.refresh.bindAsEventListener(this);
-		document.observe(this.ruleEvent, this.onNotify);
-		this.onSchedule = function() { this.drawMain(true); }.bindAsEventListener(this);
-		document.observe('chinachu:schedule', this.onSchedule);
+		this.onNotify = this.refresh.bind(this);
+		Chinachu.on(document, this.ruleEvent, this.onNotify);
+		this.onSchedule = function() { this.drawMain(true); }.bind(this);
+		Chinachu.on(document, 'chinachu:schedule', this.onSchedule);
 		if (this.isExclusion) { this.refresh(); }
 
 		return this;
@@ -24,10 +25,12 @@ P = Class.create(P, {
 	deinit: function() {
 
 		if (this.grid) this.grid.destroy();
+		if (this.ruleTabs) this.ruleTabs.remove();
+		this.view.title.hidden = false;
 
 		this.disposed = true;
-		document.stopObserving(this.ruleEvent, this.onNotify);
-		document.stopObserving('chinachu:schedule', this.onSchedule);
+		Chinachu.off(document, this.ruleEvent, this.onNotify);
+		Chinachu.off(document, 'chinachu:schedule', this.onSchedule);
 
 		return this;
 	}
@@ -35,15 +38,16 @@ P = Class.create(P, {
 	refresh: function() {
 
 		if (this.isExclusion) {
-			new Ajax.Request('./api/exclusion-rules.json', {
+			var generation = ++this.refreshGeneration;
+			Chinachu.request('./api/exclusion-rules.json', {
 				method: 'get',
 				onSuccess: function(t) {
-					if (this.disposed) return;
+					if (this.disposed || generation !== this.refreshGeneration) return;
 					this.exclusionRules = t.responseJSON;
 					this.drawMain();
 				}.bind(this),
 				onFailure: function(t) {
-					if (!this.disposed) new flagrate.Modal({ title: '失敗', text: '共通除外ルールを読み込めませんでした (' + t.status + ')' }).show();
+					if (!this.disposed && generation === this.refreshGeneration) new ChinachuUI.Modal({ title: '失敗', text: '共通除外ルールを読み込めませんでした (' + t.status + ')' }).show();
 				}.bind(this)
 			});
 		} else {
@@ -58,25 +62,9 @@ P = Class.create(P, {
 	,
 	initToolbar: function _initToolbar() {
 		this.view.toolbar.add({
-			key: 'rule-kind',
-			ui: new sakura.ui.Button({
-				label: this.isExclusion ? '通常ルールへ' : '共通除外ルールへ',
-				onClick: function() {
-					window.location.href = this.isExclusion ? '#!/rules/list/' : '#!/rules/list/kind=exclusion/';
-				}.bind(this)
-			})
-		});
-		if (this.isExclusion) {
-			this.view.toolbar.add({
-				key: 'refresh',
-				ui: new sakura.ui.Button({ label: '更新', onClick: this.refresh.bind(this) })
-			});
-		}
-
-		this.view.toolbar.add({
 			key: 'execute-scheduler',
-			ui : new sakura.ui.Button({
-				label  : 'EXECUTE {0}'.__('SCHEDULER'.__()),
+			ui : new ChinachuUI.ActionButton({
+				label  : Chinachu.t('EXECUTE {0}', [Chinachu.t('SCHEDULER')]),
 				icon   : './icons/calendar-import.png',
 				onClick: function() {
 					new chinachu.ui.ExecuteScheduler();
@@ -84,12 +72,12 @@ P = Class.create(P, {
 			})
 		});
 
-		this.view.toolbar.add({ key: '--', ui: new sakura.ui.Element({ tagName: 'hr' }) });
+		this.view.toolbar.add({ key: '--', ui: new ChinachuUI.ElementView({ tagName: 'hr' }) });
 
 		this.view.toolbar.add({
 			key: 'add',
-			ui : new sakura.ui.Button({
-				label  : this.isExclusion ? '共通除外ルールを追加' : 'ADD'.__(),
+			ui : new ChinachuUI.ActionButton({
+				label  : this.isExclusion ? '共通除外ルールを追加' : Chinachu.t('ADD'),
 				icon   : './icons/plus-circle.png',
 				onClick: function() {
 					new chinachu.ui.NewRule(this.isExclusion);
@@ -99,31 +87,31 @@ P = Class.create(P, {
 
 		this.view.toolbar.add({
 			key: 'edit',
-			ui : new sakura.ui.Button({
-				label  : 'EDIT'.__(),
+			ui : new ChinachuUI.ActionButton({
+				label  : Chinachu.t('EDIT'),
 				icon   : './icons/hammer.png',
 				onClick: function() {
-					new chinachu.ui.EditRule(this.getRules().indexOf(this.grid.getSelectedRows().first().data), this.isExclusion);
+					new chinachu.ui.EditRule(this.getRules().indexOf(this.grid.getSelectedRows()[0].data), this.isExclusion);
 				}.bind(this)
 			}).disable()
 		});
 
 		/*this.view.toolbar.add({
 			key: 'copy',
-			ui : new sakura.ui.Button({
-				label  : 'COPY'.__(),
+			ui : new ChinachuUI.ActionButton({
+				label  : Chinachu.t('COPY'),
 				icon   : './icons/document-copy.png',
 				onClick: function() {
-					//console.log(this.grid.getSelectedRows().first());
-					//new chinachu.ui.CreateRuleByProgram(this.grid.getSelectedRows().first().data.id);
+					//console.log(this.grid.getSelectedRows()[0]);
+					//new chinachu.ui.CreateRuleByProgram(this.grid.getSelectedRows()[0].data.id);
 				}.bind(this)
 			}).disable()
 		});*/
 
 		this.view.toolbar.add({
 			key: 'delete',
-			ui : new sakura.ui.Button({
-				label  : 'DELETE'.__(),
+			ui : new ChinachuUI.ActionButton({
+				label  : Chinachu.t('DELETE'),
 				icon   : './icons/cross-script.png',
 				onClick: function() {
 
@@ -132,14 +120,14 @@ P = Class.create(P, {
 					var rules = this.getRules();
 					var resource = this.ruleResource;
 					var refresh = this.refresh.bind(this);
-					selected.each(function(row) {
+					selected.forEach(function(row) {
 						nums.push(rules.indexOf(row.data));
 					});
 					nums.sort(function (a, b) {
 						return a - b;
 					});
 
-					var modal  = new flagrate.Modal({
+					var modal  = new ChinachuUI.Modal({
 						title: 'ルール削除',
 						text : 'これらの ' + selected.length + ' ルールを削除します',
 						buttons: [
@@ -148,7 +136,7 @@ P = Class.create(P, {
 								color: '@red',
 								onSelect: function(e, modal) {
 
-									modal.buttons.each(function(a) {
+									modal.buttons.forEach(function(a) {
 										a.button.disable();
 									});
 
@@ -177,7 +165,7 @@ P = Class.create(P, {
 
 						modal.content.updateText('ルール#' + num.toString(10) + ' を削除しています...');
 
-						new Ajax.Request('./api/' + resource + '/' + num.toString(10) + '.json', {
+						Chinachu.request('./api/' + resource + '/' + num.toString(10) + '.json', {
 							method    : 'delete',
 							onSuccess: function() {
 
@@ -188,7 +176,7 @@ P = Class.create(P, {
 								modal.close();
 								refresh();
 
-								new flagrate.Modal({
+								new ChinachuUI.Modal({
 									title: '失敗',
 									text : 'ルール#' + num.toString(10) + ' の削除に失敗しました (' + t.status + ')'
 								}).show();
@@ -224,9 +212,21 @@ P = Class.create(P, {
 	,
 	draw: function() {
 
-		this.view.content.className = '';
+		this.view.content.className = 'list';
 		this.view.content.update();
 		if (this.isExclusion) { this.view.title.update('共通除外ルール'); }
+
+		var tabs = ChinachuUI.createElement('nav', { class: 'rule-kind-tabs', 'aria-label': 'ルールの種類' })
+			.insertTo(this.view.title.parentNode);
+		this.ruleTabs = tabs;
+		this.view.title.hidden = true;
+		[
+			{ label: '通常ルール', href: '#!/rules/list/', active: !this.isExclusion },
+			{ label: '共通除外ルール', href: '#!/rules/list/kind=exclusion/', active: this.isExclusion }
+		].forEach(function(tab) {
+			ChinachuUI.createElement('a', { href: tab.href, 'aria-current': tab.active ? 'page' : null })
+				.insertText(tab.label).insertTo(tabs);
+		});
 
 		this.grid = new ChinachuVirtualGrid({
 			multiSelect: true,
@@ -325,7 +325,7 @@ P = Class.create(P, {
 			return ChinachuChannelSelector.format(value, global.chinachu.schedule);
 		}
 
-		this.getRules().each(function(rule, i) {
+		this.getRules().forEach(function(rule, i) {
 
 			var row = {
 				data: rule,
@@ -343,7 +343,7 @@ P = Class.create(P, {
 				row.cell.types = {
 					sortKey  : rule.types[0],
 					className: 'types',
-					html     : rule.types.invoke('sub', /^(.{1}).*$/, '<span class="label-type-#{0}">#{1}</span>').join('')
+					html     : rule.types.map(function(type) { return '<span class="label-type-' + Chinachu.escapeHTML(type) + '">' + Chinachu.escapeHTML(type.slice(0, 1)) + '</span>'; }).join('')
 				};
 			} else {
 				row.cell.types = {
@@ -357,8 +357,8 @@ P = Class.create(P, {
 				row.cell.categories = {
 					sortKey    : rule.categories[0],
 					className  : 'categories',
-					html       : rule.categories.invoke('sub', /.+/, '<span class="label-cat-#{0}">#{0}</span>').join(''),
-					attribute  : { title: rule.categories.join(', ').truncate(256) }
+					html       : rule.categories.map(function(category) { return '<span class="label-cat-' + Chinachu.escapeHTML(category) + '">' + Chinachu.escapeHTML(category) + '</span>'; }).join(''),
+					attribute  : { title: rule.categories.join(', ').slice(0, 256) }
 				};
 			} else {
 				row.cell.categories = {
@@ -371,7 +371,7 @@ P = Class.create(P, {
 			if (rule.channels && rule.channels.length) {
 				row.cell.channels = {
 					text       : rule.channels.map(channelName).join(', '),
-					attribute  : { title: (rule.channels.map(channelName).join(', ') + '\nID: ' + rule.channels.join(', ')).truncate(256) }
+					attribute  : { title: (rule.channels.map(channelName).join(', ') + '\nID: ' + rule.channels.join(', ')).slice(0, 256) }
 				};
 			} else {
 				row.cell.channels = {
@@ -384,7 +384,7 @@ P = Class.create(P, {
 			if (rule.ignore_channels && rule.ignore_channels.length) {
 				row.cell.ignore_channels = {
 					text       : rule.ignore_channels.map(channelName).join(', '),
-					attribute  : { title: (rule.ignore_channels.map(channelName).join(', ') + '\nID: ' + rule.ignore_channels.join(', ')).truncate(256) }
+					attribute  : { title: (rule.ignore_channels.map(channelName).join(', ') + '\nID: ' + rule.ignore_channels.join(', ')).slice(0, 256) }
 				};
 			} else {
 				row.cell.ignore_channels = {
@@ -397,7 +397,7 @@ P = Class.create(P, {
 			if (rule.reserve_flags) {
 				row.cell.reserve_flags = {
 					text       : rule.reserve_flags.join(', '),
-					attribute  : { title: rule.reserve_flags.join(', ').truncate(256) }
+					attribute  : { title: rule.reserve_flags.join(', ').slice(0, 256) }
 				};
 			} else {
 				row.cell.reserve_flags = {
@@ -410,7 +410,7 @@ P = Class.create(P, {
 			if (rule.ignore_flags) {
 				row.cell.ignore_flags = {
 					text       : rule.ignore_flags.join(', '),
-					attribute  : { title: rule.ignore_flags.join(', ').truncate(256) }
+					attribute  : { title: rule.ignore_flags.join(', ').slice(0, 256) }
 				};
 			} else {
 				row.cell.ignore_flags = {
@@ -423,7 +423,7 @@ P = Class.create(P, {
 			if (rule.hour) {
 				row.cell.hour = {
 					sortKey  : rule.hour.start || 0,
-					text     : [rule.hour.start || 0, rule.hour.end || 0].invoke('toPaddedString', 2).join('~')
+					text     : [rule.hour.start || 0, rule.hour.end || 0].map(function(value) { return String(value).padStart(2, '0'); }).join('~')
 				};
 			} else {
 				row.cell.hour = {
@@ -439,7 +439,7 @@ P = Class.create(P, {
 					text     : [
 						Math.round((rule.duration.min || 0) / 60),
 						Math.round((rule.duration.max || 0) / 60)
-					].invoke('toPaddedString', 2).join('~')
+					].map(function(value) { return String(value).padStart(2, '0'); }).join('~')
 				};
 			} else {
 				row.cell.duration = {
@@ -454,7 +454,7 @@ P = Class.create(P, {
 			if (rule.reserve_titles) {
 				row.cell.reserve_titles = {
 					text       : '[' + (rule.reserve_titles_operator || 'or').toUpperCase() + '] ' + rule.reserve_titles.join(', '),
-					attribute  : { title: rule.reserve_titles.join(', ').truncate(256) }
+					attribute  : { title: rule.reserve_titles.join(', ').slice(0, 256) }
 				};
 			} else {
 				row.cell.reserve_titles = {
@@ -467,7 +467,7 @@ P = Class.create(P, {
 			if (rule.ignore_titles) {
 				row.cell.ignore_titles = {
 					text       : rule.ignore_titles.join(', '),
-					attribute  : { title: rule.ignore_titles.join(', ').truncate(256) }
+					attribute  : { title: rule.ignore_titles.join(', ').slice(0, 256) }
 				};
 			} else {
 				row.cell.ignore_titles = {
@@ -480,7 +480,7 @@ P = Class.create(P, {
 			if (rule.reserve_descriptions) {
 				row.cell.reserve_descriptions = {
 					text       : '[' + (rule.reserve_descriptions_operator || 'or').toUpperCase() + '] ' + rule.reserve_descriptions.join(', '),
-					attribute  : { title: rule.reserve_descriptions.join(', ').truncate(256) }
+					attribute  : { title: rule.reserve_descriptions.join(', ').slice(0, 256) }
 				};
 			} else {
 				row.cell.reserve_descriptions = {
@@ -493,7 +493,7 @@ P = Class.create(P, {
 			if (rule.ignore_descriptions) {
 				row.cell.ignore_descriptions = {
 					text       : rule.ignore_descriptions.join(', '),
-					attribute  : { title: rule.ignore_descriptions.join(', ').truncate(256) }
+					attribute  : { title: rule.ignore_descriptions.join(', ').slice(0, 256) }
 				};
 			} else {
 				row.cell.ignore_descriptions = {
@@ -506,7 +506,7 @@ P = Class.create(P, {
 			if (rule.recorded_format) {
 				row.cell.recorded_format = {
 					text       : rule.recorded_format,
-					attribute  : { title: rule.recorded_format.truncate(256) }
+					attribute  : { title: rule.recorded_format.slice(0, 256) }
 				};
 			} else {
 				row.cell.recorded_format = {
@@ -519,7 +519,7 @@ P = Class.create(P, {
 			rows.push(row);
 		});
 
-		this.grid.splice(0, void 0, rows).each(function(row) {
+		this.grid.splice(0, void 0, rows).forEach(function(row) {
 			this.grid.deselect(row);
 		}.bind(this));
 		if (selectedRules.length) {

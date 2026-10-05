@@ -14,8 +14,14 @@ function browser() {
 		var window = { location: {}, localStorage: { getItem: function(k) { return storage[k]; }, setItem: function(k,v) { storage[k]=v; } }, addEventListener: function(k,fn) { handlers[k]=fn; } };
 		var document = { fire: function(name, memo) { changes++; events.push({name:name, memo:memo}); } };
 		var global = { chinachu: { reserves: [{ id: 'one', title: '番組1', start: 100 }, { id: 'two', title: '番組2', start: 200 }, { id: 'manual', title: '手動予約', start: 300, isManualReserved: true }] } };
-		var Ajax = { Request: function(url, options) { requests.push({url:url, options:options}); } };
-		var P = {}, Class = { create: function(base, methods) { return methods; } };
+		var P = {};
+		var Chinachu = {
+			request: function(url, options) { requests.push({url:url, options:options, scope:this.scope}); },
+			definePage: function(methods) { P = methods; },
+			withScope: function(scope, fn) { var previous = this.scope; this.scope = scope; try { return fn(); } finally { this.scope = previous; } },
+			emit: function(target, name, detail) { target.fire(name, detail); },
+			escapeHTML: function(value) { return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+		};
 	`, ctx);
 	vm.runInContext(read('web/preferences.js'), ctx);
 	vm.runInContext(read('web/reservation-actions.js'), ctx);
@@ -39,14 +45,6 @@ function complete(ctx, index, skip, failure) {
 function reservationList() {
 	const ctx = browser();
 	vm.runInContext(`
-		Array.prototype.each = Array.prototype.forEach;
-		Array.prototype.invoke = function(method) {
-			var args = Array.prototype.slice.call(arguments, 1);
-			return this.map(function(value) { return value[method].apply(value, args); });
-		};
-		String.prototype.escapeHTML = function() {
-			return this.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-		};
 		global.chinachu.reserves.forEach(function(program) {
 			program.fullTitle = program.title;
 			program.detail = '番組説明';
@@ -310,6 +308,23 @@ describe('reservation click actions', function() {
 		ctx.P.onRowClick({}, {data:ctx.global.chinachu.reserves[0]});
 		complete(ctx,2,false);
 		assert.equal(ctx.global.chinachu.reserves[0].autoSkipOverride,true);
+	});
+	it('keeps the global mutation queue independent of a departing page request scope', function() {
+		const ctx = browser();
+		vm.runInContext('Chinachu.scope = { _disposed: false };', ctx);
+		const pageScope = ctx.Chinachu.scope;
+		ctx.P.setProgramSkip(ctx.global.chinachu.reserves[0], true);
+		ctx.P.setProgramSkip(ctx.global.chinachu.reserves[1], true);
+		assert.equal(ctx.requests[0].scope, null);
+		assert.equal(ctx.Chinachu.scope, pageScope);
+		pageScope._disposed = true;
+		ctx.P.closed = true;
+		complete(ctx, 0, true);
+		assert.equal(ctx.requests[1].scope, null);
+		complete(ctx, 1, true);
+		assert.equal(ctx.ChinachuReservationActions.isPending('one'), false);
+		assert.equal(ctx.ChinachuReservationActions.isPending('two'), false);
+		assert.equal(ctx.notices.length, 0);
 	});
 	it('serializes rapid clicks on different programs and ignores duplicate pending clicks', function() {
 		const ctx = browser();

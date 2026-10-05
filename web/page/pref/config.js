@@ -1,21 +1,16 @@
-P = Class.create(P, {
+Chinachu.definePage({
 	init: function() {
 		this.activeTab = 'form';
 		this.closed = false;
-		this.view.toolbar.add({ key: 'save', ui: new sakura.ui.Button({
+		this.view.toolbar.add({ key: 'save', ui: new ChinachuUI.ActionButton({
 			label: 'サーバー設定を保存', icon: './icons/disk.png', onClick: this.save.bind(this)
 		}).disable() });
-		var editorToggle = new sakura.ui.Button({
+		var editorToggle = new ChinachuUI.ActionButton({
 			label: 'JSON編集',
-			attr: { role: 'button', tabindex: '0', 'aria-controls': 'config-panel-form config-panel-json' },
+			attr: { 'aria-controls': 'config-panel-form config-panel-json' },
 			onClick: function() { this.selectTab(this.activeTab === 'form' ? 'json' : 'form'); }.bind(this)
 		}).disable();
-		editorToggle.entity.addEventListener('keydown', function(event) {
-			if (event.key === 'Enter' || event.key === ' ') {
-				event.preventDefault();
-				if (editorToggle.isEnabled()) editorToggle.onClick();
-			}
-		});
+
 		this.view.toolbar.add({ key: 'editor-toggle', ui: editorToggle });
 		this.draw();
 		this.load();
@@ -77,7 +72,7 @@ P = Class.create(P, {
 		this.node('p', group, 'スキップ優先時は行を左クリックすると確認なしでスキップ／解除します。「詳細」ボタンから番組詳細を開けます。手動予約の行は詳細を開きます。このブラウザにのみ適用・即時保存。', 'config-help');
 	},
 	load: function() {
-		new Ajax.Request('./api/config.json', {
+		Chinachu.request('./api/config.json', {
 			method: 'get',
 			onSuccess: function(t) {
 				if (this.closed) return;
@@ -217,7 +212,7 @@ P = Class.create(P, {
 		});
 		var text = this.activeTab === 'json' ? this.data.editor.getValue() : JSON.stringify(this.data.config, null, '  ');
 		var page = this;
-		flagrate.createModal({
+		ChinachuUI.createModal({
 			title: 'サーバー設定の保存',
 			text: '変更項目: ' + labels.join('、') + '\n保存後、変更を反映するにはサービスの再起動が必要です。\n直前の設定を config.json.bak にバックアップします。',
 			buttons: [
@@ -237,7 +232,7 @@ P = Class.create(P, {
 		this.view.toolbar.one('save').disable();
 		this.view.toolbar.one('editor-toggle').disable();
 		this.message('設定を保存しています…');
-		new Ajax.Request('./api/config.json', {
+		Chinachu.request('./api/config.json', {
 			method: 'put', parameters: { json: text, revision: this.data.revision },
 			onSuccess: function(t) {
 				if (this.closed) return;

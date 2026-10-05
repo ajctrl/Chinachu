@@ -14,14 +14,17 @@ function load(text) {
 		setValue(value) { content = value; }, getValue: () => content, resize() {}
 	};
 	const ctx = {
-		P: {}, Class: { create: (parent, methods) => methods }, ChinachuConfig: schema,
+		ChinachuConfig: schema,
+		Chinachu: {
+			definePage(methods) { ctx.page = methods; },
+			request(url, options) { options.onSuccess({ responseText: text, getHeader: () => '"source-revision"' }); }
+		},
 		ace: { edit: () => editor },
-		flagrate: { createModal(options) { modal = options; return { open() {} }; } },
-		Ajax: { Request: function(url, options) { options.onSuccess({ responseText: text, getHeader: () => '"source-revision"' }); } }
+		ChinachuUI: { createModal(options) { modal = options; return { open() {} }; } }
 	};
 	vm.runInNewContext(source, ctx);
 	const buttons = Object.fromEntries(['save', 'editor-toggle'].map(key => [key, { enabled: false, entity: {}, enable() { this.enabled = true; } }]));
-	const page = Object.assign(Object.create(ctx.P), {
+	const page = Object.assign(Object.create(ctx.page), {
 		activeTab: 'form', data: {}, formPanel: { hidden: false }, jsonPanel: { hidden: true },
 		view: { toolbar: { one: key => buttons[key] } },
 		message(message) { this.status = message; }, renderForm() { this.rendered = true; },

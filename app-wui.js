@@ -40,6 +40,7 @@ const geoip = require('geoip-lite');
 const mirakurun = new (require("mirakurun").default)();
 const configStore = require('./lib/config-store');
 const excludesStore = require('./lib/excludes-store');
+const { watchExclusionRules } = require('./lib/exclusion-rule-watcher');
 const { log } = require('./lib/logger');
 const { configureMirakurunClient } = require('./lib/mirakurun-client');
 const { createBasicAuthMiddleware } = require('./lib/socket-auth');
@@ -127,6 +128,7 @@ console.info(mirakurun);
 const timer = {};
 const emptyFunction = function () {};
 const status = {
+	version: pkg.version,
 	connectedCount: 0,
 	feature: {
 		previewer: true,
@@ -136,7 +138,11 @@ const status = {
 		normalizationForm: config.normalizationForm
 	},
 	system: {
-		core: os.cpus().length
+		core: os.cpus().length,
+		platform: os.platform(),
+		release: os.release(),
+		arch: os.arch(),
+		node: process.version
 	},
 	operator: {
 		alive: false,
@@ -507,6 +513,7 @@ function httpServerMain(req, res, query) {
 		if (ext === 'png') { type = 'image/png'; }
 		if (ext === 'gif') { type = 'image/gif'; }
 		if (ext === 'jpg') { type = 'image/jpeg'; }
+		if (ext === 'woff2') { type = 'font/woff2'; }
 		if (ext === 'f4v') { type = 'video/mp4'; }
 		if (ext === 'm4v') { type = 'video/mp4'; }
 		if (ext === 'mp4') { type = 'video/mp4'; }
@@ -520,7 +527,7 @@ function httpServerMain(req, res, query) {
 		var head = {
 			'Content-Type'             : type,
 			'Server'                   : 'Chinachu (Node)',
-			'Cache-Control'            : 'no-cache',
+			'Cache-Control'            : res.getHeader('Cache-Control') || 'no-cache',
 			'X-Content-Type-Options'   : 'nosniff',
 			'X-Frame-Options'          : 'SAMEORIGIN',
 			'X-UA-Compatible'          : 'IE=Edge,chrome=1',
@@ -542,7 +549,7 @@ function httpServerMain(req, res, query) {
 			return resErr(405);
 		}
 
-		if (['ico', 'png'].indexOf(ext) !== -1) {
+		if (['ico', 'png', 'woff2'].indexOf(ext) !== -1) {
 			res.setHeader('Cache-Control', 'private, max-age=86400');
 		}
 
@@ -829,6 +836,7 @@ function ioAddListener(server, isOpen) {
 	// listen event
 	iosAddEventListner(io, 'status');
 	iosAddEventListner(io, 'notify-rules');
+	iosAddEventListner(io, 'notify-exclusion-rules');
 	iosAddEventListner(io, 'notify-reserves');
 	iosAddEventListner(io, 'notify-recording');
 	iosAddEventListner(io, 'notify-recorded');
@@ -860,6 +868,7 @@ function ioServerMain(socket) {
 	ios.emit('status', status);
 
 	socket.emit('notify-rules');
+	socket.emit('notify-exclusion-rules');
 	socket.emit('notify-reserves');
 	socket.emit('notify-recording');
 	socket.emit('notify-recorded');
@@ -886,6 +895,11 @@ chinachu.jsonWatcher(
 	},
 	{ create: [], now: true }
 );
+
+// Common exclusions include legacy config rules until excludes.json exists.
+watchExclusionRules(EXCLUDES_FILE, CONFIG_FILE, function () {
+	ios.emit('notify-exclusion-rules');
+});
 
 // ファイル更新監視: ./data/schedule.json
 chinachu.jsonWatcher(

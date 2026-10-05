@@ -1,4 +1,4 @@
-P = Class.create(P, {
+Chinachu.definePage({
 
 	init: function() {
 
@@ -7,8 +7,8 @@ P = Class.create(P, {
 		this.initToolbar();
 		this.draw();
 
-		this.onNotify = this.refresh.bindAsEventListener(this);
-		document.observe('chinachu:recording', this.onNotify);
+		this.onNotify = this.refresh.bind(this);
+		Chinachu.on(document, 'chinachu:recording', this.onNotify);
 
 		return this;
 	}
@@ -20,7 +20,7 @@ P = Class.create(P, {
 
 		if (this.grid) this.grid.destroy();
 
-		document.stopObserving('chinachu:recording', this.onNotify);
+		Chinachu.off(document, 'chinachu:recording', this.onNotify);
 
 		return this;
 	}
@@ -36,7 +36,7 @@ P = Class.create(P, {
 
 		this.descriptionSwitch = ChinachuPreferences.createSwitch(this.drawMain.bind(this), 'recording');
 		this.unsubscribeDescriptionFontSize = ChinachuPreferences.subscribeDescriptionFontSize(this.drawMain.bind(this));
-		var control = new sakura.ui.Element({ tagName: 'span' });
+		var control = new ChinachuUI.ElementView({ tagName: 'span' });
 		control.entity.appendChild(this.descriptionSwitch.element);
 		this.view.toolbar.add({ key: 'show-description', ui: control });
 
@@ -129,7 +129,7 @@ P = Class.create(P, {
 			return a.start - b.start;
 		});
 
-		programs.each(function(program, i) {
+		programs.forEach(function(program, i) {
 
 			var row = {
 				className: showDescription ? 'reserve-description-row' : '',
@@ -182,13 +182,13 @@ P = Class.create(P, {
 			row.cell.type = {
 				sortAlt  : program.channel.type,
 				className: 'types',
-				html     : '<span class="label-type-' + program.channel.type + '">' + program.channel.type + '</span>'
+				html     : '<span class="label-type-' + Chinachu.escapeHTML(program.channel.type) + '">' + Chinachu.escapeHTML(program.channel.type) + '</span>'
 			};
 
 			row.cell.category = {
 				sortAlt    : program.category,
 				className  : 'categories',
-				html       : '<span class="label-cat-' + program.category + '">' + program.category + '</span>'
+				html       : '<span class="label-cat-' + Chinachu.escapeHTML(program.category) + '">' + Chinachu.escapeHTML(program.category) + '</span>'
 			};
 
 			row.cell.channel = {
@@ -199,21 +199,21 @@ P = Class.create(P, {
 				}
 			};
 
-			var titleHtml = program.flags.invoke('sub', /.+/, '<span class="flag #{0}">#{0}</span>').join('') + program.title;
+			var titleHtml = (program.flags || []).map(function(flag) { return '<span class="flag ' + Chinachu.escapeHTML(flag) + '">' + Chinachu.escapeHTML(flag) + '</span>'; }).join('') + Chinachu.escapeHTML(program.title);
 			if (program.subTitle && program.title.indexOf(program.subTitle) === -1) {
-				titleHtml += '<span class="subtitle">' + program.subTitle + '</span>';
+				titleHtml += '<span class="subtitle">' + Chinachu.escapeHTML(program.subTitle) + '</span>';
 			}
 			if (typeof program.episode !== 'undefined' && program.episode !== null) {
-				titleHtml += '<span class="episode">#' + program.episode + '</span>';
+				titleHtml += '<span class="episode">#' + Chinachu.escapeHTML(program.episode) + '</span>';
 			}
-			titleHtml += '<span class="id">#' + program.id + '</span>';
+			titleHtml += '<span class="id">#' + Chinachu.escapeHTML(program.id) + '</span>';
 
 			if (program.isManualReserved) {
 				titleHtml = '<span class="flag manual">手動</span>' + titleHtml;
 			}
 
 			if (showDescription && program.detail) {
-				titleHtml = '<div class="reserve-title">' + titleHtml + '</div><div class="reserve-description" style="font-size: ' + descriptionFontSize + '">' + String(program.detail).replace(/\r\n|\r|\n/g, ' ').escapeHTML() + '</div>';
+				titleHtml = '<div class="reserve-title">' + titleHtml + '</div><div class="reserve-description" style="font-size: ' + descriptionFontSize + '">' + Chinachu.escapeHTML(String(program.detail).replace(/\r\n|\r|\n/g, ' ')) + '</div>';
 			}
 
 			row.cell.title = {

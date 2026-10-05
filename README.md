@@ -18,3 +18,5 @@ Mirakurun are supported. Socket.IO 2.x clients are not supported.
 
 
 Reservation keywords and automatic exclusion: [configuration and behavior](docs/auto-exclusion.md).
+
+Browser UI architecture, vendored assets and checks: [documentation](docs/browser-ui.md).

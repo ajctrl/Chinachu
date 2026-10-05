@@ -1,4 +1,4 @@
-P = Class.create(P, {
+Chinachu.definePage({
 	
 	init: function _initPage() {
 		this.view.content.className = 'loading';
@@ -10,9 +10,9 @@ P = Class.create(P, {
 	
 	deinit: function _deinit() {
 		
-		this.data.operatorLogRequest.transport.abort();
-		this.data.schedulerLogRequest.transport.abort();
-		this.data.wuiLogRequest.transport.abort();
+		if (this.data.operatorLogRequest) this.data.operatorLogRequest.transport.abort();
+		if (this.data.schedulerLogRequest) this.data.schedulerLogRequest.transport.abort();
+		if (this.data.wuiLogRequest) this.data.wuiLogRequest.transport.abort();
 		
 		return this;
 	},
@@ -21,11 +21,11 @@ P = Class.create(P, {
 		this.view.content.className = '';
 		this.view.content.update();
 		
-		this.view.operatorLog  = flagrate.createElement().addClassName('console');
-		this.view.schedulerLog = flagrate.createElement().addClassName('console');
-		this.view.wuiLog       = flagrate.createElement().addClassName('console');
+		this.view.operatorLog  = ChinachuUI.createElement().addClassName('console');
+		this.view.schedulerLog = ChinachuUI.createElement().addClassName('console');
+		this.view.wuiLog       = ChinachuUI.createElement().addClassName('console');
 		
-		flagrate.createTab({
+		ChinachuUI.createTab({
 			fill: true,
 			tabs: [
 				{
@@ -52,38 +52,32 @@ P = Class.create(P, {
 			]
 		}).insertTo(this.view.content);
 		
-		this.data.operatorLogRequest = new Ajax.Request('./api/log/operator/stream.txt', {
+		this.data.operatorLogRequest = Chinachu.request('./api/log/operator/stream.txt', {
 			method: 'get',
 			onInteractive: function(t) {
-				var html = t.responseText;
+				var text = t.responseText;
 				
-				html = html.replace(/\n/g, '<br>');
-				
-				this.view.operatorLog.update(html);
+				this.view.operatorLog.updateText(text);
 				this.view.operatorLog.scrollTop = this.view.operatorLog.scrollHeight;
 			}.bind(this)
 		});
 		
-		this.data.schedulerLogRequest = new Ajax.Request('./api/log/scheduler/stream.txt', {
+		this.data.schedulerLogRequest = Chinachu.request('./api/log/scheduler/stream.txt', {
 			method: 'get',
 			onInteractive: function(t) {
-				var html = t.responseText;
+				var text = t.responseText;
 				
-				html = html.replace(/\n/g, '<br>');
-				
-				this.view.schedulerLog.update(html);
+				this.view.schedulerLog.updateText(text);
 				this.view.schedulerLog.scrollTop = this.view.schedulerLog.scrollHeight;
 			}.bind(this)
 		});
 		
-		this.data.wuiLogRequest = new Ajax.Request('./api/log/wui/stream.txt', {
+		this.data.wuiLogRequest = Chinachu.request('./api/log/wui/stream.txt', {
 			method: 'get',
 			onInteractive: function(t) {
-				var html = t.responseText;
+				var text = t.responseText;
 				
-				html = html.replace(/\n/g, '<br>');
-				
-				this.view.wuiLog.update(html);
+				this.view.wuiLog.updateText(text);
 				this.view.wuiLog.scrollTop = this.view.wuiLog.scrollHeight;
 			}.bind(this)
 		});

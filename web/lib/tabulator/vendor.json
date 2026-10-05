@@ -1,0 +1,7 @@
+{
+  "package": "tabulator-tables",
+  "version": "6.6.1",
+  "source": "https://registry.npmjs.org/tabulator-tables/-/tabulator-tables-6.6.1.tgz",
+  "integrity": "sha512-8A77aN30vJS34w1P5h4HtgEajB7vX2v0AD1fXFIKxp6SxplpGGfKn0Y4ouY91+6gdGK8/quqXoCA2LkrhBVE3A==",
+  "license": "MIT"
+}
