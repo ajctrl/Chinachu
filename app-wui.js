@@ -209,13 +209,13 @@ function publishMdns(options) {
 
 if (tlsEnabled) {
 	if (basicAuthEnabled) {
-		server = https.createServer(basic, tlsOption, httpServer);
+		server = https.createServer(tlsOption, basic.check(httpServer));
 	} else {
 		server = https.createServer(tlsOption, httpServer);
 	}
 } else {
 	if (basicAuthEnabled) {
-		server = http.createServer(basic, httpServer);
+		server = http.createServer(basic.check(httpServer));
 	} else {
 		server = http.createServer(httpServer);
 	}

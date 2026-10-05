@@ -12,7 +12,6 @@ var path       = require('path');
 var crypto     = require('crypto');
 var dateFormat = require('dateformat').default;
 var child_process = require('child_process');
-var string = require('@chezearth/string');
 
 var execSync   = function (command) {
 	try {
@@ -203,7 +202,7 @@ exports.formatRecordedName = function (program, name) {
 			if (isNaN(digit)) {
 				digit = 1;
 			}
-			return program.episode === null ? 'n' : string(program.episode.toString(10)).padLeft(digit, '0').s;
+			return program.episode === null ? 'n' : program.episode.toString(10).padStart(Number(digit), '0');
 		}
 
 		// episode

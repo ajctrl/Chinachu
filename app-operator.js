@@ -38,8 +38,6 @@ process.on('uncaughtException', (err) => {
 
 // 追加モジュールのロード
 const { default: dateFormat } = require('dateformat');
-const mkdirp = require('mkdirp');
-const disk = require('diskusage');
 const nodemailer = require("nodemailer");
 const chinachu = require('chinachu-common');
 const mirakurun = new (require("mirakurun").default)();
@@ -99,7 +97,7 @@ fs.writeFileSync(RECORDING_DATA_FILE, '[]');
 // 保存先ディレクトリが存在しない場合には作成
 if (!fs.existsSync(config.recordedDir)) {
 	log('MKDIR: ' + config.recordedDir);
-	mkdirp.sync(config.recordedDir);
+	fs.mkdirSync(config.recordedDir, { recursive: true });
 }
 
 // Gotify
@@ -352,7 +350,7 @@ function doRecord(program, stream) {
 	const recDirPath = recPath.replace(/^(.+)\/.+$/, '$1');
 	if (!fs.existsSync(recDirPath)) {
 		log('MKDIR: ' + recDirPath);
-		mkdirp.sync(recDirPath);
+		fs.mkdirSync(recDirPath, { recursive: true });
 	}
 
 	// 保存ストリーム
@@ -493,12 +491,12 @@ function stopRecording(programId) {
 // ストレージチェック
 function storageChecker() {
 
-	disk.check(config.recordedDir, (err, info) => {
+	fs.statfs(config.recordedDir, (err, info) => {
 		if(err) {
 			return;
 		}
 
-		const freeMB = info.available / 1024 / 1024;
+		const freeMB = info.bavail * info.bsize / 1024 / 1024;
 		if (freeMB < storageLowSpaceThresholdMB) {
 			stChecked = 0;// すぐに再チェックするため
 			log(`ALERT: Storage Low Space! (${freeMB} MB < ${storageLowSpaceThresholdMB} MB)`);

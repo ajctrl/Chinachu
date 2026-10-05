@@ -725,6 +725,10 @@ function chinachuRuleList() {
 	// output
 	var cnt = 0;
 
+	function printRuleValue(value) {
+		return cnt > 1 && value.length > 20 ? value.slice(0, 17) + '...' : value;
+	}
+
 	rules.forEach(function(a, i) {
 		if (opts.get('num')) {
 			if (i !== parseInt(opts.get('num'), 10)) {
@@ -749,7 +753,7 @@ function chinachuRuleList() {
 						Object.keys(a[b]).forEach(function(c, j) {
 							val[j] = a[b][c];
 						});
-						t.cell(b, val.join(', '), null, (val.join(', ').length > 20) ? 20 : null);
+						t.cell(b, val.join(', '), printRuleValue);
 					}
 					break;
 

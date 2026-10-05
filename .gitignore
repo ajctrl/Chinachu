@@ -21,6 +21,7 @@
 /usr/*
 /node
 /node_modules/*
+/common/node_modules/
 
 /config.json.bak
 /config.json.*.tmp

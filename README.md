@@ -8,8 +8,8 @@ Requirements
 - Node.js 24.x
 - The npm version bundled with Node.js 24
 - FFmpeg (including ffprobe)
-- Mirakurun 4.1.3
-- Socket.IO 4.8.3 clients (Engine.IO protocol 4)
+- Mirakurun 4.x (bundled npm client: 4.1.5)
+- Socket.IO 4.8.4 clients (Engine.IO protocol 4)
 
 Install Node.js, npm, FFmpeg, and ffprobe system-wide and ensure they are
 available in `PATH`, then install dependencies with `npm ci`. Chinachu does not
@@ -20,3 +20,5 @@ Mirakurun are supported. Socket.IO 2.x clients are not supported.
 Reservation keywords and automatic exclusion: [configuration and behavior](docs/auto-exclusion.md).
 
 Browser UI architecture, vendored assets and checks: [documentation](docs/browser-ui.md).
+
+Node dependency versions, native replacements and checks: [documentation](docs/npm-dependencies.md).
