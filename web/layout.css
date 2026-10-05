@@ -152,7 +152,10 @@ body > .middle.noside { grid-template-columns: minmax(0, 1fr); }
 .chinachu-grid-menu { border: 0; background: transparent; font-size: 18px; line-height: 1; width: 100%; }
 .chinachu-search-form { display: grid; gap: 12px; }
 .chinachu-search-field { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: center; gap: 10px; }
-.chinachu-search-field input, .chinachu-search-field select { width: 100%; min-width: 0; border: 1px solid #aaa; background: #fff; padding: var(--chinachu-space-small); border-radius: var(--chinachu-radius-control); }
+.chinachu-search-field > input, .chinachu-search-field > select { width: 100%; min-width: 0; border: 1px solid #aaa; background: #fff; padding: var(--chinachu-space-small); border-radius: var(--chinachu-radius-control); }
+.chinachu-search-channel-field { align-items: start; }
+.chinachu-search-channel-field > span { padding-top: 8px; }
+.chinachu-search-channel-field > .channel-selector { min-width: 0; }
 @media (min-width: 801px) {
  .app-navigation > .category-pref { margin-left: auto; }
 }

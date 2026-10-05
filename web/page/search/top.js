@@ -162,7 +162,7 @@ Chinachu.definePage({
 				if (program.end < time) continue;
 
 				if (this.self.query.pgid && this.self.query.pgid !== program.id) continue;
-				if (this.self.query.chid && this.self.query.chid !== program.channel.id) continue;
+				if (!ChinachuSearchForm.matchesChannel(this.self.query, program.channel)) continue;
 				if (this.self.query.cat && this.self.query.cat !== program.category) continue;
 				if (this.self.query.type && this.self.query.type !== program.channel.type) continue;
 				if (nf) {

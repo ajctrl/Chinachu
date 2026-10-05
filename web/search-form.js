@@ -10,7 +10,7 @@
 		var fields = [
 			['cat', 'カテゴリー', ['anime', 'information', 'news', 'sports', 'variety', 'documentary', 'drama', 'music', 'cinema', 'theater', 'hobby', 'welfare', 'etc']],
 			['title', 'タイトル'], ['desc', '説明'], ['type', 'タイプ', ['GR', 'BS', 'CS', 'SKY']],
-			['start', '何時から'], ['end', '何時まで'], ['pgid', 'プログラムID'], ['chid', 'チャンネルID']
+			['start', '何時から'], ['end', '何時まで'], ['pgid', 'プログラムID']
 		];
 		fields.forEach(function(field) {
 			var label = document.createElement('label');
@@ -36,6 +36,26 @@
 			label.appendChild(input);
 			form.appendChild(label);
 		});
+		var channelField = document.createElement('div');
+		channelField.className = 'chinachu-search-field chinachu-search-channel-field';
+		var channelCaption = document.createElement('span');
+		channelCaption.textContent = 'チャンネル';
+		channelField.appendChild(channelCaption);
+		var channelSelector = ChinachuChannelSelector.create({
+			element: document.createElement('div'),
+			getChannels: function() {
+				var data = global.chinachu;
+				var seen = new Set();
+				return (data.schedule || []).concat(recorded ? (data.recorded || []).map(function(program) { return program.channel; }) : []).filter(function(channel) {
+					if (seen.has(channel.id)) return false;
+					seen.add(channel.id);
+					return true;
+				});
+			}
+		});
+		channelSelector.setValues(typeof page.self.query.channels === 'string' ? page.self.query.channels.split(',').filter(Boolean) : (page.self.query.chid ? [page.self.query.chid] : []));
+		channelField.appendChild(channelSelector);
+		form.appendChild(channelField);
 		function submit(event) {
 			if (event) event.preventDefault();
 			['title', 'desc'].forEach(function(key) {
@@ -45,6 +65,8 @@
 			if (!form.reportValidity()) return;
 			var query = Object.assign({}, page.self.query);
 			Object.keys(inputs).forEach(function(key) { query[key] = inputs[key].value; });
+			query.channels = channelSelector.getValues().join(',');
+			delete query.chid;
 			query.skip = 1;
 			// Older schedule-search URLs encoded title and description twice.
 			if (!recorded) query.searchVersion = 2;
@@ -67,5 +89,14 @@
 		inputs.title.focus();
 		return modal;
 	}
-	root.ChinachuSearchForm = { show: show };
+	function matchesChannel(query, channel) {
+		if (typeof query.channels === 'string') {
+			var values = query.channels.split(',').filter(Boolean);
+			return !values.length || values.some(function(value) {
+				return value === channel.id || value === channel.channel || value === channel.type + '_' + channel.sid;
+			});
+		}
+		return !query.chid || query.chid === channel.id;
+	}
+	root.ChinachuSearchForm = { show: show, matchesChannel: matchesChannel };
 }(window));
