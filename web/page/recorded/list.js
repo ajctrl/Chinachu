@@ -115,6 +115,11 @@ Chinachu.definePage({
 					label: 'タイトル'
 				},
 				{
+					key  : 'matchedKeywords',
+					label: '一致キーワード',
+					width: 160
+				},
+				{
 					key  : 'datetime',
 					label: '放送日時',
 					width: 210
@@ -245,6 +250,14 @@ Chinachu.definePage({
 				attribute  : {
 					title: program.fullTitle + ' - ' + program.detail
 				}
+			};
+
+			var matchedKeywords = program.isManualReserved ? '手動予約' :
+				(Array.isArray(program.matchedKeywords) ?
+					(program.matchedKeywords.join('、') || 'キーワード条件なし') : '');
+			row.cell.matchedKeywords = {
+				text: matchedKeywords,
+				attribute: { title: matchedKeywords }
 			};
 
 			row.cell.duration = {
