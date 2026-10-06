@@ -30,7 +30,7 @@ if (!fs.existsSync('./data/') || !fs.existsSync('./log/') || !fs.existsSync('./w
 const opts = require('opts');
 const { default: dateFormat } = require('dateformat');
 const chinachu = require('chinachu-common');
-const { buildCandidates } = require('./lib/reservation-planner');
+const { buildCandidates, markDuplicates } = require('./lib/reservation-planner');
 const excludesStore = require('./lib/excludes-store');
 const mirakurun = new (require("mirakurun").default)();
 
@@ -177,34 +177,12 @@ function scheduler() {
 		return a.start - b.start;
 	});
 
-	// duplicates
-	var duplicateCount = 0;
+	// Resolve duplicate groups before tuner allocation.
+	var duplicateCount = markDuplicates(matches);
 	for (i = 0; i < matches.length; i++) {
 		a = matches[i];
-
-		// 手動解除した予約は重複で削除せず、解除情報を維持する。
-		if (a.isSkip || a.autoSkipOverride) { continue; }
-
-		for (j = 0; j < matches.length; j++) {
-			var b = matches[j];
-
-			if (b.isDuplicate || b.isSkip) { continue; }
-
-			if (a.id === b.id) { continue; }
-			if (a.channel.type !== b.channel.type) { continue; }
-			if (a.channel.channel !== b.channel.channel) { continue; }
-			if (a.start !== b.start) { continue; }
-			if (a.end !== b.end) { continue; }
-			if (a.title !== b.title) { continue; }
-
-			// 手動解除した予約を優先し、それ以外はsidの若い方を選択させる。
-			if (!b.autoSkipOverride && parseInt(a.channel.sid, 10) < parseInt(b.channel.sid, 10)) { continue; }
-
-			log('DUPLICATE: ' + a.id + ' ' + dateFormat(new Date(a.start), 'isoDateTime') + ' [' + a.channel.name + '] ' + a.title);
-			a.isDuplicate = true;
-
-			++duplicateCount;
-		}
+		if (!a.isDuplicate) { continue; }
+		log('DUPLICATE: ' + a.id + ' ' + dateFormat(new Date(a.start), 'isoDateTime') + ' [' + a.channel.name + '] ' + a.title);
 	}
 
 	// check conflict

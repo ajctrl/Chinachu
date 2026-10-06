@@ -16,6 +16,66 @@ function program(overrides) {
 	}, overrides);
 }
 
+function permutations(items) {
+	if (!items.length) { return [[]]; }
+	return items.flatMap((item, index) =>
+		permutations(items.filter((_, i) => i !== index)).map(rest => [item, ...rest]));
+}
+
+describe('duplicate reservation selection', function () {
+	const states = {
+		reserve: {}, manual: { isManualReserved: true }, skip: { isSkip: true },
+		manualSkip: { isManualReserved: true, isSkip: true },
+		autoSkip: { isSkip: true, isAutoSkip: true }, override: { autoSkipOverride: true }
+	};
+	const cases = [
+		['ordinary services', ['reserve', 'reserve', 'reserve'], [0]],
+		['manual skip suppresses alternatives', ['skip', 'reserve', 'reserve'], [0]],
+		['manual reservation with lowest SID', ['manual', 'reserve', 'skip'], [0, 2]],
+		['manual reservation with highest SID', ['skip', 'reserve', 'manual'], [0, 2]],
+		['skipped manual reservation', ['manualSkip', 'manual', 'reserve'], [0, 1]],
+		['automatic exclusion remains local', ['autoSkip', 'reserve', 'reserve'], [0, 1]],
+		['manual reservation beside automatic exclusions', ['autoSkip', 'autoSkip', 'manual'], [0, 1, 2]],
+		['explicit override beside manual skip', ['skip', 'reserve', 'override'], [0, 2]],
+		['multiple explicit overrides', ['skip', 'override', 'override'], [0, 1, 2]],
+		['manual and automatic skips with no eligible recording', ['skip', 'autoSkip', 'reserve'], [0, 1]],
+		['all services skipped', ['skip', 'manualSkip', 'autoSkip'], [0, 1, 2]],
+		['ordinary SID selection between manual reservations', ['manual', 'manual', 'skip'], [0, 2]],
+		['explicit override priority', ['reserve', 'manual', 'override'], [2]]
+	];
+	for (const [name, status, survivors] of cases) {
+		it('selects ' + name + ' consistently in all six service orders', function () {
+			const start = Date.now() + 3600000;
+			const programs = status.map((state, index) => program({
+				id: 'service-' + index, start, end: start + 1800000,
+				channel: { id: 'gr' + index, type: 'GR', channel: '27', sid: index + 1 },
+				...states[state]
+			}));
+			const expected = survivors.map(index => 'service-' + index);
+			for (const order of permutations(programs)) {
+				const candidates = JSON.parse(JSON.stringify(order));
+				for (let update = 0; update < 2; update++) {
+					assert.equal(planner.markDuplicates(candidates), 3 - expected.length);
+					assert.deepEqual(candidates.filter(p => !p.isDuplicate).map(p => p.id).sort(), expected);
+				}
+			}
+		});
+	}
+
+	it('selects a stable reservation when SIDs are tied or missing', function () {
+		for (const sid of [1, undefined]) {
+			const first = program({ id: 'first' });
+			const second = program({ id: 'second', start: first.start, end: first.end });
+			first.channel.sid = second.channel.sid = sid;
+			for (const order of permutations([first, second])) {
+				const candidates = JSON.parse(JSON.stringify(order));
+				assert.equal(planner.markDuplicates(candidates), 1);
+				assert.equal(candidates.find(p => !p.isDuplicate).id, first.id);
+			}
+		}
+	});
+});
+
 describe('reservation keyword matching', function () {
 	it('collects unique actual matches only from fully matching enabled rules', function () {
 		const rules = [
@@ -306,6 +366,137 @@ describe('scheduler and CLI persistence', function () {
 		assert.equal(reserves.find(r => r.id === p.id).isSkip, true);
 		assert.equal(reserves.find(r => r.id === duplicate.id).isConflict, false);
 	});
+
+	for (const reversed of [false, true]) {
+		for (const skippedSid of [1, 2]) {
+			for (const manual of [false, true]) {
+				it(`does not replace a manual skip with a duplicate service (reversed=${reversed}, sid=${skippedSid}, manual=${manual})`, function () {
+					const first = program({ id: 'first', isManualReserved: manual });
+					const second = program({ id: 'second', start: first.start, end: first.end });
+					first.channel.sid = skippedSid;
+					second.channel.sid = skippedSid === 1 ? 2 : 1;
+					files['excludes.json'] = '[]';
+					files['reserves.json'] = JSON.stringify([first]);
+					files['schedule.json'] = JSON.stringify([{ programs: reversed ? [second, first] : [first, second] }]);
+					assert.equal(run('app-cli.js', { mode: 'skip', id: first.id })[0].isSkip, true);
+					for (let update = 0; update < 3; update++) {
+						const reserves = run('app-scheduler.js');
+						assert.equal(reserves.length, 1);
+						assert.equal(reserves[0].id, first.id);
+						assert.equal(reserves[0].isSkip, true);
+						assert.equal(reserves[0].isAutoSkip, undefined);
+					}
+					run('app-cli.js', { mode: 'unskip', id: first.id });
+					const restored = run('app-scheduler.js');
+					assert.equal(restored.length, 1);
+					assert.equal(restored[0].isSkip, undefined);
+				});
+			}
+		}
+	}
+
+	for (const reversed of [false, true]) {
+		for (const skippedSid of [1, 2]) {
+			it(`preserves a manually added duplicate alongside a skipped service (reversed=${reversed}, sid=${skippedSid})`, function () {
+				const first = program({ id: 'first' });
+				const second = program({ id: 'second', start: first.start, end: first.end });
+				first.channel.sid = skippedSid;
+				second.channel.sid = skippedSid === 1 ? 2 : 1;
+				files['excludes.json'] = '[]';
+				files['reserves.json'] = JSON.stringify([first]);
+				files['schedule.json'] = JSON.stringify([{ programs: reversed ? [second, first] : [first, second] }]);
+				run('app-cli.js', { mode: 'skip', id: first.id });
+				assert.equal(run('app-scheduler.js').length, 1);
+				run('app-cli.js', { mode: 'reserve', id: second.id });
+				for (let update = 0; update < 3; update++) {
+					const reserves = run('app-scheduler.js');
+					assert.equal(reserves.length, 2);
+					assert.equal(reserves.find(p => p.id === first.id).isSkip, true);
+					const manual = reserves.find(p => p.id === second.id);
+					assert.equal(manual.isManualReserved, true);
+					assert.equal(manual.isSkip, undefined);
+					assert.equal(manual.isConflict, false);
+				}
+			});
+		}
+	}
+
+	it('preserves undoing a manual reservation skip while its sibling remains skipped', function () {
+		const first = program({ id: 'first', isSkip: true });
+		const second = program({ id: 'second', start: first.start, end: first.end, isManualReserved: true, isSkip: true });
+		second.channel.sid = 2;
+		files['excludes.json'] = '[]';
+		files['reserves.json'] = JSON.stringify([first, second]);
+		files['schedule.json'] = JSON.stringify([{ programs: [first, second] }]);
+		run('app-cli.js', { mode: 'unskip', id: second.id });
+		for (let update = 0; update < 2; update++) {
+			const reserves = run('app-scheduler.js');
+			assert.equal(reserves.length, 2);
+			assert.equal(reserves.find(p => p.id === first.id).isSkip, true);
+			assert.equal(reserves.find(p => p.id === second.id).isSkip, undefined);
+		}
+	});
+
+	it('preserves a manual reservation among three duplicate services in all six orders', function () {
+		const skipped = program({ id: 'skipped', isSkip: true });
+		const automatic = program({ id: 'automatic', start: skipped.start, end: skipped.end });
+		const manual = program({ id: 'manual', start: skipped.start, end: skipped.end, isManualReserved: true });
+		automatic.channel.sid = 2;
+		manual.channel.sid = 3;
+		for (const order of permutations([skipped, automatic, manual])) {
+			files['excludes.json'] = '[]';
+			files['reserves.json'] = JSON.stringify([skipped, manual]);
+			files['schedule.json'] = JSON.stringify([{ programs: order }]);
+			for (let update = 0; update < 3; update++) {
+				const reserves = run('app-scheduler.js');
+				assert.equal(reserves.length, 2);
+				assert.equal(reserves.find(p => p.id === skipped.id).isSkip, true);
+				const recording = reserves.find(p => p.id === manual.id);
+				assert.equal(recording.isManualReserved, true);
+				assert.equal(recording.isSkip, undefined);
+				assert.equal(recording.isConflict, false);
+			}
+		}
+	});
+
+	it('keeps an explicitly unskipped duplicate recordable alongside a manually skipped service', function () {
+		const first = program({ id: 'first' });
+		const second = program({ id: 'second', start: first.start, end: first.end });
+		second.channel.sid = 2;
+		files['excludes.json'] = JSON.stringify([{ sid: 2, reserve_titles: ['再放送'] }]);
+		files['schedule.json'] = JSON.stringify([{ programs: [first, second] }]);
+		run('app-scheduler.js');
+		run('app-cli.js', { mode: 'skip', id: first.id });
+		run('app-cli.js', { mode: 'unskip', id: second.id });
+		for (let update = 0; update < 2; update++) {
+			const reserves = run('app-scheduler.js');
+			assert.equal(reserves.length, 2);
+			assert.equal(reserves.find(p => p.id === first.id).isSkip, true);
+			const restored = reserves.find(p => p.id === second.id);
+			assert.equal(restored.isSkip, undefined);
+			assert.equal(restored.autoSkipOverride, true);
+			assert.equal(restored.isConflict, false);
+		}
+	});
+
+	for (const changed of ['type', 'channel', 'start', 'end', 'title']) {
+		it(`does not suppress another airing differing in ${changed}`, function () {
+			const first = program({ id: 'first', isSkip: true });
+			const second = program({ id: 'second', start: first.start, end: first.end });
+			second.channel.sid = 2;
+			if (changed === 'type') second.channel.type = 'BS';
+			else if (changed === 'channel') second.channel.channel = '28';
+			else if (changed === 'title') second.title = 'Other';
+			else second[changed] += 60000;
+			files['excludes.json'] = '[]';
+			files['reserves.json'] = JSON.stringify([first]);
+			files['schedule.json'] = JSON.stringify([{ programs: [first, second] }]);
+			const reserves = run('app-scheduler.js');
+			assert.equal(reserves.length, 2);
+			assert.equal(reserves.find(p => p.id === first.id).isSkip, true);
+			assert.equal(reserves.find(p => p.id === second.id).isSkip, undefined);
+		});
+	}
 
 	for (const reversed of [false, true]) {
 		it(`preserves an overridden duplicate across two updates and re-skip (reversed=${reversed})`, function () {
