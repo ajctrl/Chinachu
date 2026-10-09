@@ -75,7 +75,56 @@ CORSを追加して任意の外部サイトへAPIを開放することも避け�
 WebSocketの転送は[Nginxの公式手順](https://nginx.org/en/docs/http/websocket.html)に従っています。
 配信データを逐次返すため、[応答バッファリング](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_buffering)を無効にしています。
 本文の制限は[Nginxのclient_max_body_size](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size)も使います。
-この例の構文確認・証明書の準備・Nginxへの適用は、それぞれの実環境で行ってください。
+この例は後述のローカル統合テストで構文と転送動作を確認しています。
+実環境の証明書の準備・構文確認・Nginxへの適用は、それぞれの実環境で行ってください。
+
+## ローカル統合テスト
+
+LinuxでNginx、OpenSSL、FFmpeg、ffprobeをPATHに用意し、npm依存をインストールした状態で実行します。
+
+```sh
+npm run test:proxy
+```
+
+NginxがPATHにない場合は `NGINX_BIN=/path/to/nginx npm run test:proxy` とします。
+ローカルのTCP待受と子プロセスの起動を許可した環境が必要です。
+テストは一時ディレクトリに設定・認証情報・動画・証明書を生成し、実際の `app-wui.js` と
+このページのNginx設定例をループバックの一時ポートで起動します。
+実設定・録画データには触れず、終了時にテスト用サーバーと一時データを片付けます。
+約20秒で完了し、通常の `npm test` とは別に実行します。
+
+2026-10-09にNode.js 24.21.0、Nginx 1.24.0、FFmpeg 6.1.1で19項目が成功しました。
+証明書の検証を有効にしたHTTPS通信、Basic認証、Host・Origin・CSRF検証、ルールの
+POST・PUT・DELETE、本文の1MiB制限・15秒タイムアウト、静的RangeとHEAD、
+経路逸脱の拒否、Socket.IOのpolling・WebSocket・upgrade、録画ダウンロード・PNGプレビュー・
+MP4/TS配信、録画中TSとログの逐次転送、切断後の子プロセス終了、転送元IPの上書きを確認します。
+Nginxの本文タイムアウトではクライアント接続が終了し、アクセスログに408が記録されることも確認しました。
+追加の配信・接続テストは次のコマンドで実行します。60秒の接続維持を含むため、約2分かかります。
+
+```sh
+npm run test:proxy -- --extended
+```
+
+録画中PNG・MP4のシーク・時間指定・途中切断、Mirakurun互換のHTTP上流を使ったチャンネル配信と
+上流障害、8本の同時MP4配信、80回のWebSocket接続・切断、8本のWebSocketと4本の配信の
+60秒維持を確認します。接続数、WUIのファイル記述子数、子プロセスが切断後に戻ることも検証します。
+チャンネル配信は実Mirakurunクライアントを使いますが、チューナーとMirakurunサーバーは模擬です。
+
+PlaywrightとChromiumを別途用意すると、実ブラウザーで認証・ルール操作・主要画面・録画再生と
+シーク・Socket.IO再接続を確認できます。Playwrightはアプリの依存には追加していません。
+
+```sh
+PLAYWRIGHT_MODULE=/path/to/node_modules/playwright \
+CHROMIUM_BIN=/path/to/chromium \
+npm run test:proxy -- --extended --browser
+```
+
+Playwrightが通常のモジュール探索先にあり、そのChromiumを使う場合は、両環境変数を省略できます。
+`PROXY_BROWSER_SCREENSHOT=/path/to/playback.png` を指定すると再生画面の画像を保存します。
+ブラウザーはテスト用証明書の公開鍵だけを許可してHTTPSへ接続します。
+2026-10-09に拡張テスト28項目、基本テストとChromium 153.0.0.0のブラウザーテスト計24項目が成功しました。
+実チューナー・実Mirakurunサーバー、VAAPI、外部からの到達性、実環境の証明書、
+数時間以上の連続運転は対象外です。
 
 ## 旧設定からの移行
 

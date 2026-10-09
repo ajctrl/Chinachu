@@ -1,4 +1,7 @@
 (function() {
+	function stopChild(child) {
+		if (child && child.exitCode == null && child.signalCode == null) child.kill('SIGKILL');
+	}
 
 	var program = chinachu.getProgramById(request.param.id, data.recording);
 
@@ -160,33 +163,31 @@
 
 					tailf.stdout.pipe(response);
 
-					tailf.on('exit', function(code) {
-						response.end();
-						tailf = null;
-					});
-
-					request.on('close', function() {
-						if (tailf) {
-							tailf.stdout.removeAllListeners('data');
-							tailf.stderr.removeAllListeners('data');
-							tailf.kill('SIGKILL');
-						}
-					});
+					tailf.once('error', function(error) { log(error); response.destroy(); });
+					tailf.once('close', function() { response.end(); });
+					response.once('close', function() { stopChild(tailf); });
 				} else {
 					var ffmpeg = child_process.spawn('ffmpeg', args, { stdio: ['pipe', 'pipe', 'pipe', fd] });
 					children.push(ffmpeg);
 					log('SPAWN: ffmpeg ' + args.join(' ') + ' (pid=' + ffmpeg.pid + ')');
+					var tailf = null;
+					function stopInput() {
+						if (tailf) { tailf.stdout.unpipe(ffmpeg.stdin); stopChild(tailf); }
+					}
+					ffmpeg.stdin.on('error', function(error) {
+						stopInput();
+						if (error.code !== 'EPIPE') { log(error); response.destroy(); stopChild(ffmpeg); }
+					});
+					ffmpeg.once('error', function(error) { stopInput(); log(error); response.destroy(); });
 
 					if (!d.ss) {
-						var tailf = child_process.spawn('tail', ['-f', '/proc/self/fd/3'], { stdio: ['pipe', 'pipe', 'pipe', fd] });
+						tailf = child_process.spawn('tail', ['-f', '/proc/self/fd/3'], { stdio: ['pipe', 'pipe', 'pipe', fd] });
 						children.push(tailf);
 
 						tailf.stdout.pipe(ffmpeg.stdin);
 
-						tailf.on('exit', function(code) {
-							if (ffmpeg) ffmpeg.kill('SIGKILL');
-							tailf = null;
-						});
+						tailf.once('error', function(error) { log(error); response.destroy(); stopChild(ffmpeg); });
+						tailf.once('close', function() { if (!ffmpeg.stdin.destroyed) ffmpeg.stdin.end(); });
 					}
 
 					ffmpeg.stdout.pipe(response);
@@ -195,30 +196,15 @@
 						log(d);
 					});
 
-					ffmpeg.on('exit', function(code) {
-						if (tailf) {
-							tailf.stdout.removeAllListeners('data');
-							tailf.stderr.removeAllListeners('data');
-							tailf.kill('SIGKILL');
-							tailf = null;
-						} else {
-							ffmpeg = null;
-						}
-
+					// close follows stdout draining; exit can precede the final frames.
+					ffmpeg.once('close', function() {
+						stopInput();
 						response.end();
 					});
 
-					request.on('close', function() {
-						if (tailf) {
-							tailf.stdout.removeAllListeners('data');
-							tailf.stderr.removeAllListeners('data');
-							tailf.kill('SIGKILL');
-						} else {
-							ffmpeg.stdout.removeAllListeners('data');
-							ffmpeg.stderr.removeAllListeners('data');
-							ffmpeg.kill('SIGKILL');
-							ffmpeg = null;
-						}
+					response.once('close', function() {
+						stopInput();
+						stopChild(ffmpeg);
 					});
 				}
 

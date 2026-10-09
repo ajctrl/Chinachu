@@ -294,6 +294,19 @@ function main(avinfo) {
 
 				ffmpeg.stdout.pipe(response);
 
+				// A duration limit can close FFmpeg's input before the file is read.
+				// Stop reading, but let the encoded output finish normally on EPIPE.
+				ffmpeg.stdin.on('error', function(error) {
+					readStream.destroy();
+					if (error.code !== 'EPIPE') { log(error); response.destroy(); }
+				});
+				ffmpeg.once('close', function() { readStream.destroy(); });
+				ffmpeg.once('error', function(error) {
+					readStream.destroy();
+					log(error);
+					response.destroy();
+				});
+
 				readStream.pipe(ffmpeg.stdin);
 
 				ffmpeg.stderr.on('data', function(d) {

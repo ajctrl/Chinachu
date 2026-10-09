@@ -11,8 +11,9 @@ const common = require('chinachu-common');
 const scripts = ['channel', 'recording-program', 'recorded-program'];
 
 // Run the real API scripts with inert media tools and no DVR/file access.
-async function watch(name, query, vaapiEnabled, type = 'mp4') {
+async function watch(name, query, vaapiEnabled, type = 'mp4', exercise = () => {}) {
 	const calls = [], logs = [], heads = [], streams = [];
+	let mediaChild, input;
 	let opened = 0, serviceRequests = 0;
 	function stream() {
 		const result = new PassThrough();
@@ -20,7 +21,8 @@ async function watch(name, query, vaapiEnabled, type = 'mp4') {
 		return result;
 	}
 	function child() {
-		return Object.assign(new EventEmitter(), { stdin: stream(), stdout: stream(), stderr: stream(), kill() {} });
+		return Object.assign(new EventEmitter(), { stdin: stream(), stdout: stream(), stderr: stream(), exitCode: null, signalCode: null,
+			signals: [], kill(signal) { this.signals.push(signal); } });
 	}
 	const request = Object.assign(new EventEmitter(), {
 		param: { id: 'one', chid: 'one' }, type, query, url: '/api/' + name + '/one/watch.' + type,
@@ -49,16 +51,94 @@ async function watch(name, query, vaapiEnabled, type = 'mp4') {
 					return result;
 				}
 			},
-			fs: { closeSync() {}, createReadStream: stream },
+			fs: { closeSync() {}, createReadStream() { input = stream(); return input; } },
 			mirakurun: { async getServiceStream() { serviceRequests++; return stream(); } },
-			child_process: { spawn(tool, args) { calls.push({ tool, args: Array.from(args) }); return child(); } }
+			child_process: { spawn(tool, args) {
+				const process = child(); calls.push({ tool, args: Array.from(args), process });
+				if (tool === 'ffmpeg') mediaChild = process;
+				return process;
+			} }
 		}, { timeout: 1000 });
 		await new Promise(resolve => setImmediate(resolve));
+		await exercise({ mediaChild, input, response, calls });
 		return { calls, logs, heads, opened, serviceRequests };
 	} finally { streams.forEach(s => s.destroy()); }
 }
 
 describe('watch API size and debug security', function() {
+	it('stops live tail input on EPIPE while allowing the final encoded frame to drain', async function() {
+		await watch('recording-program', { t: '1' }, false, 'mp4', async ({ mediaChild, response, calls }) => {
+			const tail = calls.find(call => call.tool === 'tail').process;
+			mediaChild.stdin.emit('error', Object.assign(new Error('closed input'), { code: 'EPIPE' }));
+			assert.deepEqual(tail.signals, ['SIGKILL']);
+			assert.deepEqual(mediaChild.signals, []);
+			assert.equal(response.destroyed, false);
+			let output = '';
+			response.on('data', chunk => { output += chunk; });
+			mediaChild.exitCode = 0; mediaChild.emit('exit', 0);
+			assert.equal(response.writableEnded, false, 'process exit must not truncate stdout');
+			mediaChild.stdout.end('final encoded frame');
+			await new Promise(resolve => response.once('finish', resolve));
+			mediaChild.emit('close', 0);
+			assert.equal(output, 'final encoded frame');
+			assert.deepEqual(mediaChild.signals, []);
+		});
+	});
+	it('ends FFmpeg input when live tail exits without killing the encoder before it drains', async function() {
+		await watch('recording-program', {}, false, 'mp4', ({ mediaChild, calls }) => {
+			const tail = calls.find(call => call.tool === 'tail').process;
+			tail.exitCode = 0; tail.emit('close', 0);
+			assert.equal(mediaChild.stdin.writableEnded, true);
+			assert.deepEqual(mediaChild.signals, []);
+		});
+	});
+	for (const seeked of [false, true]) {
+		it('stops every live media process on response disconnect (seek ' + seeked + ')', async function() {
+			await watch('recording-program', seeked ? { ss: '2' } : {}, false, 'mp4', ({ response, calls }) => {
+				response.emit('close');
+				for (const call of calls) assert.deepEqual(call.process.signals, ['SIGKILL']);
+			});
+		});
+		it('never signals an exited live media process on a late response disconnect (seek ' + seeked + ')', async function() {
+			await watch('recording-program', seeked ? { ss: '2' } : {}, false, 'mp4', ({ mediaChild, response, calls }) => {
+				for (const call of calls) call.process.exitCode = 0;
+				mediaChild.emit('close', 0); response.emit('close');
+				for (const call of calls) assert.deepEqual(call.process.signals, []);
+			});
+		});
+	}
+	for (const tool of ['ffmpeg', 'tail']) {
+		it('closes live playback and stops its sibling when ' + tool + ' fails to start', async function() {
+			await watch('recording-program', {}, false, 'mp4', ({ response, calls }) => {
+				calls.find(call => call.tool === tool).process.emit('error', new Error('spawn failed'));
+				assert.equal(response.destroyed, true);
+				assert.deepEqual(calls.find(call => call.tool !== tool).process.signals, ['SIGKILL']);
+			});
+		});
+	}
+	it('stops reading on an early FFmpeg input close while preserving encoded output', async function() {
+		await watch('recorded-program', { t: '1' }, false, 'mp4', async ({ mediaChild, input, response }) => {
+			let output = '';
+			response.on('data', chunk => { output += chunk; });
+			mediaChild.stdin.emit('error', Object.assign(new Error('closed input'), { code: 'EPIPE' }));
+			assert.equal(input.destroyed, true);
+			assert.equal(response.destroyed, false);
+			mediaChild.stdout.end('last encoded frame');
+			await new Promise(resolve => response.once('finish', resolve));
+			assert.equal(output, 'last encoded frame');
+		});
+	});
+	for (const event of ['input error', 'spawn error', 'close']) {
+		it('releases recording input after FFmpeg ' + event, async function() {
+			await watch('recorded-program', {}, false, 'mp4', ({ mediaChild, input, response }) => {
+				if (event === 'input error') mediaChild.stdin.emit('error', Object.assign(new Error('input failed'), { code: 'EIO' }));
+				if (event === 'spawn error') mediaChild.emit('error', Object.assign(new Error('missing executable'), { code: 'ENOENT' }));
+				if (event === 'close') mediaChild.emit('close', 0);
+				assert.equal(input.destroyed, true);
+				if (event !== 'close') assert.equal(response.destroyed, true);
+			});
+		});
+	}
 	for (const name of scripts) {
 		for (const vaapi of [false, true]) {
 			it('rejects unsafe sizes before any media access in ' + name + ' (VAAPI ' + vaapi + ')', async function() {
