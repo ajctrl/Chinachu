@@ -14,6 +14,7 @@ function browser(query, recorded, data = {}) {
 		set textContent(value) { this.text = value; this.children = []; }
 		get textContent() { return (this.text || '') + this.children.map(child => child.textContent).join(''); }
 		setAttribute(name, value) { this[name] = value; }
+		replaceChildren() { this.children = []; this.text = ''; }
 		dispatchEvent(event) { if (this.handlers[event.type]) this.handlers[event.type](event); }
 		appendChild(child) { this.children.push(child); return child; }
 		addEventListener(name, handler) { this.handlers[name] = handler; }
@@ -51,6 +52,23 @@ describe('native search forms', function() {
 		return query;
 	}
 
+	it('shows literal search terms, resolves channel aliases and clears removed conditions', function() {
+		const { window, page } = browser({ title: '<img>%41', start: '0', channels: 'GR_101,unknown' }, false, { schedule: [{ id: 'gr1', type: 'GR', sid: 101, name: '総合' }] });
+		let additions = 0;
+		page.view = { content: { appendChild() { additions++; } } };
+		window.ChinachuSearchForm.updateSummary(page, false);
+		assert.equal(page.searchSummary.hidden, false);
+		assert.match(page.searchSummary.textContent, /タイトル：<img>%41/);
+		assert.match(page.searchSummary.textContent, /チャンネル：総合、unknown/);
+		assert.match(page.searchSummary.textContent, /開始時刻：0時/);
+		assert.equal(page.searchSummary.children[0].innerHTML, undefined);
+		page.self.query = { skip: 1 };
+		window.ChinachuSearchForm.updateSummary(page, false);
+		assert.equal(page.searchSummary.hidden, true);
+		assert.equal(page.searchSummary.textContent, '');
+		assert.equal(additions, 1);
+	});
+
 	it('preserves percent escapes through form submission and schedule page initialization', function() {
 		for (const term of ['%41', '%20', '%2F', '%E7%95%AA', '%', '日本語 & 100% / (字幕)']) {
 			const { inputs, modal, window } = browser({}, false);
@@ -84,7 +102,7 @@ describe('native search forms', function() {
 				chinachu: { dateToString: String },
 				global: { chinachu: { status: {}, recorded: programs, schedule: [{ programs }] } }
 			});
-			const page = { self: { query: { channels: 'gr1,bs1' } }, grid: { splice(start, count, result) { rows = result; } } };
+			const page = { view: { content: { appendChild() {} } }, self: { query: { channels: 'gr1,bs1' } }, grid: { splice(start, count, result) { rows = result; } } };
 			definition.drawMain.call(page);
 			assert.deepEqual(Array.from(rows, row => row.data.id), ['gr1', 'bs1']);
 			page.self.query.channels = '';

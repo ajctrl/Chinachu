@@ -89,6 +89,39 @@
 		inputs.title.focus();
 		return modal;
 	}
+	function updateSummary(page, recorded) {
+		if (!page.searchSummary) {
+			page.searchSummary = document.createElement('div');
+			page.searchSummary.className = 'chinachu-search-summary';
+			page.searchSummary.setAttribute('aria-label', '検索条件');
+			page.view.content.appendChild(page.searchSummary);
+		}
+		var summary = page.searchSummary, query = page.self.query;
+		summary.replaceChildren();
+		function add(label, value) {
+			if (value === undefined || value === null || value === '') return;
+			var item = document.createElement('span');
+			item.textContent = label + '：' + value;
+			summary.appendChild(item);
+		}
+		add('タイトル', query.title);
+		add('説明', query.desc);
+		add('ジャンル', query.cat);
+		add('放送種別', query.type);
+		var data = global.chinachu;
+		var channels = (data.schedule || []).concat(recorded ? (data.recorded || []).map(function(program) { return program.channel; }) : []);
+		var ids = typeof query.channels === 'string' ? query.channels.split(',').filter(Boolean) : (query.chid ? [query.chid] : []);
+		if (ids.length) add('チャンネル', ids.map(function(id) {
+			var channel = channels.find(function(channel) {
+				return matchesChannel(typeof query.channels === 'string' ? { channels: id } : { chid: id }, channel);
+			});
+			return channel && channel.name || id;
+		}).join('、'));
+		if (query.start !== undefined && query.start !== '') add('開始時刻', query.start + '時');
+		if (query.end !== undefined && query.end !== '') add('終了時刻', query.end + '時');
+		add('プログラムID', query.pgid);
+		summary.hidden = !summary.children.length;
+	}
 	function matchesChannel(query, channel) {
 		if (typeof query.channels === 'string') {
 			var values = query.channels.split(',').filter(Boolean);
@@ -98,5 +131,5 @@
 		}
 		return !query.chid || query.chid === channel.id;
 	}
-	root.ChinachuSearchForm = { show: show, matchesChannel: matchesChannel };
+	root.ChinachuSearchForm = { show: show, matchesChannel: matchesChannel, updateSummary: updateSummary };
 }(window));

@@ -11,7 +11,9 @@ function implementation() {
 		sessionStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) },
 		requestAnimationFrame() { return 1; }, cancelAnimationFrame() {}
 	};
-	const context = vm.createContext({ window, console, document: { createElement: () => ({ setAttribute() {} }) } });
+	const context = vm.createContext({ window, console, document: { createElement: () => ({
+		setAttribute() {}, children: [], appendChild(node) { this.children.push(node); }
+	}) } });
 	vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/virtual-grid.js'), 'utf8'), context);
 	return { Grid: window.ChinachuVirtualGrid, storage, window };
 }
@@ -114,6 +116,94 @@ describe('Tabulator list adapter', function() {
 		assert.equal(clicks, 1);
 		assert.equal(doubles, 1);
 		assert.equal(view.getSelectedRows().length, 0);
+	});
+
+	it('does not select or activate a row when expanding its additional information', function() {
+		const view = grid();
+		let clicks = 0;
+		view._opt.onClick = () => clicks++;
+		view._opt.onDblClick = () => clicks++;
+		const row = model('one', 1);
+		for (const selector of ['[role="button"]', '.tabulator-responsive-collapse']) {
+			const event = { target: { closest: candidates => candidates.split(', ').includes(selector) } };
+			view._click(event, row, false);
+			view._click(event, row, true);
+		}
+		assert.equal(clicks, 0);
+		assert.equal(view.getSelectedRows().length, 0);
+	});
+
+	it('snapshots collapsed dynamic values without moving live content or leaking a new timer', function() {
+		const view = grid(), row = model('one', 1);
+		const snapshot = { textContent: '2026/10/08' };
+		let cloned = 0, removed = 0;
+		const dynamic = { entity: { cloneNode(deep) { assert.equal(deep, true); cloned++; return snapshot; } }, remove() { removed++; } };
+		row.cell.datetime = { createElement: () => dynamic };
+		const component = { getRow: () => ({ getData: () => ({ _model: row }) }) };
+		const fallback = view._formatCollapsedCell(component, { key: 'datetime' });
+		assert.equal(fallback.children[0], snapshot);
+		assert.equal(removed, 1);
+		assert.equal(row.cell.datetime._content, undefined);
+		row.cell.datetime._content = dynamic;
+		row.cell.datetime._div = dynamic.entity;
+		const mounted = view._formatCollapsedCell(component, { key: 'datetime' });
+		assert.equal(mounted.children[0], snapshot);
+		assert.equal(row.cell.datetime._content, dynamic);
+		assert.equal(cloned, 2);
+		assert.equal(removed, 1);
+		// A virtual row keeps its cell wrapper after its live content is removed.
+		delete row.cell.datetime._content;
+		view._formatCollapsedCell(component, { key: 'datetime' });
+		assert.equal(removed, 2);
+	});
+
+	it('renders raw collapsed values and column labels as text instead of HTML', function() {
+		const view = grid(), row = model('one', 1, '<img src=x onerror=alert(1)>');
+		const value = view._formatCollapsedCell({ getRow: () => ({ getData: () => ({ _model: row }) }) }, { key: 'title' });
+		assert.equal(value.textContent, row.cell.title.text);
+		assert.equal(value.innerHTML, undefined);
+		const list = view._collapsedDetails([{ title: '<b>タイトル</b>', value: row.cell.title.text }]);
+		assert.equal(list.children[0].textContent, '<b>タイトル</b>');
+		assert.equal(list.children[1].textContent, row.cell.title.text);
+		assert.equal(list.children[1].innerHTML, undefined);
+	});
+
+	it('preserves selection, sort and scroll anchor while rebuilding across the compact breakpoint', function() {
+		const view = grid(), row = model('one', 1);
+		view.splice(0, undefined, [row]);
+		view.select(row);
+		let removed = 0, destroyed = 0, rebuilt = 0;
+		row.cell.title._content = { remove() { removed++; } };
+		view._renderedModels.add(row);
+		view._compact = false;
+		view._isCompact = () => true;
+		view.table = { destroy() { destroyed++; } };
+		view._build = () => { rebuilt++; view._compact = true; };
+		const anchor = { key: 'one:1:0', offset: 17, sort: 'channel', ascending: false };
+		assert.equal(view._updateCompactLayout(anchor), true);
+		assert.equal(view._saved, anchor);
+		assert.equal(view._pendingAnchor, anchor);
+		assert.equal(view.getSelectedRows()[0], row);
+		assert.equal(removed, 1);
+		assert.equal(destroyed, 1);
+		assert.equal(rebuilt, 1);
+		assert.equal(view._updateCompactLayout(anchor), false);
+	});
+
+	it('includes both dates for overnight broadcasts and escapes channel metadata', function() {
+		const view = grid(), row = model('overnight', new Date(2026, 9, 8, 23, 45).getTime());
+		row.data.end = new Date(2026, 9, 9, 0, 15).getTime();
+		row.data.seconds = 1800;
+		row.data.channel = { name: '<img src=x>', type: 'GR' };
+		let metadata;
+		const description = {};
+		const title = { children: [], appendChild(value) { this.children.push(value); } };
+		view._compactSummary({ classList: { add() {} }, querySelector: selector => selector === '.reserve-description' ? description : title,
+			insertBefore(value, before) { metadata = value; assert.equal(before, description); } }, row);
+		assert.equal(title.children[0].className, 'chinachu-program-title-link');
+		assert.equal(metadata.children[0].textContent, '<img src=x> · GR');
+		assert.equal(metadata.children[0].innerHTML, undefined);
+		assert.equal(metadata.children[1].textContent, '10/8(木) 23:45–10/9(金) 00:15 · 30分');
 	});
 
 	it('restores page scope for actions invoked by the table and ignores departed pages', function() {

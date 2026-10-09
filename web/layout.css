@@ -1,7 +1,7 @@
 /* Application layout. UI controls and tables keep their own component styles. */
 *, *::before, *::after { box-sizing: border-box; }
 html { height: 100%; }
-body { height: 100%; height: 100dvh; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; color: #333; font-size: 13px; line-height: 1.5; }
+body { height: 100%; height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; color: #333; font-size: 13px; line-height: 1.5; }
 a { color: #337ab7; text-decoration: none; }
 a:hover { text-decoration: underline; }
 button, input, select, textarea { font: inherit; }
@@ -20,6 +20,7 @@ button { cursor: pointer; }
 .app-navigation .chinachu-icon { width: 16px; height: 16px; }
 .nav-count { padding: 0 4px; background: transparent; color: #fff; border-radius: 4px; font-size: 10px; font-style: normal; }
 .nav-count:empty { display: none; }
+.app-mobile-title, .app-menu-settings, .app-sidebar-toggle, .sidebar-backdrop { display: none; }
 .app-menu-toggle { display: none; margin-left: auto; }
 body > .middle { display: grid; grid-template-columns: 132px minmax(0, 1fr); min-height: 0; min-width: 0; }
 body > .middle.noside { grid-template-columns: minmax(0, 1fr); }
@@ -38,11 +39,30 @@ body > .middle.noside { grid-template-columns: minmax(0, 1fr); }
 .main-head h1 > .flag { font-size: 11px; margin-right: 3px; padding: 1px 3px; background: rgba(0,0,0,.1); }
 .main-head h1 > small { font-size: 12px; color: rgba(255,255,255,.8); }
 .main-head-toolbar { min-width: 0; }
+.main-head-toolbar:has(.recorded-list-toolbar) { margin-left: auto; }
+.main-head-toolbar .recorded-list-toolbar { justify-content: flex-end; }
+.scheduler-label-short { display: none; }
 .schedule-type-filter { min-width: 44px; min-height: 40px; padding: 0 8px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: rgba(255,255,255,.65); font-size: 13px; }
 .schedule-type-filter[aria-pressed="true"] { color: #fff; border-bottom-color: #fff; }
 .schedule-type-filter:hover:not(:disabled) { color: #fff; background: rgba(255,255,255,.08); }
 .schedule-type-filter:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .schedule-type-filter:disabled { opacity: .5; cursor: not-allowed; }
+.schedule-settings-button { margin-inline-start: auto; }
+.schedule-day-controls { min-width: 0; max-width: 100%; }
+.schedule-day-tabs { display: flex; flex-wrap: nowrap; gap: 8px; }
+.schedule-day-tabs > wa-button { flex: none; }
+.schedule-day-controls > [hidden] { display: none !important; }
+.schedule-day-navigation { display: flex; align-items: stretch; gap: 0; min-width: 0; border: 1px solid #f4d9e7; border-radius: 8px; overflow: hidden; }
+.schedule-day-navigation button, .schedule-day-navigation select { min-height: 38px; border: 0; border-radius: 0; background: transparent; color: #fff; }
+.schedule-day-navigation button { flex: none; width: 40px; padding: 0; }
+.schedule-day-navigation button, .schedule-day-navigation select { background-repeat: no-repeat; background-position: center; background-size: 16px 16px; }
+.schedule-day-navigation .schedule-day-previous { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m15 6-6 6 6 6'/%3E%3C/svg%3E"); }
+.schedule-day-navigation .schedule-day-next { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E"); }
+.schedule-day-navigation select { flex: 1; min-width: 0; appearance: none; padding: 0 26px 0 8px; border-inline: 1px solid #ffffff40; background-position: right 8px center; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
+.schedule-day-navigation button:hover:not(:disabled) { background-color: #ffffff1f; }
+.schedule-day-navigation option { background: #fff; color: #333; }
+.schedule-day-navigation button:disabled { opacity: .5; cursor: not-allowed; }
+.schedule-day-navigation :is(button, select):focus-visible { outline: 2px solid #fff; outline-offset: -3px; }
 .main-head-toolbar wa-checkbox { --wa-form-control-value-color: #fff; }
 .main-head-toolbar .chinachu-button::part(base) { min-height: 40px; }
 .main-head-toolbar wa-checkbox::part(base) { min-height: 40px; padding-inline: 4px; }
@@ -150,6 +170,13 @@ body > .middle.noside { grid-template-columns: minmax(0, 1fr); }
 .tabulator.chinachu-virtual-grid .tabulator-header .tabulator-col[aria-sort="descending"] { color: #8b004a; }
 .chinachu-virtual-grid .tabulator-cell a { color: inherit; }
 .chinachu-grid-menu { border: 0; background: transparent; font-size: 18px; line-height: 1; width: 100%; }
+.chinachu-grid-details { display: grid; grid-template-columns: minmax(80px, 28%) minmax(0, 1fr); gap: 8px 12px; margin: 0; white-space: normal; }
+.chinachu-grid-details dt { color: #68707c; }
+.chinachu-grid-details dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.chinachu-grid-details .reserve-title { white-space: normal; }
+.chinachu-virtual-grid .tabulator-responsive-collapse { padding: 12px; border-top: 1px solid #ddd; white-space: normal; }
+.chinachu-virtual-grid .tabulator-responsive-collapse-toggle { width: 28px; height: 28px; border-radius: 4px; }
+.chinachu-virtual-grid .tabulator-responsive-collapse-toggle:focus-visible { outline: 2px solid #c24186; outline-offset: 2px; }
 .chinachu-search-form { display: grid; gap: 12px; }
 .chinachu-search-field { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: center; gap: 10px; }
 .chinachu-search-field > input, .chinachu-search-field > select { width: 100%; min-width: 0; border: 1px solid #aaa; background: #fff; padding: var(--chinachu-space-small); border-radius: var(--chinachu-radius-control); }
@@ -166,20 +193,34 @@ body > .middle.noside { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 800px) {
  .header { flex-wrap: wrap; padding-block: 5px; gap: 4px 10px; }
- .app-menu-toggle { display: inline-block; }
+ .app-menu-toggle { display: inline-block; margin-left: 0; flex: none; }
+ .app-mobile-title { display: block; flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 500; }
+ .header.menu-open .app-menu-settings:not(:empty) { display: block; flex-basis: 100%; border-top: 1px solid rgba(255,255,255,.3); padding: 6px 0; }
+ .app-menu-settings .description-switch { min-height: 40px; margin: 0; }
+ .main-head-title > h1 { display: none; }
+ .main-head-title:not(:has(.rule-kind-tabs)) { display: none; }
+ .main-head.compact-empty { display: none; }
+ .main:has(> .main-head.compact-empty) { grid-template-rows: minmax(0, 1fr); }
+ .main-head-toolbar .chinachu-toolbar > span:empty { display: none; }
  .app-navigation { display: none; flex-basis: 100%; flex-wrap: wrap; }
  .header.menu-open .app-navigation { display: flex; }
  .app-navigation > li { flex: 1 1 22%; }
  .app-navigation a { width: 100%; justify-content: center; }
- body > .middle { grid-template-columns: 44px minmax(0, 1fr); }
- .side { padding: 6px 2px; }
- .side-body wa-button { font-size: 0; }
- .side-body wa-button::part(label) { display: none; }
- .side-body wa-button::part(base) { justify-content: center; padding: 5px; }
- .side-body wa-button::part(start) { margin: 0; }
+ body > .middle { position: relative; grid-template-columns: minmax(0, 1fr); }
+ .side { display: none; }
+ .app-sidebar-toggle { display: block; max-width: 100%; min-height: 36px; padding: 4px 6px; border: 0; border-radius: 4px; background: transparent; color: inherit; font: inherit; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ .app-sidebar-toggle:hover, .app-sidebar-toggle[aria-expanded="true"] { background: #ffffff26; }
+ .app-sidebar-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
+ .middle.sidebar-open > .side { display: block; position: absolute; inset: 0 auto auto 0; width: min(280px, calc(100% - 24px)); max-height: 100%; overflow-y: auto; border-radius: 0 0 6px 6px; z-index: 202; box-shadow: 3px 0 12px #0003; }
+ .middle.sidebar-open > .sidebar-backdrop { display: block; position: absolute; inset: 0; width: 100%; height: 100%; z-index: 201; border: 0; background: #0006; }
+ .sidebar-open .side-body wa-button::part(base) { min-height: 44px; }
  .main-head { padding: 7px; gap: 6px; }
  .main-head h1 { font-size: 16px; }
  .main-head-toolbar { width: 100%; }
+
+ .main:has(.config-settings, .search-results-page) > .main-head .chinachu-toolbar { justify-content: flex-end; }
+ .scheduler-label-full { display: none; }
+ .scheduler-label-short { display: inline; }
  .layout-main, .layout-third { grid-column: span 12; }
  .layout-quarter { grid-column: span 6; }
  .layout-row { gap: 8px; }
@@ -187,14 +228,33 @@ body > .middle.noside { grid-template-columns: minmax(0, 1fr); }
  .video-control { flex-wrap: wrap; }
  .video-container { bottom: 84px !important; }
  .video-control .chinachu-slider.seek { min-width: 100px; }
+ .chinachu-virtual-grid .tabulator-cell { padding-block: 10px; }
+ .chinachu-virtual-grid .tabulator-cell:is([tabulator-field="title"], [tabulator-field="reserve_titles"]) { white-space: normal; overflow-wrap: anywhere; }
+ div.chinachu-virtual-grid .reserve-title { white-space: normal; overflow-wrap: anywhere; }
+ .chinachu-program-metadata { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 10px; margin-top: 5px; color: #68707c; font-size: 11px; font-weight: normal; line-height: 1.6; }
+ .chinachu-program-metadata > * { min-width: 0; overflow-wrap: anywhere; }
+ div.chinachu-virtual-grid .chinachu-program-summary .reserve-title { position: relative; }
+ .chinachu-program-title-link { position: absolute; inset: 0; display: block; }
+ .chinachu-program-title-link:focus-visible { outline: 2px solid #c24186; outline-offset: 2px; }
+ .chinachu-program-keywords { margin-top: 4px; color: #68707c; font-size: 11px; font-weight: normal; line-height: 1.5; white-space: normal; overflow-wrap: anywhere; }
+ .chinachu-program-genre { display: inline-block; }
+ div.chinachu-virtual-grid .chinachu-program-summary .reserve-description { margin: 6px 0 0; padding: 0; border: 0; line-height: 1.5; max-height: 3em; }
+ .chinachu-grid-menu, .reserve-details { min-height: 40px; }
+ .chinachu-virtual-grid .tabulator-responsive-collapse-toggle { width: 30px; height: 30px; }
 }
 @media (max-width: 480px) {
  .app-navigation > li { flex-basis: 40%; }
  .layout-quarter { grid-column: span 12; }
  .chinachu-search-field { grid-template-columns: 90px minmax(0, 1fr); }
+ .chinachu-grid-details { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+ .chinachu-grid-details dd { margin-bottom: 8px; }
+}
+@media (max-width: 360px) {
+ .main-head-toolbar:has(.scheduler-label-short) .chinachu-button::part(base) { padding-inline: 6px; }
 }
 
 .program-page > .page-layout { padding-inline: 12px; }
+.program-page .program-meta, .program-page .chinachu-callout { overflow-wrap: anywhere; }
 
 /* Preserve the original shell palette with the new components. */
 .side-body wa-button::part(base) { background: transparent; border-color: transparent; color: #777; }
@@ -210,3 +270,140 @@ body > .middle.noside { grid-template-columns: minmax(0, 1fr); }
 .program-panel, .storage-page .storage-card { border-radius: var(--chinachu-radius-panel); }
 .main-head h1 { font-weight: 500; }
 .tabulator-cell[tabulator-field="datetime"], .tabulator-cell[tabulator-field="duration"] { font-variant-numeric: tabular-nums; }
+
+.main-body > .search-results-page { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; padding: 0; background: #fff; }
+.search-results-page > .chinachu-virtual-grid { grid-row: 2; min-height: 0; }
+.chinachu-search-summary { display: flex; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; background: #fff; color: #68707c; min-width: 0; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; line-height: 1.6; }
+.chinachu-search-summary > span { min-width: 0; overflow-wrap: anywhere; }
+.chinachu-search-summary[hidden] { display: none; }
+
+.chinachu-rule-summary { white-space: normal; overflow-wrap: anywhere; line-height: 1.6; color: #333; font-size: 12px; font-style: normal; }
+.chinachu-rule-heading { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+.chinachu-rule-meta { display: block; color: #68707c; font-size: 11px; margin-bottom: 5px; }
+.chinachu-rule-condition { margin-top: 3px; }
+.chinachu-rule-exclusion { color: #92405b; }
+
+/* Date tabs form the upper edge of the schedule sheet. */
+.main-head .schedule-day-tabs { gap: 0; }
+.main-head .schedule-day-tabs .chinachu-button::part(base) {
+ min-height: 40px;
+ border-radius: 8px 8px 0 0;
+ border: 0;
+ box-shadow: none;
+ padding-inline: 14px;
+}
+.main-head .schedule-day-tabs .chinachu-button:not(.selected)::part(base) { background: transparent; color: #fff; }
+.main-head .schedule-day-tabs .chinachu-button:not(.selected):hover::part(base) { background: #ffffff1f; }
+.main-head .schedule-day-tabs .chinachu-button.selected::part(base) { background: #fff; color: #8b235c; font-weight: 700; }
+.main-head .schedule-day-tabs .chinachu-button:focus-visible::part(base) { outline: 2px solid currentColor; outline-offset: -4px; }
+/* Move the whole date row into the bottom padding without changing header height. */
+.main-head .schedule-day-tabs .chinachu-button { transform: translateY(7px); }
+@media (max-width: 800px) {
+ .main-head .schedule-day-tabs .chinachu-button { transform: translateY(6px); }
+}
+/* Bridge the 2px gap while preserving the raised tab and label positions. */
+.main-head .schedule-day-tabs .chinachu-button.selected { position: relative; }
+.main-head .schedule-day-tabs .chinachu-button.selected::after {
+ content: "";
+ position: absolute;
+ top: 100%;
+ inset-inline: 0;
+ height: 2px;
+ background: #fff;
+ pointer-events: none;
+}
+@media (min-width: 801px) {
+ .main-head .schedule-settings-button { transform: translateY(2px); }
+ .main-head .schedule-type-filter { position: relative; transform: translateY(7px); border-bottom-color: transparent; }
+ .main-head .schedule-type-filter[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 1px;
+  height: 2px;
+  background: #fff;
+  pointer-events: none;
+ }
+ .main-head .schedule-type-filter + .schedule-day-controls { margin-inline-start: 12px; }
+}
+
+@media (max-width: 800px) {
+ .main-head-toolbar:has(.schedule-day-controls) { width: auto; }
+ .main-head .chinachu-toolbar:has(.schedule-day-controls) { gap: 4px; }
+ .main-head .schedule-type-filter { flex: none; min-width: 40px; padding-inline: 4px; }
+ .main-head .schedule-settings-button { flex: none; }
+ .main-head .schedule-settings-button::part(label) { display: none; }
+ .main-head .schedule-settings-button .chinachu-button-icon { margin-inline-end: 0; }
+ .main-head .schedule-settings-button::part(base) { min-width: 40px; padding-inline: 8px; }
+ .main-head .schedule-day-controls { flex: none; margin-inline-start: 16px; }
+ .main-head .schedule-day-tabs { flex-wrap: wrap; }
+ .main-head .schedule-day-tabs .chinachu-button::part(base) { padding-inline: 8px; }
+ .main-head .schedule-toolbar-split .schedule-day-controls { order: 1; }
+}
+
+/* Keep the date row together when the settings label changes at the compact breakpoint. */
+.main-head-toolbar:has(.schedule-day-controls) { max-width: 100%; margin-inline-start: auto; }
+.main-head .schedule-toolbar-split .schedule-day-controls { order: 1; margin-inline-start: 0; }
+@media (max-width: 800px) {
+ .main-head .chinachu-toolbar:has(.schedule-day-controls):not(.schedule-toolbar-split) .schedule-type-filter {
+  position: relative;
+  transform: translateY(6px);
+  border-bottom-color: transparent;
+ }
+ .main-head .chinachu-toolbar:has(.schedule-day-controls):not(.schedule-toolbar-split) .schedule-type-filter[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 1px;
+  height: 2px;
+  background: #fff;
+  pointer-events: none;
+ }
+ .main-head .chinachu-toolbar:has(.schedule-day-controls):not(.schedule-toolbar-split) .schedule-settings-button { transform: translateY(1px); }
+}
+
+.main-head .chinachu-toolbar:not(.schedule-toolbar-split) .schedule-day-controls.schedule-today-short { margin-inline-start: -6px; }
+@media (max-width: 800px) {
+ .main-head .chinachu-toolbar:not(.schedule-toolbar-split) .schedule-day-controls.schedule-today-short { margin-inline-start: -2px; }
+}
+/* The compact date control has no lowered tab edge; align the whole row. */
+@media (max-width: 451px) {
+ .main-head .chinachu-toolbar:has(.schedule-day-controls.is-compact):not(.schedule-toolbar-split) .schedule-type-filter,
+ .main-head .chinachu-toolbar:has(.schedule-day-controls.is-compact):not(.schedule-toolbar-split) .schedule-settings-button { transform: none; }
+}
+
+/* Collapse broadcast filters only when the compact date row needs the space. */
+.schedule-type-filter[hidden], .schedule-type-menu[hidden] { display: none !important; }
+.schedule-type-menu { flex: none; }
+.schedule-type-toggle { min-height: 40px; padding: 0 8px; border: 1px solid #f4d9e7; border-radius: 4px; background: transparent; color: white; font-size: 13px; white-space: nowrap; }
+.schedule-type-toggle:focus-visible { outline: 2px solid white; outline-offset: -3px; }
+/* Full-row choices keep the compact broadcast menu easy to scan and tap. */
+.schedule-type-options { position: fixed; inset: auto; box-sizing: border-box; margin: 0; width: 240px; max-width: calc(100vw - 8px); padding: 0; overflow: hidden; border: 1px solid #e5dce1; border-radius: 10px; background: white; color: #333; box-shadow: 0 6px 20px #0003; }
+.schedule-type-options strong { display: block; padding: 14px 16px; font-size: 13px; }
+.schedule-type-options label { display: flex; justify-content: space-between; align-items: center; gap: 16px; min-height: 44px; padding: 0 16px; border-top: 1px solid #eee8eb; font-size: 14px; cursor: pointer; }
+.schedule-type-options label:has(input:checked) { background: #fbedf4; }
+.schedule-type-options label:hover { background: #f6f2f4; }
+.schedule-type-options label:has(input:checked):hover { background: #f6dfeb; }
+.schedule-type-options label:has(input:focus-visible) { outline: 2px solid #c24186; outline-offset: -3px; }
+.schedule-type-options input { appearance: none; flex: none; width: 20px; height: 20px; margin: 0; border: 0; border-radius: 0; background: transparent; cursor: pointer; }
+.schedule-type-options input:checked { background: center / 20px 20px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c24186' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12 4 4L19 6'/%3E%3C/svg%3E"); }
+.schedule-type-options input:focus-visible { outline: none; }
+
+.main-head .chinachu-toolbar:not(.schedule-toolbar-split) .schedule-type-menu:not([hidden]) + .schedule-day-controls.schedule-today-short { margin-inline-start: 0; }
+
+@media (max-width: 800px) {
+ .main-head-title:has(.rule-kind-tabs) { flex: none; }
+ .main-head-toolbar:has(.scheduler-label-short) { width: auto; margin-inline-start: auto; }
+ .main-head-toolbar:has(.scheduler-label-short) .chinachu-toolbar { flex-wrap: nowrap; gap: 4px; }
+ .main-head-toolbar:has(.scheduler-label-short) .chinachu-button::part(base) { padding-inline: 6px; }
+ .main-head-toolbar:has(.scheduler-label-short) hr { flex: none; width: 0; height: 24px; margin: 0 2px; border: 0; border-inline-start: 1px solid #ffffff60; }
+}
+
+@media (max-width: 520px) {
+ .main-head-toolbar:has(.scheduler-label-short) { width: 100%; margin-inline-start: 0; }
+ .main-head-toolbar:has(.scheduler-label-short) hr { margin-inline-start: auto; }
+}
+
+@media (max-width: 800px) and (orientation: portrait) {
+ .main-head-toolbar:has(.scheduler-label-short) hr { border-inline-start: 0; padding-inline-start: 1px; }
+}

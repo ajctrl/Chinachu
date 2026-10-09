@@ -131,12 +131,13 @@ Chinachu.definePage({
 		if (event.target && event.target.closest && event.target.closest('a, button, input, select, .chinachu-grid-menu')) return;
 		if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
 		if (ChinachuPreferences.getClickAction() !== 'skip') {
+			if (this.grid && this.grid._compact) return;
 			window.location.href = '#!/program/view/id=' + row.data.id + '/';
 			return;
 		}
 		if (event.detail > 1) return;
 		this.manualUnskipClick = row.data.isManualReserved && row.data.isSkip ? row.data : null;
-		if (row.data.isManualReserved && !row.data.isSkip) {
+		if (!(this.grid && this.grid._compact) && row.data.isManualReserved && !row.data.isSkip) {
 			if (!ChinachuReservationActions.isPending(row.data.id)) {
 				this.showSkipNotice('手動予約をスキップするには、ダブルクリックしてください。', null, true);
 			}
@@ -145,6 +146,7 @@ Chinachu.definePage({
 		this.setProgramSkip(row.data, !row.data.isSkip);
 	},
 	onRowDoubleClick: function(event, row) {
+		if (this.grid && this.grid._compact) return;
 		if (ChinachuPreferences.getClickAction() !== 'skip' || !row.data.isManualReserved || row.data.isSkip) return;
 		if (event.button && event.button !== 0) return;
 		if (event.target && event.target.closest && event.target.closest('a, button, input, select, .chinachu-grid-menu')) return;

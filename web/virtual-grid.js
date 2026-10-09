@@ -23,23 +23,35 @@
 		this._build();
 		return this;
 	};
-	Grid.prototype._build = function() {
+	Grid.prototype._columns = function() {
 		var grid = this;
 		var options = this._opt;
+		var primary = options.cols.find(function(column) { return column.key === 'title' || column.key === 'reserve_titles'; }) || options.cols[0];
 		var columns = options.cols.map(function(column) {
 			return {
-				title: column.label, field: column.key, width: column.width, minWidth: column.width || 160,
+				title: column.label,
+				field: column.key, width: column.width, minWidth: column.width || 128,
+				visible: !grid._compact || column === primary,
+				responsive: column === primary ? 0 : column.key === 'channel' || column.key === 'datetime' ? 1 : 2,
 				headerSort: !column.disableSort, resizable: !column.disableResize,
 				hozAlign: column.align || 'left', variableHeight: true,
-				formatter: function(cell) { return grid._formatCell(cell, column); },
+				formatter: function(cell) {
+					// Responsive collapse supplies a lightweight cell. Keep its snapshot
+					// separate from the mounted cell and its DynamicTime lifecycle.
+					return typeof cell.getField === 'function' ? grid._formatCell(cell, column) : grid._formatCollapsedCell(cell, column);
+				},
 				sorter: function(a, b) {
 					if (typeof a === 'number' && typeof b === 'number') return a - b;
 					return String(a == null ? '' : a).localeCompare(String(b == null ? '' : b), 'ja', { numeric: true });
 				}
 			};
 		});
+		if (!this._compact) columns.unshift({
+			title: '', field: '_collapse', width: 40, minWidth: 40, responsive: 0,
+			headerSort: false, resizable: false, formatter: 'responsiveCollapse'
+		});
 		if (!options.disableSelect) columns.unshift({
-			title: '', field: '_selection', width: 36, minWidth: 36, headerSort: false, resizable: false,
+			title: '', field: '_selection', width: 36, minWidth: 36, responsive: 0, headerSort: false, resizable: false,
 			titleFormatter: function() {
 				var checkbox = grid._selectAll = document.createElement('input');
 				checkbox.type = 'checkbox';
@@ -59,8 +71,8 @@
 				return checkbox;
 			}
 		});
-		if (options.disableSelect) columns.push({
-			title: '', field: '_menu', width: 34, minWidth: 34, headerSort: false, resizable: false,
+		if (options.disableSelect || this._compact && options.compactFormatter) columns.push({
+			title: '', field: '_menu', width: 34, minWidth: 34, responsive: 0, headerSort: false, resizable: false,
 			formatter: function(cell) {
 				var model = cell.getRow().getData()._model;
 				if (!model.menuItems || !model.menuItems.length) return '';
@@ -68,7 +80,7 @@
 				button.type = 'button';
 				button.className = 'chinachu-grid-menu';
 				button.textContent = '⋮';
-				button.setAttribute('aria-label', '番組の操作');
+				button.setAttribute('aria-label', options.compactFormatter ? 'ルールの操作' : '番組の操作');
 				button.addEventListener('click', function(event) {
 					event.stopPropagation();
 					var rect = button.getBoundingClientRect();
@@ -77,28 +89,64 @@
 				return button;
 			}
 		});
+		return columns;
+	};
+	Grid.prototype._isCompact = function() {
+		return this._opt.cols.some(function(column) { return column.key === 'title' || column.key === this._opt.compactColumn; }, this) &&
+			!!root.matchMedia && root.matchMedia('(max-width: 800px)').matches;
+	};
+	Grid.prototype._updateCompactLayout = function(anchor) {
+		if (this._compact === this._isCompact()) return false;
+		if (this._resizeObserver) this._resizeObserver.disconnect();
+		if (this._body) this._body.removeEventListener('scroll', this._onScroll);
+		this._renderedModels.forEach(this._disposeModel.bind(this));
+		this.table.destroy();
+		this._ready = false;
+		this._lastData = null;
+		this._saved = this._pendingAnchor = anchor;
+		this._build();
+		return true;
+	};
+	Grid.prototype._build = function() {
+		var grid = this, options = this._opt;
+		this._compact = this._isCompact();
+		var columns = this._columns();
 		var initialSort = this._saved && options.cols.some(function(col) { return col.key === grid._saved.sort; }) ?
 			[{ column: this._saved.sort, dir: this._saved.ascending === false ? 'desc' : 'asc' }] : [];
 		// Capture the visible program before Tabulator remeasures wrapped cells on resize.
 		if (root.ResizeObserver) {
 			this._width = this.element.getBoundingClientRect().width;
 			this._resizeObserver = new root.ResizeObserver(function() {
-				var width = grid.element.getBoundingClientRect().width;
+				var width = grid._body ? grid._body.clientWidth : grid.element.getBoundingClientRect().width;
 				if (!grid._ready || grid._disposed || width === grid._width) return;
 				grid._width = width;
 				grid._resizeAnchor = grid._resizeAnchor || grid._anchor();
 				if (grid._resizeFrame) return;
-				grid._resizeFrame = root.requestAnimationFrame(function() {
+				grid._resizeFrame = root.requestAnimationFrame(function resize() {
+					if (grid._rendering && !grid._disposed) {
+						grid._resizeFrame = root.requestAnimationFrame(resize);
+						return;
+					}
 					grid._resizeFrame = null;
 					var anchor = grid._resizeAnchor;
 					grid._resizeAnchor = null;
-					if (!grid._disposed) grid._restore(anchor).catch(function(error) { console.error(error); });
+					if (!grid._disposed) {
+						// Tabulator bases collapse thresholds on the header width. Match
+						// the scrollable body so its scrollbar does not hide the last cell.
+						grid._header.style.maxWidth = grid._body.clientWidth + 'px';
+						if (grid._updateCompactLayout(anchor)) return;
+						grid.table.redraw(true);
+						grid._restore(anchor).catch(function(error) { console.error(error); });
+					}
 				});
 			});
 			this._resizeObserver.observe(this.element);
 		}
 		this.table = new root.Tabulator(this.element, {
 			index: '_key', height: '100%', layout: 'fitColumns', renderVertical: 'virtual', renderVerticalBuffer: 300,
+			headerVisible: !this._compact,
+			responsiveLayout: this._compact ? false : 'collapse', responsiveLayoutCollapseStartOpen: false,
+			responsiveLayoutCollapseFormatter: function(fields) { return grid._collapsedDetails(fields); },
 			placeholder: '該当する項目がありません', columns: columns, data: [],
 			selectableRows: false, initialSort: initialSort,
 			rowFormatter: function(row) {
@@ -116,8 +164,11 @@
 			if (grid._disposed) { grid.table.destroy(); return; }
 			grid._ready = true;
 			grid._body = grid.element.querySelector('.tabulator-tableholder');
+			grid._header = grid.element.querySelector('.tabulator-header');
+			if (grid._resizeObserver) grid._resizeObserver.observe(grid._body);
 			grid._body.tabIndex = 0;
 			grid._body.addEventListener('scroll', grid._onScroll = function() { grid._closeMenu(); });
+			grid._updateSelectionHeader();
 			grid._queueRender();
 		});
 		this.table.on('rowClick', function(event, row) { grid._click(event, row.getData()._model, false); });
@@ -141,14 +192,104 @@
 		this._menu = null;
 	};
 	Grid.prototype._click = function(event, model, doubleClick) {
-		if (event.target.closest && event.target.closest('a, button, input, select, wa-button')) return;
+		if (event.target.closest && event.target.closest('a, button, input, select, wa-button, [role="button"], .tabulator-responsive-collapse')) return;
 		if (!doubleClick && !this._opt.disableSelect) this[model.isSelected ? 'deselect' : 'select'](model);
 		var callback = doubleClick ? 'onDblClick' : 'onClick';
 		if (model[callback]) model[callback](event, model, this);
 		if (this._opt[callback]) this._opt[callback](event, model, this);
 	};
+	Grid.prototype._formatCollapsedCell = function(component, column) {
+		var model = component.getRow().getData()._model;
+		var cell = model.cell[column.key];
+		var content = document.createElement('div');
+		if (!cell || typeof cell !== 'object') content.textContent = cell == null ? '' : cell;
+		else if (cell.html !== undefined) content.innerHTML = cell.html;
+		else if (cell.createElement) {
+			// Clone a snapshot so collapsing never steals a live cell or retains
+			// timers for a second copy of the same value.
+			if (cell._div && cell._content) content.appendChild(cell._div.cloneNode(true));
+			else {
+				var view = cell.createElement();
+				try { content.appendChild((view.entity || view).cloneNode(true)); }
+				finally { view.remove(); }
+			}
+		} else if (cell.element) content.appendChild((cell.element.entity || cell.element).cloneNode(true));
+		else content.textContent = cell.text == null ? '' : cell.text;
+		return content;
+	};
+	Grid.prototype._compactSummary = function(content, model) {
+		content.classList.add('chinachu-program-summary');
+		var metadata = document.createElement('div');
+		metadata.className = 'chinachu-program-metadata';
+		var program = model.data || {}, channel = program.channel || {};
+		var title = content.querySelector('.reserve-title');
+		if (!title) {
+			title = document.createElement('div');
+			title.className = 'reserve-title';
+			while (content.firstChild) title.appendChild(content.firstChild);
+			content.appendChild(title);
+		}
+		var link = document.createElement('a');
+		link.className = 'chinachu-program-title-link';
+		link.href = '#!/program/view/id=' + encodeURIComponent(program.id) + '/';
+		link.setAttribute('aria-label', '番組の詳細を見る：' + (program.title || '番組'));
+		title.appendChild(link);
+		var station = document.createElement('span');
+		station.textContent = [channel.name || channel.id, channel.type].filter(Boolean).join(' · ');
+		if (station.textContent) metadata.appendChild(station);
+		if (model.cell.category) {
+			var genre = this._formatCollapsedCell({ getRow: function() {
+				return { getData: function() { return { _model: model }; } };
+			} }, { key: 'category' });
+			genre.className = 'chinachu-program-genre';
+			metadata.appendChild(genre);
+		}
+		var start = new Date(program.start), end = new Date(program.end);
+		function date(value) { return (value.getMonth() + 1) + '/' + value.getDate() + '(' + ['日', '月', '火', '水', '木', '金', '土'][value.getDay()] + ')'; }
+		function time(value) { return String(value.getHours()).padStart(2, '0') + ':' + String(value.getMinutes()).padStart(2, '0'); }
+		var timing = [];
+		if (program.start != null && !isNaN(start.getTime())) {
+			var range = date(start) + ' ' + time(start);
+			if (program.end != null && !isNaN(end.getTime())) {
+				range += '–' + (start.toDateString() === end.toDateString() ? '' : date(end) + ' ') + time(end);
+			}
+			timing.push(range);
+		}
+		if (typeof program.seconds === 'number' && isFinite(program.seconds)) timing.push(Math.round(program.seconds / 60 * 10) / 10 + '分');
+		if (timing.length) {
+			var broadcast = document.createElement('span');
+			broadcast.textContent = timing.join(' · ');
+			metadata.appendChild(broadcast);
+		}
+		content.insertBefore(metadata, content.querySelector('.reserve-description'));
+		['matchedKeywords', 'excludedKeywords'].forEach(function(key) {
+			var cell = model.cell[key];
+			var text = cell && typeof cell === 'object' ? cell.text : cell;
+			if (text == null || !String(text).trim()) return;
+			var line = document.createElement('div');
+			line.className = 'chinachu-program-keywords';
+			line.textContent = (key === 'matchedKeywords' ? '該当キーワード：' : '除外キーワード：') + text;
+			content.appendChild(line);
+		});
+	};
+	Grid.prototype._collapsedDetails = function(fields) {
+		if (!fields.length) return '';
+		var list = document.createElement('dl');
+		list.className = 'chinachu-grid-details';
+		fields.forEach(function(field) {
+			var label = document.createElement('dt');
+			label.textContent = field.title;
+			var value = document.createElement('dd');
+			if (field.value && field.value.nodeType) value.appendChild(field.value);
+			else value.textContent = field.value == null ? '' : field.value;
+			list.appendChild(label);
+			list.appendChild(value);
+		});
+		return list;
+	};
 	Grid.prototype._formatCell = function(component, column) {
 		var model = component.getRow().getData()._model;
+		if (this._compact && column.key === this._opt.compactColumn) return this._opt.compactFormatter(model);
 		var cell = model.cell[column.key];
 		if (!cell || typeof cell !== 'object') cell = model.cell[column.key] = { text: cell == null ? '' : cell };
 		if (cell._content) { cell._content.remove(); delete cell._content; }
@@ -160,6 +301,7 @@
 		if (cell.html !== undefined) content.innerHTML = cell.html;
 		else if (cell.element) content.appendChild(cell.element.entity || cell.element);
 		else content.textContent = cell.text == null ? '' : cell.text;
+		if (this._compact && column.key === 'title') this._compactSummary(content, model);
 		if (cell.createElement) this._createContent(cell);
 		if (cell.onClick) element.onclick = function(event) { cell.onClick(event, cell, this); }.bind(this);
 		if (cell.postProcess) cell.postProcess(element, cell, this);
@@ -172,6 +314,24 @@
 	Grid.prototype._syncContent = function() {
 		this._renderedModels.forEach(function(model) {
 			var mounted = model._tr && model._tr.isConnected;
+			if (mounted) {
+				var toggle = model._tr.querySelector('.tabulator-responsive-collapse-toggle');
+				if (toggle && !toggle.hasAttribute('role')) {
+					toggle.setAttribute('role', 'button');
+					toggle.tabIndex = 0;
+					toggle.setAttribute('aria-label', '行の追加情報');
+					toggle.addEventListener('click', function() {
+						toggle.setAttribute('aria-expanded', String(!toggle.classList.contains('open')));
+					}, true);
+					toggle.addEventListener('keydown', function(event) {
+						if (event.key !== 'Enter' && event.key !== ' ') return;
+						event.preventDefault();
+						event.stopPropagation();
+						toggle.click();
+					});
+				}
+				if (toggle) toggle.setAttribute('aria-expanded', String(toggle.classList.contains('open')));
+			}
 			Object.keys(model.cell).forEach(function(key) {
 				var cell = model.cell[key];
 				if (!cell || !cell.createElement) return;

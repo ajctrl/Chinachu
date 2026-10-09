@@ -14,6 +14,7 @@ function browser() {
 			setItem: function(key, value) { if (failStorage) throw Error('denied'); values[key] = value; }
 		} };
 		function Element(tag) { this.tagName = tag; this.children = []; this.handlers = {}; }
+		Element.prototype.replaceChildren = function() { this.children = []; };
 		Element.prototype.appendChild = function(child) { this.children.push(child); };
 		Element.prototype.setAttribute = function(key, value) { this[key] = value; };
 		Element.prototype.addEventListener = function(key, fn) { this.handlers[key] = fn; };
@@ -147,7 +148,7 @@ describe('browser display preferences and reservation descriptions', function() 
 			};
 		`, ctx);
 		vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/page/reserves/list.js'), 'utf8'), ctx);
-		vm.runInContext('P.view = { content: { update: function() {} } }; P.self = { query: {} }; P.draw();', ctx);
+		vm.runInContext('P.view = { toolbar: { add: function() {} }, content: { update: function() {}, appendChild: function() {} } }; P.self = { query: {} }; P.draw();', ctx);
 		assert.ok(!ctx.P.grid.rows[0].cell.title.html.includes('reserve-description'));
 		vm.runInContext('ChinachuPreferences.set(true); P.drawMain();', ctx);
 		assert.match(ctx.P.grid.rows[0].cell.title.html, /&lt;img/);
@@ -176,7 +177,7 @@ describe('browser display preferences and reservation descriptions', function() 
 				ChinachuPreferences.set(false, scope);
 			`, ctx);
 			vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/page/' + page + '.js'), 'utf8'), ctx);
-			vm.runInContext("P.view = { content: { update: function() {} } }; P.self = { query: { skip: 1 } }; P.draw();", ctx);
+			vm.runInContext("P.view = { toolbar: { add: function() {} }, content: { update: function() {}, appendChild: function() {} } }; P.self = { query: { skip: 1 } }; P.draw();", ctx);
 			const row = () => ctx.P.grid.rows.find(row => row.data.id === 'one');
 			assert.ok(!row().cell.title.html.includes('reserve-description'), page);
 			vm.runInContext('ChinachuPreferences.set(true, scope); P.drawMain();', ctx);

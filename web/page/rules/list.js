@@ -61,10 +61,20 @@ Chinachu.definePage({
 	}
 	,
 	initToolbar: function _initToolbar() {
+		var schedulerLabel = Chinachu.t('EXECUTE {0}', [Chinachu.t('SCHEDULER')]);
+		var schedulerLabels = document.createElement('span');
+		var fullLabel = document.createElement('span');
+		fullLabel.className = 'scheduler-label-full';
+		fullLabel.textContent = schedulerLabel;
+		var shortLabel = document.createElement('span');
+		shortLabel.className = 'scheduler-label-short';
+		shortLabel.textContent = '実行';
+		schedulerLabels.append(fullLabel, shortLabel);
 		this.view.toolbar.add({
 			key: 'execute-scheduler',
 			ui : new ChinachuUI.ActionButton({
-				label  : Chinachu.t('EXECUTE {0}', [Chinachu.t('SCHEDULER')]),
+				label  : schedulerLabels,
+				attribute: { 'aria-label': schedulerLabel, title: schedulerLabel },
 				icon   : './icons/calendar-import.png',
 				onClick: function() {
 					new chinachu.ui.ExecuteScheduler();
@@ -77,7 +87,7 @@ Chinachu.definePage({
 		this.view.toolbar.add({
 			key: 'add',
 			ui : new ChinachuUI.ActionButton({
-				label  : this.isExclusion ? '共通除外ルールを追加' : Chinachu.t('ADD'),
+				label  : Chinachu.t('ADD'),
 				icon   : './icons/plus-circle.png',
 				onClick: function() {
 					new chinachu.ui.NewRule(this.isExclusion);
@@ -230,6 +240,8 @@ Chinachu.definePage({
 
 		this.grid = new ChinachuVirtualGrid({
 			multiSelect: true,
+			compactColumn: 'reserve_titles',
+			compactFormatter: this.formatCompactRule.bind(this),
 			stateKey: this.isExclusion ? 'exclusion-rules' : 'rules',
 			legacyPage: parseInt(this.self.query.page, 10) || 0,
 			fill       : true,
@@ -314,6 +326,40 @@ Chinachu.definePage({
 		return this;
 	}
 	,
+	formatCompactRule: function(model) {
+		var rule = model.data;
+		var card = document.createElement('div');
+		card.className = 'chinachu-rule-summary';
+		function line(text, className) {
+			var element = document.createElement('div');
+			element.className = className || 'chinachu-rule-condition';
+			element.textContent = text;
+			card.appendChild(element);
+		}
+		function present(key) {
+			var value = rule[key];
+			if (Array.isArray(value)) return value.length > 0;
+			if (value && typeof value === 'object') return Object.keys(value).some(function(key) { return value[key] != null && value[key] !== ''; });
+			return value != null && value !== '';
+		}
+		var heading = present('reserve_titles') ? (this.isExclusion ? '除外タイトル：' : 'タイトル：') + model.cell.reserve_titles.text :
+			[present('channels') ? model.cell.channels.text : '', (rule.categories || []).join('、'), (rule.types || []).join('・')].filter(Boolean).join(' / ') || '条件指定ルール';
+		line(heading, 'chinachu-rule-heading');
+		line(['#' + model.cell.n.text, rule.isDisabled ? '無効' : '有効', this.isExclusion ? '共通除外' : '',
+			(rule.types || []).join('・'), present('channels') ? model.cell.channels.text : '', (rule.categories || []).join('、')].filter(Boolean).join(' · '), 'chinachu-rule-meta');
+		var labels = {
+			reserve_descriptions: this.isExclusion ? '除外説明文' : '対象説明文',
+			ignore_titles: '無視タイトル', ignore_descriptions: '無視説明文', ignore_channels: '無視チャンネル',
+			reserve_flags: '対象フラグ', ignore_flags: '無視フラグ', hour: '時間帯', duration: '長さ（分）', recorded_format: '録画ファイル名'
+		};
+		Object.keys(labels).forEach(function(key) {
+			if (present(key) && !(this.isExclusion && key === 'recorded_format')) {
+				line(labels[key] + '：' + model.cell[key].text, key.indexOf('ignore_') === 0 ? 'chinachu-rule-condition chinachu-rule-exclusion' : 'chinachu-rule-condition');
+			}
+		}, this);
+		if (present('reserve_titles') && present('reserve_descriptions')) line('タイトル・説明文の結合：' + model.cell.reserve_fields_operator.text);
+		return card;
+	},
 	drawMain: function(preserveSelection) {
 
 		// Schedule updates only change channel labels; keep selection by rule identity.
@@ -337,6 +383,9 @@ Chinachu.definePage({
 				}
 			};
 
+			row.menuItems = [{ label: '編集', onSelect: function() {
+				new chinachu.ui.EditRule(this.getRules().indexOf(rule), this.isExclusion);
+			}.bind(this) }];
 			if (rule.isDisabled) row.className = 'disabled';
 
 			if (rule.types) {
@@ -517,7 +566,7 @@ Chinachu.definePage({
 			}
 
 			rows.push(row);
-		});
+		}, this);
 
 		this.grid.splice(0, void 0, rows).forEach(function(row) {
 			this.grid.deselect(row);

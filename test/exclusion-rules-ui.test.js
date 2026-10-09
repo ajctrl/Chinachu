@@ -26,7 +26,11 @@ function browser() {
 			off: function(target, name) { delete handlers[name]; },
 			emit: function(target, name) { events.push(name); if (handlers[name]) handlers[name](); }
 		};
-		var document = {};
+		var document = { createElement: function(tag) {
+			return { tagName: tag, children: [], append: function() {
+				this.children.push.apply(this.children, arguments);
+			} };
+		} };
 		function Button(options) { this.options = options; }
 		Button.prototype.disable = function() { this.disabled = true; return this; };
 		Button.prototype.enable = function() { this.disabled = false; return this; };

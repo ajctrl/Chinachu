@@ -7,7 +7,8 @@ const vm = require('node:vm');
 function loadPage(name, globals = {}) {
 	let page;
 	vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../web/page/', name + '.js'), 'utf8'), {
-		Chinachu: { definePage(methods) { page = methods; } }, URL, clearTimeout, setTimeout, ...globals
+		URL, clearTimeout, setTimeout, ...globals,
+		Chinachu: { ...globals.Chinachu, definePage(methods) { page = methods; } }
 	});
 	return page;
 }
@@ -55,6 +56,62 @@ describe('program description links', function() {
 		const rendered = render(text);
 		assert.equal(rendered.textContent, text);
 		assert.equal(rendered.children.filter(node => node.tagName === 'a').length, 0);
+	});
+});
+
+describe('schedule table date navigation', function() {
+	function setup(day) {
+		const location = {};
+		const page = loadPage('schedule/table', {
+			location, Chinachu: { serializeQuery: query => new URLSearchParams(query).toString() }
+		});
+		page.self = { query: { day, channel: 'test-channel' } };
+		page.time = new Date(2026, 9, 31, 12).getTime();
+		page.view = {
+			dayButtons: Array.from({ length: 7 }, () => ({
+				setLabel(value) { this.label = value; },
+				select() { this.selected = true; }, unselect() { this.selected = false; }
+			})),
+			daySelect: { options: Array.from({ length: 7 }, () => ({})) },
+			previousDay: {}, nextDay: {}
+		};
+		return { page, location };
+	}
+	it('keeps the dropdown and desktop selection aligned and labels dates across a month boundary', function() {
+		const { page } = setup('1');
+		page.updateDayControls();
+		assert.equal(page.view.dayButtons[0].label, '10/31(土) 12時〜');
+		assert.equal(page.view.dayButtons[1].label, '11/1(日)');
+		assert.equal(page.view.daySelect.options[1].textContent, '11/1(日)');
+		assert.equal(page.view.daySelect.value, '1');
+		assert.deepEqual(page.view.dayButtons.map(button => button.selected), [false, true, false, false, false, false, false]);
+		page.time += 3600000;
+		page.updateDayControls();
+		assert.equal(page.view.daySelect.options[0].textContent, '10/31(土) 13時〜');
+	});
+	it('disables navigation at the ends of the week and rejects invalid URL days', function() {
+		const { page } = setup('0');
+		page.updateDayControls();
+		assert.equal(page.view.previousDay.disabled, true);
+		assert.equal(page.view.nextDay.disabled, false);
+		page.self.query.day = '6';
+		page.updateDayControls();
+		assert.equal(page.view.previousDay.disabled, false);
+		assert.equal(page.view.nextDay.disabled, true);
+		for (const invalid of ['-1', '7', 'NaN', '1x', '1.5']) {
+			page.self.query.day = invalid;
+			page.updateDayControls();
+			assert.equal(page.view.daySelect.value, '0');
+			assert.equal(page.view.previousDay.disabled, true);
+		}
+	});
+	it('changes the day while retaining other URL parameters and rejects out-of-range navigation', function() {
+		const { page, location } = setup('0');
+		page.selectDay(6);
+		assert.equal(location.hash, '!/schedule/table/day=6&channel=test-channel/');
+		for (const invalid of [-1, 7, NaN, 1.5]) page.selectDay(invalid);
+		assert.equal(page.self.query.day, '6');
+		assert.equal(location.hash, '!/schedule/table/day=6&channel=test-channel/');
 	});
 });
 

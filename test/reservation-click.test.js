@@ -225,6 +225,23 @@ describe('reservation click actions', function() {
 		assert.equal(ctx.window.location.href, '#!/reserves/list/');
 		assert.equal(ctx.requests.length, 0);
 	});
+	it('uses one click for compact manual reservations only when skip is enabled', function() {
+		const ctx = browser();
+		ctx.P.grid = { _compact: true };
+		ctx.window.location.href = '#!/reserves/list/';
+		const row = { data: ctx.global.chinachu.reserves[2] };
+		ctx.P.onRowClick({ detail: 1 }, row);
+		assert.equal(ctx.window.location.href, '#!/reserves/list/');
+		assert.equal(ctx.requests.length, 0);
+		ctx.ChinachuPreferences.setClickAction('skip');
+		ctx.P.onRowClick({ detail: 1 }, row);
+		assert.equal(ctx.requests.length, 1);
+		assert.match(ctx.requests[0].url, /manual\/skip.json$/);
+		complete(ctx, 0, true);
+		ctx.P.onRowClick({ detail: 2 }, row);
+		ctx.P.onRowDoubleClick({ detail: 2 }, row);
+		assert.equal(ctx.requests.length, 1);
+	});
 	it('skips manual reservations on double click, unskips on single click and supports undo', function() {
 		const ctx = browser();
 		ctx.ChinachuPreferences.setClickAction('skip');

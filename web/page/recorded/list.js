@@ -15,6 +15,7 @@ Chinachu.definePage({
 	,
 	deinit: function() {
 
+		this.view.toolbar.entity.classList.remove('recorded-list-toolbar');
 		this.descriptionSwitch.destroy();
 		this.unsubscribeDescriptionFontSize();
 
@@ -34,6 +35,7 @@ Chinachu.definePage({
 	,
 	initToolbar: function _initToolbar() {
 
+		this.view.toolbar.entity.classList.add('recorded-list-toolbar');
 		this.descriptionSwitch = ChinachuPreferences.createSwitch(this.drawMain.bind(this), 'recorded');
 		this.unsubscribeDescriptionFontSize = ChinachuPreferences.subscribeDescriptionFontSize(this.drawMain.bind(this));
 		var control = new ChinachuUI.ElementView({ tagName: 'span' });

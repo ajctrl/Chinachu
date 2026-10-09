@@ -130,7 +130,6 @@
 			"icon"       : "./icons/controller-d-pad.png",
 			"label"      : "preference",
 			"defaultPage": "config",
-			"pageIndex"  : ["config"],
 			"page"       : {
 				"config": {
 					"label": "Config",

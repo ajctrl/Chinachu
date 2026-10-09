@@ -55,8 +55,10 @@ Chinachu.definePage({
 	,
 	draw: function() {
 
-		this.view.content.className = '';
+		this.view.content.className = 'search-results-page';
 		this.view.content.update();
+		this.searchSummary = null;
+		ChinachuSearchForm.updateSummary(this, true);
 
 		this.grid = new ChinachuVirtualGrid({
 			multiSelect  : false,
@@ -117,6 +119,7 @@ Chinachu.definePage({
 	drawMain: function() {
 
 		if (!this.grid) return this;
+		ChinachuSearchForm.updateSummary(this, true);
 
 		var rows = [];
 		var showDescription = ChinachuPreferences.get('recorded.search');

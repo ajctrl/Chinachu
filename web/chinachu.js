@@ -126,6 +126,7 @@
 			label: 'メニュー', className: 'app-menu-toggle',
 			attribute: { 'aria-expanded': 'false', 'aria-controls': 'app-navigation' },
 			onSelect: function () {
+				setSidebarOpen(false);
 				var open = app.view.header.classList.toggle('menu-open');
 				menuToggle.setAttribute('aria-expanded', String(open));
 			}
@@ -134,6 +135,97 @@
 			.insertTo(app.view.header);
 		Chinachu.on(nav, 'click', function (event) {
 			if (!event.target.closest('a')) return;
+			app.view.header.classList.remove('menu-open');
+			menuToggle.setAttribute('aria-expanded', 'false');
+		});
+		app.view.side.entity.id = 'app-sidebar';
+		var sidebarToggle = document.createElement('button');
+		sidebarToggle.type = 'button';
+		sidebarToggle.className = 'app-sidebar-toggle';
+		sidebarToggle.setAttribute('aria-expanded', 'false');
+		sidebarToggle.setAttribute('aria-controls', 'app-sidebar');
+		Chinachu.on(sidebarToggle, 'click', function() {
+			setSidebarOpen(!app.view.middle.entity.classList.contains('sidebar-open'));
+		});
+		var sidebarBackdrop = ChinachuUI.createElement('button', {
+			type: 'button', class: 'sidebar-backdrop', 'aria-label': 'サイドバーを閉じる', tabindex: '-1'
+		}).insertTo(app.view.middle.entity);
+		function setSidebarOpen(open) {
+			open = !!open && compactHeader.matches && !app.view.middle.entity.classList.contains('noside');
+			app.view.middle.entity.classList.toggle('sidebar-open', open);
+			app.view.main.entity.inert = open;
+			sidebarToggle.setAttribute('aria-expanded', String(open));
+			sidebarToggle.setAttribute('aria-label', app.pm.title.textContent + (open ? '：ページ切替を閉じる' : '：ページを切り替える'));
+			if (open) {
+				app.view.header.classList.remove('menu-open');
+				menuToggle.setAttribute('aria-expanded', 'false');
+			} else if (app.view.side.entity.contains(document.activeElement)) sidebarToggle.focus();
+		}
+		Chinachu.on(sidebarBackdrop, 'click', function() { setSidebarOpen(false); });
+		Chinachu.on(app.view.side.entity, 'click', function(event) {
+			if (event.target.closest('wa-button')) setSidebarOpen(false);
+		});
+		Chinachu.on(document, 'keydown', function(event) {
+			if (event.key === 'Escape' && app.view.middle.entity.classList.contains('sidebar-open')) {
+				setSidebarOpen(false);
+				sidebarToggle.focus();
+			}
+		});
+		var mobileTitle = document.createElement('h1');
+		mobileTitle.className = 'app-mobile-title';
+		var mobileTitleText = document.createElement('span');
+		mobileTitle.appendChild(mobileTitleText);
+		mobileTitle.appendChild(sidebarToggle);
+		app.view.header.insertBefore(mobileTitle, menuToggle);
+		var menuSettings = document.createElement('div');
+		menuSettings.id = 'app-menu-settings';
+		menuSettings.className = 'app-menu-settings';
+		app.view.header.appendChild(menuSettings);
+		menuToggle.setAttribute('aria-controls', 'app-navigation app-menu-settings');
+		var compactHeader = window.matchMedia('(max-width: 800px)');
+		var movedSwitch = null, switchPlaceholder = null;
+		function restoreDescriptionSwitch() {
+			if (!movedSwitch) return;
+			if (switchPlaceholder.isConnected) switchPlaceholder.replaceWith(movedSwitch);
+			else movedSwitch.remove();
+			movedSwitch = switchPlaceholder = null;
+		}
+		function updateMobileTitle() {
+			var title = app.pm.title.textContent;
+			mobileTitleText.textContent = title;
+			sidebarToggle.textContent = title + ' ▾';
+			mobileTitle.title = title;
+			sidebarToggle.setAttribute('aria-label', title + (sidebarToggle.getAttribute('aria-expanded') === 'true' ? '：ページ切替を閉じる' : '：ページを切り替える'));
+		}
+		function syncCompactHeader() {
+			restoreDescriptionSwitch();
+			setSidebarOpen(false);
+			var category = app.pm.index.category[app.pm.category];
+			sidebarToggle.hidden = !(category && category.pageIndex && category.pageIndex.length);
+			mobileTitleText.hidden = !sidebarToggle.hidden;
+			updateMobileTitle();
+			if (compactHeader.matches) {
+				var control = app.pm.toolbar.entity.querySelector('.description-switch');
+				if (control) {
+					switchPlaceholder = document.createComment('description-switch');
+					control.replaceWith(switchPlaceholder);
+					menuSettings.appendChild(control);
+					movedSwitch = control;
+				}
+			}
+			var hasActions = Array.from(app.pm.toolbar.entity.children).some(function(child) {
+				return child.children.length || child.textContent.trim();
+			});
+			app.view.mainHead.entity.classList.toggle('compact-empty', !hasActions && !app.view.title.entity.querySelector('.rule-kind-tabs'));
+		}
+		compactHeader.addEventListener('change', syncCompactHeader);
+		new MutationObserver(function() {
+			updateMobileTitle();
+		}).observe(app.pm.title, { childList: true, characterData: true, subtree: true });
+		Chinachu.on(document, 'chinachu:page:complete', syncCompactHeader);
+		Chinachu.on(document, 'chinachu:page:unload', function() {
+			setSidebarOpen(false);
+			restoreDescriptionSwitch();
 			app.view.header.classList.remove('menu-open');
 			menuToggle.setAttribute('aria-expanded', 'false');
 		});

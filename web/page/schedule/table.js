@@ -22,6 +22,7 @@
 		deinit: function () {
 			if (this.view.popoverDrawer) this.view.popoverDrawer.remove();
 			if (this.pointerCleanup) this.pointerCleanup();
+			if (this.dayControlsObserver) this.dayControlsObserver.disconnect();
 
 			Chinachu.off(document, 'chinachu:schedule', this.onNotify);
 			Chinachu.off(document, 'chinachu:reserves', this.onNotify);
@@ -50,9 +51,6 @@
 
 		initToolbar: function () {
 
-			var date = new Date(this.time);
-			var days = ['日', '月', '火', '水', '木', '金', '土'];
-
 			['GR', 'BS', 'CS', 'SKY'].forEach(function(type) {
 				var control = ChinachuUI.createElement('button', {
 					class: 'schedule-type-filter', type: 'button', disabled: true,
@@ -72,87 +70,143 @@
 				this.view.toolbar.add({ key: 'type-' + type.toLowerCase(), ui: control });
 			}.bind(this));
 
-			this.view.toolbar.add({
-				key: 'day+0',
-				ui : new ChinachuUI.ActionButton({
-					className: 'day',
-					label  : (date.getMonth() + 1) + '/' + date.getDate() + '(' + days[date.getDay()] + ') ' + date.getHours() + '時~',
-					onClick: function () {
-						this.self.query.day = '0';
-						location.hash = '!/schedule/table/' + Chinachu.serializeQuery(this.self.query) + '/';
-					}.bind(this)
-				})
+			var typeMenu = ChinachuUI.createElement('div', { class: 'schedule-type-menu', hidden: true });
+			var typeToggle = ChinachuUI.createElement('button', {
+				type: 'button', class: 'schedule-type-toggle', popovertarget: 'schedule-type-options',
+				'aria-expanded': 'false', 'aria-controls': 'schedule-type-options'
+			}).insertText('放送切替⌄').insertTo(typeMenu);
+			var typePanel = ChinachuUI.createElement('div', {
+				id: 'schedule-type-options', class: 'schedule-type-options', popover: 'auto',
+				role: 'group', 'aria-label': '表示する放送'
+			}).insertTo(typeMenu);
+			ChinachuUI.createElement('strong').insertText('表示する放送').insertTo(typePanel);
+			this.view.typeChecks = {};
+			['GR', 'BS', 'CS', 'SKY'].forEach(function(type) {
+				var label = ChinachuUI.createElement('label').insertTo(typePanel);
+				var names = { GR: '地上波（GR）', BS: 'BS放送（BS）', CS: 'CS放送（CS）', SKY: 'SKY' };
+				ChinachuUI.createElement('span').insertText(names[type]).insertTo(label);
+				var check = ChinachuUI.createElement('input', { type: 'checkbox', 'aria-label': type }).insertTo(label);
+				this.view.typeChecks[type] = check;
+				Chinachu.on(check, 'change', function() {
+					this.view.toolbar.one('type-' + type.toLowerCase()).click();
+				}.bind(this));
+			}.bind(this));
+			Chinachu.on(typePanel, 'beforetoggle', function(event) {
+				typeToggle.setAttribute('aria-expanded', String(event.newState === 'open'));
+				if (event.newState === 'open') {
+					var rect = typeToggle.getBoundingClientRect();
+					typePanel.style.left = Math.max(4, Math.min(rect.left, window.innerWidth - parseFloat(getComputedStyle(typePanel).width) - 4)) + 'px';
+					typePanel.style.top = Math.min(rect.bottom + 4, Math.max(4, window.innerHeight - 240)) + 'px';
+				}
 			});
-			this.view.toolbar.add({
-				key: 'day+1',
-				ui : new ChinachuUI.ActionButton({
+			this.view.toolbar.add({ key: 'type-menu', ui: typeMenu });
+
+			var controls = ChinachuUI.createElement('div', { class: 'schedule-day-controls' });
+			var tabs = ChinachuUI.createElement('div', {
+				class: 'schedule-day-tabs', role: 'group', 'aria-label': '番組表の日付'
+			}).insertTo(controls);
+			var navigation = ChinachuUI.createElement('div', { class: 'schedule-day-navigation', hidden: true }).insertTo(controls);
+			this.view.previousDay = ChinachuUI.createElement('button', {
+				type: 'button', class: 'schedule-day-previous', 'aria-label': '前日の番組表', title: '前日'
+			}).insertTo(navigation);
+			this.view.daySelect = ChinachuUI.createElement('select', { 'aria-label': '番組表の日付' }).insertTo(navigation);
+			this.view.nextDay = ChinachuUI.createElement('button', {
+				type: 'button', class: 'schedule-day-next', 'aria-label': '翌日の番組表', title: '翌日'
+			}).insertTo(navigation);
+			this.view.dayButtons = [];
+			for (var day = 0; day < 7; day++) {
+				this.view.dayButtons.push(ChinachuUI.createButton({
 					className: 'day',
-					label  : (new Date(this.time + 86400000).getDate()) + '(' + days[new Date(this.time + 86400000).getDay()] + ')',
-					onClick: function () {
-						this.self.query.day = '1';
-						location.hash = '!/schedule/table/' + Chinachu.serializeQuery(this.self.query) + '/';
-					}.bind(this)
-				})
+					onSelect: this.selectDay.bind(this, day)
+				}).insertTo(tabs));
+				ChinachuUI.createElement('option', { value: day }).insertTo(this.view.daySelect);
+			}
+			Chinachu.on(this.view.previousDay, 'click', function() { this.selectDay(this.getDay() - 1); }.bind(this));
+			Chinachu.on(this.view.nextDay, 'click', function() { this.selectDay(this.getDay() + 1); }.bind(this));
+			Chinachu.on(this.view.daySelect, 'change', function() { this.selectDay(Number(this.view.daySelect.value)); }.bind(this));
+			this.view.toolbar.add({ key: 'days', ui: controls });
+			this.updateDayControls();
+			var todayButton = this.view.dayButtons[0];
+			var todayOption = this.view.daySelect.options[0];
+			// Measure off-layout, then display exactly one date control.
+			this.dayControlsObserver = new ResizeObserver(function() {
+				var compact = window.matchMedia('(max-width: 451px)').matches;
+				var fullToday = todayButton.getAttribute('title');
+				var shortLabel = fullToday.replace(/^\d+\//, '').replace(/ .*/, '');
+				todayButton.setLabel(fullToday);
+				todayOption.textContent = compact ? shortLabel : fullToday;
+				tabs.hidden = false;
+				tabs.style.cssText = 'position:absolute;visibility:hidden;width:max-content';
+				var requiredWidth = Math.ceil(tabs.getBoundingClientRect().width);
+				tabs.style.cssText = '';
+				var toolbar = controls.parentElement;
+				navigation.hidden = false;
+				navigation.style.cssText = 'position:absolute;visibility:hidden;width:max-content';
+				var navigationWidth = Math.ceil(navigation.getBoundingClientRect().width);
+				navigation.style.cssText = '';
+				var typeButtons = Array.from(toolbar.querySelectorAll('.schedule-type-filter'));
+				typeMenu.hidden = true;
+				typeButtons.forEach(function(button) { button.hidden = false; });
+				var siblings = Array.from(toolbar.children).filter(function(item) {
+					return item !== controls && item.getBoundingClientRect().width > 0;
+				});
+				var header = toolbar.closest('.main-head');
+				var headerStyle = getComputedStyle(header);
+				var rowWidth = header.clientWidth - parseFloat(headerStyle.paddingLeft) - parseFloat(headerStyle.paddingRight);
+				var available = rowWidth - siblings.reduce(function(total, item) {
+					return total + item.getBoundingClientRect().width;
+				}, 0) - parseFloat(getComputedStyle(toolbar).columnGap) * siblings.length;
+				available -= window.matchMedia('(min-width: 801px)').matches ? 12 : 16;
+				var shortToday = compact;
+				if (compact) available += 18;
+				// Try the shorter today label before moving dates onto another row.
+				if (!compact && available < requiredWidth) {
+					shortToday = true;
+					available += 18;
+					todayButton.setLabel(shortLabel);
+					tabs.style.cssText = 'position:absolute;visibility:hidden;width:max-content';
+					requiredWidth = Math.ceil(tabs.getBoundingClientRect().width);
+					tabs.style.cssText = '';
+				}
+				var groupedTypes = compact && available < navigationWidth;
+				if (groupedTypes) {
+					typeMenu.hidden = false;
+					available += typeButtons.reduce(function(total, button) { return total + button.getBoundingClientRect().width; }, 0)
+						+ parseFloat(getComputedStyle(toolbar).columnGap) * 3 - typeMenu.getBoundingClientRect().width - 2;
+					typeButtons.forEach(function(button) { button.hidden = true; });
+				} else if (typePanel.matches(':popover-open')) {
+					typePanel.hidePopover();
+				}
+				var split = available < (compact ? navigationWidth : requiredWidth);
+				toolbar.classList.toggle('schedule-toolbar-split', split);
+				controls.classList.toggle('schedule-today-short', shortToday);
+				controls.style.width = (compact ? Math.min(navigationWidth, rowWidth) : split ? rowWidth : requiredWidth) + 'px';
+				tabs.hidden = compact;
+				navigation.hidden = !compact;
+				controls.classList.toggle('is-compact', compact);
+				typeButtons.forEach(function(button) { button.style.translate = ''; });
+				if (!split && !groupedTypes && window.matchMedia('(max-width: 800px)').matches) {
+					// Center the visible text group between the page edge and date control.
+					var firstText = document.createRange(), lastText = document.createRange();
+					firstText.selectNodeContents(typeButtons[0]);
+					lastText.selectNodeContents(typeButtons[typeButtons.length - 1]);
+					var offset = (header.getBoundingClientRect().left + controls.getBoundingClientRect().left - firstText.getBoundingClientRect().left - lastText.getBoundingClientRect().right) / 2;
+					typeButtons.forEach(function(button) { button.style.translate = offset + 'px 0'; });
+				}
 			});
-			this.view.toolbar.add({
-				key: 'day+2',
-				ui : new ChinachuUI.ActionButton({
-					className: 'day',
-					label  : (new Date(this.time + 172800000).getDate()) + '(' + days[new Date(this.time + 172800000).getDay()] + ')',
-					onClick: function () {
-						this.self.query.day = '2';
-						location.hash = '!/schedule/table/' + Chinachu.serializeQuery(this.self.query) + '/';
-					}.bind(this)
-				})
-			});
-			this.view.toolbar.add({
-				key: 'day+3',
-				ui : new ChinachuUI.ActionButton({
-					className: 'day',
-					label  : (new Date(this.time + 259200000).getDate()) + '(' + days[new Date(this.time + 259200000).getDay()] + ')',
-					onClick: function () {
-						this.self.query.day = '3';
-						location.hash = '!/schedule/table/' + Chinachu.serializeQuery(this.self.query) + '/';
-					}.bind(this)
-				})
-			});
-			this.view.toolbar.add({
-				key: 'day+4',
-				ui : new ChinachuUI.ActionButton({
-					className: 'day',
-					label  : (new Date(this.time + 345600000).getDate()) + '(' + days[new Date(this.time + 345600000).getDay()] + ')',
-					onClick: function () {
-						this.self.query.day = '4';
-						location.hash = '!/schedule/table/' + Chinachu.serializeQuery(this.self.query) + '/';
-					}.bind(this)
-				})
-			});
-			this.view.toolbar.add({
-				key: 'day+5',
-				ui : new ChinachuUI.ActionButton({
-					className: 'day',
-					label  : (new Date(this.time + 432000000).getDate()) + '(' + days[new Date(this.time + 432000000).getDay()] + ')',
-					onClick: function () {
-						this.self.query.day = '5';
-						location.hash = '!/schedule/table/' + Chinachu.serializeQuery(this.self.query) + '/';
-					}.bind(this)
-				})
-			});
-			this.view.toolbar.add({
-				key: 'day+6',
-				ui : new ChinachuUI.ActionButton({
-					className: 'day',
-					label  : (new Date(this.time + 518400000).getDate()) + '(' + days[new Date(this.time + 518400000).getDay()] + ')',
-					onClick: function () {
-						this.self.query.day = '6';
-						location.hash = '!/schedule/table/' + Chinachu.serializeQuery(this.self.query) + '/';
-					}.bind(this)
-				})
-			});
+			this.dayControlsObserver.observe(controls);
+			this.dayControlsObserver.observe(controls.parentElement);
+			this.dayControlsObserver.observe(controls.closest('.main-head'));
+			this.view.dayButtons.forEach(function(button) {
+				this.dayControlsObserver.observe(button);
+			}.bind(this));
+
 
 			this.view.toolbar.add({
 				key: 'config',
 				ui : new ChinachuUI.ActionButton({
+					className: 'schedule-settings-button',
+					attribute: { 'aria-label': '設定', title: '設定' },
 					label  : '設定',
 					icon   : './icons/wrench-screwdriver.png',
 					onClick: function () {
@@ -221,9 +275,44 @@
 			return this;
 		},
 
+		getDay: function () {
+			var day = Number(this.self.query.day || 0);
+			return Number.isInteger(day) && day >= 0 && day <= 6 ? day : 0;
+		},
+
+		selectDay: function (day) {
+			if (!Number.isInteger(day) || day < 0 || day > 6) return;
+			this.self.query.day = String(day);
+			location.hash = '!/schedule/table/' + Chinachu.serializeQuery(this.self.query) + '/';
+		},
+
+		updateDayControls: function () {
+			var selected = this.getDay();
+			var today = new Date(this.time);
+			var weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+			this.view.dayButtons.forEach(function(button, day) {
+				var date = new Date(this.time + 86400000 * day);
+				var showMonth = day === 0 || date.getMonth() !== today.getMonth() || date.getFullYear() !== today.getFullYear();
+				var label = (showMonth ? (date.getMonth() + 1) + '/' : '') + date.getDate() + '(' + weekdays[date.getDay()] + ')';
+				if (day === 0) label += ' ' + date.getHours() + '時〜';
+				button.setLabel(label);
+				if (day === 0) {
+					button.setAttribute('aria-label', label);
+					button.setAttribute('title', label);
+				}
+				button[day === selected ? 'select' : 'unselect']();
+				this.view.daySelect.options[day].textContent = day === 0 && window.matchMedia('(max-width: 451px)').matches ? label.replace(/^\d+\//, '').replace(/ .*/, '') : label;
+			}, this);
+			this.view.daySelect.value = String(selected);
+			this.view.daySelect.title = this.view.dayButtons[selected].getAttribute('title') || this.view.daySelect.options[selected].textContent;
+			this.view.previousDay.disabled = selected === 0;
+			this.view.nextDay.disabled = selected === 6;
+		},
+
 		draw: function () {
 
 			if (this.view.popoverDrawer) this.view.popoverDrawer.remove();
+			this.updateDayControls();
 			this.view.content.className = 'fullscreen timetable';
 			this.view.content.update();
 
@@ -244,14 +333,7 @@
 			var categories   = this.categories = JSON.parse(window.localStorage.getItem('schedule.visible.categories') || '["anime", "information", "news", "sports", "variety", "drama", "theater", "hobby", "welfare", "documentary", "music", "cinema", "etc"]');
 			var hideChannels = JSON.parse(window.localStorage.getItem('schedule.hide.channels') || "[]");
 
-			var day = 0;
-			if (this.self.query.day) {
-				day = parseInt(this.self.query.day, 10);
-				if (day < 0 && day > 6) {
-					day = 0;
-				}
-			}
-			this.view.toolbar.one('day+' + day).entity.addClassName('selected');
+			var day = this.getDay();
 			var timeRangeStart = this.time + 86400000 * day;
 			var timeRangeEnd   = timeRangeStart + 86400000;
 
@@ -272,6 +354,7 @@
 				var control = this.view.toolbar.one('type-' + type.toLowerCase());
 				control.setAttribute('aria-pressed', String(types.indexOf(type) !== -1));
 				control.disabled = false;
+				this.view.typeChecks[type].checked = types.indexOf(type) !== -1;
 			}.bind(this));
 
 			global.chinachu.schedule.forEach(function (channel, i) {
@@ -438,8 +521,7 @@
 					color: '@inverse',
 					className: 'prev',
 					onSelect: function () {
-						this.self.query.day = day - 1;
-						location.hash = '!/schedule/table/' + Chinachu.serializeQuery(this.self.query) + '/';
+						this.selectDay(day - 1);
 					}.bind(this)
 				}).insertTo(this.view.timescale);
 			}
@@ -449,8 +531,7 @@
 					color: '@inverse',
 					className: 'next',
 					onSelect: function () {
-						this.self.query.day = day + 1;
-						location.hash = '!/schedule/table/' + Chinachu.serializeQuery(this.self.query) + '/';
+						this.selectDay(day + 1);
 					}.bind(this)
 				}).insertTo(this.view.timescale);
 			}
