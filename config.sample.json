@@ -29,19 +29,16 @@
   "wuiUsers": [
     "chinachu:yoshikawa"
   ],
-  "wuiAllowCountries": ["JP"],
 
-  "wuiPort": null,
-  "wuiHost": "0.0.0.0",
+  "wuiPort": 20772,
+  "wuiHost": "127.0.0.1",
+  "wuiAllowedOrigins": [],
   "wuiTlsKeyPath": null,
   "wuiTlsCertPath": null,
   "wuiTlsRequestCert": false,
   "wuiTlsRejectUnauthorized": true,
   "wuiTlsCaPath": null,
-  "wuiOpenServer": true,
-  "wuiOpenPort": 20772,
   "wuiXFF": false,
-  "wuiMdnsAdvertisement": true,
 
   "recordedFormat": "[<date:yymmdd-HHMM>][<type><channel>][<channel-name>]<title>.m2ts",
   "storageLowSpaceThresholdMB": 3000,

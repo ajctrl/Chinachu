@@ -1,3 +1,5 @@
+var recordingFd = null;
+var videoSize;
 var program = chinachu.getProgramById(request.param.id, data.recorded);
 if (program === null) {
 	response.error(404);
@@ -5,16 +7,28 @@ if (program === null) {
 	init();
 }
 
+function closeRecordingFile() {
+	if (recordingFd !== null) { fs.closeSync(recordingFd); recordingFd = null; }
+}
+
 function init() {
 
 	if (!data.status.feature.streamer) return response.error(403);
 
+	try { videoSize = chinachu.validateVideoSize(request.query.s); }
+	catch (_) { return response.error(400); }
+
 	if (program.tuner && program.tuner.isScrambling) return response.error(409);
 
-	if (!fs.existsSync(program.recorded)) return response.error(410);
+	try { recordingFd = chinachu.openRecordingFile(config.recordedDir, program.recorded); }
+	catch (error) { log(error); return response.error(error.code === 'ENOENT' ? 410 : 403); }
+	response.once('close', closeRecordingFile);
+	response.once('finish', closeRecordingFile);
 
 	// probing
-	child_process.exec('ffprobe -v 0 -show_format -of json "' + program.recorded + '"', function (err, std) {
+	var closed = false;
+	var ffprobe = chinachu.execFileWithFd('ffprobe', ['-v', '0', '-show_format', '-of', 'json', '/proc/self/fd/3'], recordingFd, { timeout: 5000, maxBuffer: 3200000, killSignal: 'SIGKILL' }, function (err, std) {
+		if (closed) return;
 
 		if (err) {
 			log("error", err);
@@ -26,14 +40,21 @@ function init() {
 		} catch (e) {
 			return response.error(500);
 		}
-	});
+	}, child_process);
+	if (ffprobe.pid) {
+		children.push(ffprobe);
+		ffprobe.once('exit', function() {
+			var index = children.indexOf(ffprobe);
+			if (index !== -1) children.splice(index, 1);
+		});
+	}
+	response.once('close', function() { closed = true; ffprobe.kill('SIGKILL'); });
 }
 
 function main(avinfo) {
 
 	if (request.query.debug) {
 		log(JSON.stringify(avinfo, null, '  '));
-		log(JSON.stringify(request.headers, null, '  '));
 	}
 
 	switch (request.type) {
@@ -69,7 +90,7 @@ function main(avinfo) {
 			var d = {
 				ss   : request.query.ss     || '2',  //start(seconds)
 				t    : request.query.t      || null, //duration(seconds)
-				s    : request.query.s      || null, //size(WxH)
+				s    : videoSize, //size(WxH)
 				f    : request.query.f      || null, //format
 				'c:v': request.query['c:v'] || null, //vcodec
 				'c:a': request.query['c:a'] || null, //acodec
@@ -255,7 +276,10 @@ function main(avinfo) {
 
 			args.push('-y', '-f', d.f, 'pipe:1');
 
-			var readStream = fs.createReadStream(program.recorded, range || {});
+			var readStream = fs.createReadStream(null, Object.assign({}, range || {}, { fd: recordingFd, autoClose: true }));
+			recordingFd = null;
+			readStream.once('error', function(error) { log(error); response.destroy(); });
+			response.once('close', function() { readStream.destroy(); });
 
 			request.on('close', function() {
 				readStream.destroy();
@@ -265,7 +289,7 @@ function main(avinfo) {
 				readStream.pipe(response);
 			} else {
 				var ffmpeg = child_process.spawn('ffmpeg', args);
-				children.push(ffmpeg.pid);
+				children.push(ffmpeg);
 				log('SPAWN: ffmpeg ' + args.join(' ') + ' (pid=' + ffmpeg.pid + ')');
 
 				ffmpeg.stdout.pipe(response);

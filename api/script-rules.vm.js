@@ -16,6 +16,12 @@
 				}
 			}
 			if (!newRule || typeof newRule !== 'object' || Array.isArray(newRule)) return response.error(400);
+			// A blank per-rule override uses the global recording format.
+			if (newRule.recorded_format === '' || newRule.recorded_format === null) delete newRule.recorded_format;
+			if (newRule.recorded_format !== undefined) {
+				try { chinachu.validateRecordedFormat(newRule.recorded_format); }
+				catch (_) { return response.error(400); }
+			}
 			if (['reserve_fields_operator', 'reserve_titles_operator', 'reserve_descriptions_operator'].some(function (key) {
 				return typeof newRule[key] !== 'undefined' && newRule[key] !== 'and' && newRule[key] !== 'or';
 			})) return response.error(400);

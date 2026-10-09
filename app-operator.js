@@ -295,7 +295,10 @@ function prepRecord(program) {
 		priority: program.priority,
 		signal: abortController.signal
 	})
-		.then(stream => doRecord(program, stream))
+		.then(stream => {
+			try { doRecord(program, stream); }
+			catch (error) { stream.destroy(); throw error; }
+		})
 		.catch(err => {
 
 			if (program._stream) {
@@ -343,18 +346,14 @@ function doRecord(program, stream) {
 	program.pid = -1;// dummy
 
 	// 保存先パス
-	const recPath = config.recordedDir + chinachu.formatRecordedName(program, program.recordedFormat || config.recordedFormat);
+	const recPath = chinachu.resolveRecordingPath(config.recordedDir, chinachu.formatRecordedName(program, program.recordedFormat || config.recordedFormat));
 	program.recorded = recPath;
 
-	// 保存先ディレクトリ
-	const recDirPath = recPath.replace(/^(.+)\/.+$/, '$1');
-	if (!fs.existsSync(recDirPath)) {
-		log('MKDIR: ' + recDirPath);
-		fs.mkdirSync(recDirPath, { recursive: true });
-	}
-
-	// 保存ストリーム
-	const recFile = fs.createWriteStream(recPath, { flags: 'a' });
+	// 保存先を安全に開き、以降はパスを再解決しない。
+	const recFd = chinachu.openRecordingFile(config.recordedDir, recPath, true);
+	let recFile;
+	try { recFile = fs.createWriteStream(null, { fd: recFd, autoClose: true }); }
+	catch (error) { fs.closeSync(recFd); throw error; }
 	log('STREAM: ' + recPath);
 	Object.defineProperty(program, "_stream", {
 		configurable: true,
@@ -513,13 +512,21 @@ function storageChecker() {
 				recording.forEach(program => stopRecording(program.id));
 			} else if (storageLowSpaceAction === "remove") {
 				// 削除
-				if (recorded.length > 0) {
-					const program = recorded.shift();
-					if (fs.existsSync(program.recorded) === true) {
-						fs.unlinkSync(program.recorded);
+				for (let index = 0; index < recorded.length; index++) {
+					const program = recorded[index];
+					try {
+						chinachu.removeRecordingFile(config.recordedDir, program.recorded);
+					} catch (error) {
+						log('ERROR: recording removal failed: ' + error.message);
+						continue;
 					}
-					fs.writeFileSync(RECORDED_DATA_FILE, JSON.stringify(recorded));
-					log('WRITE: ' + RECORDED_DATA_FILE);
+					recorded.splice(index, 1);
+					try {
+						fs.writeFileSync(RECORDED_DATA_FILE, JSON.stringify(recorded));
+						log('WRITE: ' + RECORDED_DATA_FILE);
+					} catch (error) { log('ERROR: recording metadata save failed: ' + error.message); }
+					// Recheck free space before removing another recording.
+					break;
 				}
 			}
 

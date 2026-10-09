@@ -60,6 +60,16 @@ describe('configuration validation and atomic storage', function() {
 		assert.equal(request('GET', {}, false).status, 403);
 		assert.equal(fs.readFileSync(file, 'utf8'), before);
 	});
+	it('rejects unsafe recording formats and invalid public origins without saving', function() {
+		for (const recordedFormat of ['../outside.ts', '/tmp/outside.ts', 'name.' + 'x'.repeat(255), '<episode:1000000000>.ts']) {
+			assert.equal(request('PUT', { json: JSON.stringify({ recordedFormat }), revision: store.revision(before) }).status, 400);
+		}
+		for (const origin of ['https://tv.example/path', 'https://user:password@tv.example', 'https://*.example', 'null', 'file:///tmp']) {
+			assert.equal(request('PUT', { json: JSON.stringify({ wuiAllowedOrigins: [origin] }), revision: store.revision(before) }).status, 400);
+		}
+		assert.equal(fs.readFileSync(file, 'utf8'), before);
+		assert.deepEqual(schema.validate({ wuiAllowedOrigins: ['https://tv.example:8443', 'http://localhost:20772'] }), []);
+	});
 	for (const operation of ['writeFileSync', 'fsyncSync', 'fchmodSync', 'backup-write', 'backup-rename', 'config-rename']) {
 		it('keeps the original config and removes temporary files when ' + operation + ' fails', function() {
 			let writes = 0;

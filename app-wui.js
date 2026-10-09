@@ -31,12 +31,9 @@ const zlib = require('zlib');
 const events = require('events');
 const http = require('http');
 const https = require('https');
-const net = require('net');
 const auth = require('http-auth');
 const { Server } = require('socket.io');
-const { Bonjour } = require('bonjour-service');
 const chinachu = require('chinachu-common');
-const geoip = require('geoip-lite');
 const mirakurun = new (require("mirakurun").default)();
 const configStore = require('./lib/config-store');
 const excludesStore = require('./lib/excludes-store');
@@ -44,13 +41,8 @@ const { watchExclusionRules } = require('./lib/exclusion-rule-watcher');
 const { log } = require('./lib/logger');
 const { configureMirakurunClient } = require('./lib/mirakurun-client');
 const { createBasicAuthMiddleware } = require('./lib/socket-auth');
-
-const privateIPv4 = new net.BlockList();
-privateIPv4.addSubnet('10.0.0.0', 8, 'ipv4');
-privateIPv4.addSubnet('172.16.0.0', 12, 'ipv4');
-privateIPv4.addSubnet('192.168.0.0', 16, 'ipv4');
-privateIPv4.addSubnet('127.0.0.0', 8, 'ipv4');
-privateIPv4.addSubnet('169.254.0.0', 16, 'ipv4');
+const { createRequestGuard, listenAddress, readBody, isLoopback } = require('./lib/http-security');
+const requestGuard = createRequestGuard(config);
 
 // Directory Checking
 if (!fs.existsSync('./data/') || !fs.existsSync('./log/') || !fs.existsSync('./web/')) {
@@ -73,19 +65,7 @@ const OPERATOR_PID_FILE = (() => {
 })();
 
 // SIGQUIT
-process.on('SIGQUIT', () => {
-	setTimeout(() => {
-		if (!bonjour) {
-			process.exit(0);
-			return;
-		}
-
-		bonjour.unpublishAll(() => {
-			bonjour.destroy();
-			process.exit(0);
-		});
-	}, 0);
-});
+process.on('SIGQUIT', () => { setTimeout(() => process.exit(0), 0); });
 
 // Uncaught Exception
 process.on('uncaughtException', err => {
@@ -185,7 +165,8 @@ if (basicAuthEnabled) {
 }
 
 // Open Server
-const openServerEnabled = config.wuiOpenServer === true;
+// Keep the old port as a migration fallback, using the same authenticated server.
+const legacyPort = config.wuiOpenServer === true ? (config.wuiOpenPort || 20772) : null;
 
 var rules     = [];
 var schedule  = [];
@@ -194,18 +175,7 @@ var recording = [];
 var recorded  = [];
 
 // Init HTTP Server
-let server, openServer, httpOpenServer;
-let bonjour;
-
-function publishMdns(options) {
-	if (!bonjour) {
-		bonjour = new Bonjour({}, err => {
-			console.error('mDNS error:', err);
-		});
-	}
-
-	return bonjour.publish(options);
-}
+let server;
 
 if (tlsEnabled) {
 	if (basicAuthEnabled) {
@@ -221,147 +191,55 @@ if (tlsEnabled) {
 	}
 }
 
-if (config.wuiPort) {
-	server.timeout = 240000;
-
-	server.listen(config.wuiPort, config.wuiHost || '0.0.0.0', function () {
-		log((tlsEnabled ? 'HTTPS' : 'HTTP') + ' Server Listening on ' + util.inspect(server.address()));
-		if (config.wuiMdnsAdvertisement === true) {
-			// Start mDNS advertisement
-			publishMdns({
-				name: 'Chinachu on ' + os.hostname(),
-				host: os.hostname(),
-				type: tlsEnabled ? 'https' : 'http',
-				protocol: 'tcp',
-				port: config.wuiPort,
-				txt: {
-					txtvers: '1',
-					'Version': 'gamma',
-					'Password': basicAuthEnabled
-				}
-			});
-			log((tlsEnabled ? 'HTTPS' : 'HTTP') + ' Server mDNS advertising started.');
-		}
-	});
-
-	console.error('**DEPRECATION WARNING**: please remove `wuiPort` and use `wuiOpenServer` instead.');
-}
-
-// Open Server for Access from LAN.
-if (openServerEnabled) {
-	openServer = http.createServer(httpServer);
-	openServer.timeout = 0;
-
-	let hostIp = config.wuiOpenHost;
-	if (!hostIp) {
-		const addresses = [];
-
-		const interfaces = os.networkInterfaces();
-		Object.keys(interfaces).forEach(k => {
-			interfaces[k]
-				.filter(a => {
-					return (
-						a.family === "IPv4" &&
-						a.internal === false &&
-						privateIPv4.check(a.address, 'ipv4') === true
-					);
-				})
-				.forEach(a => addresses.push(a.address));
-		});
-
-		hostIp = addresses[0];
-
-		console.log("============================================================");
-		console.log("Detected Private IPv4:", addresses);
-		console.log("Selected Private IPv4 for Open Server:", addresses[0]);
-		console.log("NOTE: set `wuiOpenHost` to fix address for listen.");
-		console.log("============================================================");
-	}
-
-	openServer.listen(config.wuiOpenPort || 20772, hostIp, () => {
-		log('HTTP Open Server Listening on ' + util.inspect(openServer.address()));
-		if (config.wuiMdnsAdvertisement === true) {
-			// Start mDNS advertisement
-			publishMdns({
-				name: 'Chinachu Open Server on ' + os.hostname(),
-				host: os.hostname(),
-				type: 'http',
-				protocol: 'tcp',
-				port: config.wuiOpenPort || 20772,
-				txt: {
-					txtvers: '1',
-					'Version': 'gamma',
-					'Password': false
-				}
-			});
-			log('HTTP Open Server mDNS advertising started.');
-		}
+if (config.wuiPort || legacyPort) {
+	server.requestTimeout = 15000;
+	server.headersTimeout = 10000;
+	server.listen(config.wuiPort || legacyPort, listenAddress(config), function () {
+		log((tlsEnabled ? 'HTTPS' : 'HTTP') + ' proxy backend listening on ' + util.inspect(server.address()));
 	});
 }
 
 // HTTP Server
 function httpServer(req, res) {
-
-	var q = '';
-
-	switch (req.method) {
-	case 'GET':
-	case 'HEAD':
-
-		q = new URL(req.url, 'http://localhost').search.slice(1);
-
-		if (q.match(/^\{.*\}$/) === null) {
-			q = querystring.parse(q);
-		} else {
-			try {
-				q = JSON.parse(q);
-			} catch (e) {
-				q = {};
-			}
+	const update = ['POST', 'PUT', 'DELETE'].includes(req.method);
+	const error = requestGuard(req, update);
+	if (error) {
+		res.writeHead(error, { 'Content-Type': 'text/plain', Connection: 'close' });
+		return res.end(error + '\n');
+	}
+	if (!['GET', 'HEAD', 'POST', 'PUT', 'DELETE'].includes(req.method)) {
+		res.writeHead(405, { 'Content-Type': 'text/plain' });
+		return res.end('405 Method Not Allowed\n');
+	}
+	function dispatch(text) {
+		let query;
+		try {
+			query = /^\s*\{/.test(text) ? JSON.parse(text) : querystring.parse(text);
+		} catch (_) {
+			res.writeHead(400, { 'Content-Type': 'text/plain' });
+			return res.end('400 Bad Request\n');
 		}
-
-		httpServerMain(req, res, q);
-		q = void 0;
-
-		break;
-
-	case 'POST':
-	case 'PUT':
-	case 'DELETE':
-
-		req.on('data', function (chunk) {
-			q += chunk.toString();
-		});
-
-		req.once('end', function () {
-			if (q.trim().match(/^\{(\n|.)*\}$/) === null) {
-				q = querystring.parse(q);
-			} else {
-				try {
-					q = JSON.parse(q.trim());
-				} catch (e) {
-					q = {};
-				}
-			}
-
-			httpServerMain(req, res, q);
-			q = void 0;
-		});
-
-		break;
-
-	default:
-
-		res.writeHead(400, {'content-type': 'text/plain'});
+		// Method overrides used to permit writes from images and cross-site GETs.
+		if (Object.hasOwn(query, 'method') || Object.hasOwn(query, '_method')) {
+			res.writeHead(400, { 'Content-Type': 'text/plain' });
+			return res.end('400 Bad Request\n');
+		}
+		httpServerMain(req, res, query);
+	}
+	if (update) return readBody(req, res, dispatch);
+	try {
+		dispatch(new URL(req.url, 'http://localhost').search.slice(1));
+	} catch (_) {
+		if (res.headersSent) return res.destroy();
+		res.writeHead(400, { 'Content-Type': 'text/plain' });
 		res.end('400 Bad Request\n');
-		log('400');
 	}
 }
 
 function httpServerMain(req, res, query) {
 	var remoteAddress = req.client.remoteAddress;
 
-	if (config.wuiXFF === true && req.headers['x-forwarded-for']) {
+	if (config.wuiXFF === true && isLoopback(remoteAddress) && req.headers['x-forwarded-for']) {
 		remoteAddress = req.headers['x-forwarded-for'].split(',')[0];
 	}
 
@@ -379,32 +257,10 @@ function httpServerMain(req, res, query) {
 		].join(' '));
 	};
 
-	// country restriction
-	if (Array.isArray(config.wuiAllowCountries) && config.wuiAllowCountries.length > 0) {
-		var geo = geoip.lookup(remoteAddress);
-		if (geo !== null && config.wuiAllowCountries.indexOf(geo.country) === -1) {
-			res.writeHead(403, {'content-type': 'text/plain'});
-			res.end('403 Forbidden\n');
-			logRequest(403);
-			console.warn('Non-allowed Country IP Blocked', remoteAddress, JSON.stringify(geo));
-		}
-	}
-
 	// serve static file
 	var location = req.url;
 	if (location.match(/(\?.*)$/) !== null) { location = location.match(/^(.+)\?.*$/)[1]; }
 	if (location.match(/\/$/) !== null) { location += 'index.html'; }
-
-	// HTTPメソッド指定を上書き
-	if (query.method) {
-		req.method = query.method.toUpperCase();
-		delete query.method;
-	}
-
-	if (query._method) {
-		req.method = query._method.toUpperCase();
-		delete query._method;
-	}
 
 	var filename = path.join('./web/', location);
 
@@ -565,13 +421,27 @@ function httpServerMain(req, res, query) {
 		}
 
 		var range = {};
-		if (req.headers.range) {
-			var bytes = req.headers.range.replace(/bytes=/, '').split('-');
-			range.start = parseInt(bytes[0], 10);
-			range.end   = parseInt(bytes[1], 10) || fstat.size - 1;
-
-			if (range.start > fstat.size || range.end > fstat.size) {
+		// Range applies to GET only. Validate before committing response headers.
+		if (req.method === 'GET' && req.headers.range) {
+			var match = /^bytes=([0-9]*)-([0-9]*)$/.exec(req.headers.range);
+			var invalidRange = function () {
+				res.setHeader('Content-Range', 'bytes */' + fstat.size);
 				return resErr(416);
+			};
+			if (!match || match[0] !== req.headers.range || (!match[1] && !match[2]) || fstat.size === 0) {
+				return invalidRange();
+			}
+			var first = Number(match[1]);
+			var last = Number(match[2]);
+			if (!Number.isSafeInteger(first) || !Number.isSafeInteger(last)) return invalidRange();
+			if (!match[1]) {
+				if (last === 0) return invalidRange();
+				range.start = Math.max(0, fstat.size - last);
+				range.end = fstat.size - 1;
+			} else {
+				range.start = first;
+				range.end = match[2] ? Math.min(last, fstat.size - 1) : fstat.size - 1;
+				if (range.start >= fstat.size || range.start > range.end) return invalidRange();
 			}
 
 			res.setHeader('Content-Range', 'bytes ' + range.start + '-' + range.end + '/' + fstat.size);
@@ -587,7 +457,10 @@ function httpServerMain(req, res, query) {
 		}
 
 		if (req.method === 'GET') {
-			fs.createReadStream(filename, range || {}).pipe(res);
+			var stream = fs.createReadStream(filename, range);
+			stream.once('error', function () { res.destroy(); });
+			res.once('close', function () { stream.destroy(); });
+			stream.pipe(res);
 		} else {
 			res.end();
 		}
@@ -757,12 +630,13 @@ function httpServerMain(req, res, query) {
 
 				setTimeout(function () {
 
-					sandbox.children.forEach(function (pid) {
+					sandbox.children.forEach(function (child) {
+						if (child.exitCode != null || child.signalCode != null) return;
 
-						log('child process killing: PID=' + pid);
+						log('child process killing: PID=' + child.pid);
 
 						try {
-							process.kill(pid, 'SIGKILL');
+							child.kill('SIGKILL');
 						} catch (e) {
 						}
 					});
@@ -824,14 +698,14 @@ function iosAddEventListner(io, eventName) {
 	});
 }
 
-function ioAddListener(server, isOpen) {
-	var io = new Server(server);
+function ioAddListener(server) {
+	var io = new Server(server, { allowRequest: (req, done) => done(null, !requestGuard(req)) });
 
-	if (basicAuthEnabled && !isOpen) {
+	if (basicAuthEnabled) {
 		io.use(createBasicAuthMiddleware(config.wuiUsers || []));
 	}
 
-	io.on('connection', isOpen ? ioOpenServer : ioServer);
+	io.on('connection', ioServer);
 
 	// listen event
 	iosAddEventListner(io, 'status');
@@ -846,14 +720,6 @@ function ioAddListener(server, isOpen) {
 }
 
 ioAddListener(server);
-if (openServerEnabled === true) {
-	ioAddListener(openServer, true);
-}
-
-function ioOpenServer(socket) {
-	socket.isOpen = true;
-	ioServer(socket);
-}
 
 function ioServer(socket) {
 	ioServerMain(socket);

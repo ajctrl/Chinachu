@@ -28,7 +28,7 @@
 	response.write(new Array(1024).join(' '));
 
 	var tailf = child_process.spawn('tail', ['-f', '-n', '100', filename]);
-	children.push(tailf.pid);
+	children.push(tailf);
 
 	tailf.stdout.pipe(response);
 

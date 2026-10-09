@@ -85,11 +85,12 @@ describe('WUI static asset responses', function () {
 		assert.equal(response.getHeader('Cache-Control'), 'private, max-age=86400');
 	});
 
-	it('preserves font caching for partial and conditional responses', function () {
-		const partial = request('/lib/notosansjp/' + font, { range: 'bytes=0-9' });
-		assert.equal(partial.statusCode, 206);
-		assert.equal(partial.getHeader('Content-Length'), 10);
-		assert.equal(partial.getHeader('Cache-Control'), 'private, max-age=86400');
+	it('ignores Range on HEAD and preserves font caching for conditional responses', function () {
+		const head = request('/lib/notosansjp/' + font, { range: 'bytes=0-9' });
+		assert.equal(head.statusCode, 200);
+		assert.equal(head.getHeader('Content-Length'), fs.statSync(path.join(directory, font)).size);
+		assert.equal(head.getHeader('Content-Range'), undefined);
+		assert.equal(head.getHeader('Cache-Control'), 'private, max-age=86400');
 		const modified = fs.statSync(path.join(directory, font)).mtime.toUTCString();
 		const conditional = request('/lib/notosansjp/' + font, { 'if-modified-since': modified });
 		assert.equal(conditional.statusCode, 304);

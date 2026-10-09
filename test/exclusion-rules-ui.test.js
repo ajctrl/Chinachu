@@ -4,6 +4,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { createRequestGuard } = require('../lib/http-security');
+const common = require('chinachu-common');
 
 function browser() {
 	const context = vm.createContext({ console: { log() {} } });
@@ -82,11 +84,12 @@ function browser() {
 			if (options.onSuccess) options.onSuccess({ responseJSON: /\\/\\d+\\.json$/.test(url) ? rules[0] : rules });
 		};
 		function XMLHttpRequest() {
+			this.headers = {};
 			this.addEventListener = function(name, fn) { this.loaded = fn; };
-			this.setRequestHeader = function() {};
+			this.setRequestHeader = function(name, value) { this.headers[name.toLowerCase()] = value; };
 			this.open = function(method, url) { this.method = method; this.url = url; };
 			this.send = function(body) {
-				requests.push({ method: this.method, url: this.url, body: JSON.parse(body) });
+				requests.push({ method: this.method, url: this.url, headers: this.headers, body: JSON.parse(body) });
 				this.status = this.method === 'POST' ? 201 : 200;
 				this.loaded();
 			};
@@ -98,6 +101,37 @@ function browser() {
 }
 
 describe('common exclusion rule GUI', function () {
+	for (const [action, method, url] of [
+		['new ui.NewRule()', 'POST', './api/rules.json'],
+		['new ui.EditRule(0)', 'PUT', './api/rules/0.json'],
+		['new ui.NewRule(true)', 'POST', './api/exclusion-rules.json'],
+		['new ui.EditRule(0, true)', 'PUT', './api/exclusion-rules/0.json'],
+		["new ui.CreateRuleByProgram('program')", 'POST', './api/rules.json']
+	]) {
+		it('permits the guarded update from ' + action + ' with a blank recording format', function() {
+			const ctx = browser();
+			const source = fs.readFileSync(path.join(__dirname, '../web/class.js'), 'utf8');
+			vm.runInContext(source.slice(source.indexOf('\tui.EditRule ='), source.indexOf('\tui.copyStr =')), ctx);
+			vm.runInContext("var util = { getProgramById: function() { return { title: '番組', category: 'anime', channel: { type: 'GR', id: 'station' } }; } }; result.recorded_format = '';", ctx);
+			vm.runInContext(action + '; var editor = modals[modals.length - 1]; editor.buttons[0].onSelect({ targetButton: new Button({}) }, editor);', ctx);
+			const sent = ctx.requests.at(-1);
+			assert.equal(sent.method, method);
+			assert.equal(sent.url, url);
+			const headers = { ...sent.headers, host: 'localhost' };
+			assert.equal(createRequestGuard({})({ headers }, true), null);
+			if (url.includes('exclusion-rules')) return;
+			let status, saved;
+			vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../api/', method === 'POST' ? 'script-rules.vm.js' : 'script-rules-rule.vm.js'), 'utf8'), {
+				chinachu: common, data: { rules: [{}] }, define: { RULES_FILE: 'mock-rules.json' },
+				request: { method, query: sent.body, param: { num: '0' }, headers },
+				response: { error(code) { status = code; }, head(code) { status = code; }, end() {} },
+				fs: { writeFileSync(file, body) { saved = JSON.parse(body); } }
+			});
+			assert.equal(status, method === 'POST' ? 201 : 200);
+			assert.ok(saved.every(rule => !Object.hasOwn(rule, 'recorded_format')));
+		});
+	}
+
 	it('shows defaults in creation and restores saved keyword operators in editing', function () {
 		const ctx = browser();
 		const source = fs.readFileSync(path.join(__dirname, '../web/class.js'), 'utf8');

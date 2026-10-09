@@ -27,7 +27,7 @@ describe('updated HTTP authentication', function() {
 		it('preserves successful and failed Basic authentication over ' + (tlsEnabled ? 'HTTPS' : 'HTTP'), async function() {
 			// Run the application's server setup without starting its DVR services.
 			const source = read('app-wui.js');
-			const server = vm.runInNewContext(source.slice(source.indexOf('// Basic Auth'), source.indexOf('if (config.wuiPort)')) + '\nserver;', {
+			const server = vm.runInNewContext(source.slice(source.indexOf('// Basic Auth'), source.indexOf('// HTTP Server')) + '\nserver;', {
 				auth: require('http-auth'), http, https, tlsEnabled, tlsOption,
 				config: { wuiUsers: ['alice:secret'] }, httpServer: (req, res) => res.end('authenticated:' + req.user)
 			});

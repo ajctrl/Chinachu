@@ -15,22 +15,11 @@
 			storageUsage.recorded = sumOfFileSize(recordedFiles);
 			storageUsage.lowSpaceThreshold = (config.storageLowSpaceThresholdMB || 3000) * 1024 * 1024;
 			
-			child_process.exec('df --block-size=512 ' + config.recordedDir , function(err, stdout, stderr) {
-				if (err) {
-					log(stderr);
-					return response.error(500);
-				}
-				
-				var line = stdout.split('\n')[1]; //ignore header line.
-				var usage = line.replace(/^\s*/,"").split(/\s+/); // left trim and sprit.
-				
-				//var IGNORE_fs      = usage[0];
-				storageUsage.size  = parseInt(usage[1]) * 512;
-				storageUsage.used  = parseInt(usage[2]) * 512;
-				storageUsage.avail = parseInt(usage[3]) * 512;
-				//var IGNORE_percent = usage[4];
-				//var IGNORE_mounton = usage[5];
-				
+			fs.statfs(config.recordedDir, function(err, info) {
+				if (err) { log(err); return response.error(500); }
+				storageUsage.size = info.blocks * info.bsize;
+				storageUsage.used = (info.blocks - info.bfree) * info.bsize;
+				storageUsage.avail = info.bavail * info.bsize;
 				response.head(200);
 				response.end(JSON.stringify(storageUsage, null, '  '));
 			});

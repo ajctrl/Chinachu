@@ -13,9 +13,8 @@
 			return;
 
 		case 'DELETE':
-			if (fs.existsSync(program.recorded)) {
-				fs.unlinkSync(program.recorded);
-			}
+			try { chinachu.removeRecordingFile(config.recordedDir, program.recorded); }
+			catch (error) { log(error); return response.error(403); }
 
 			data.recorded = (function() {
 				var array = [];

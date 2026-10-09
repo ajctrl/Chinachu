@@ -10,10 +10,8 @@
   "license": "MIT",
   "dependencies": {
     "chinachu-common": "file:common",
-    "bonjour-service": "1.4.4",
     "dateformat": "^5.0.3",
     "easy-table": "^1.2.0",
-    "geoip-lite": "2.0.3",
     "http-auth": "^4.2.1",
     "mirakurun": "4.1.5",
     "nodemailer": "^10.0.15",

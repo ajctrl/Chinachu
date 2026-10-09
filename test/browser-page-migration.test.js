@@ -63,13 +63,15 @@ describe('schedule table date navigation', function() {
 	function setup(day) {
 		const location = {};
 		const page = loadPage('schedule/table', {
-			location, Chinachu: { serializeQuery: query => new URLSearchParams(query).toString() }
+			location, window: { matchMedia: () => ({ matches: false }) }, Chinachu: { serializeQuery: query => new URLSearchParams(query).toString() }
 		});
 		page.self = { query: { day, channel: 'test-channel' } };
 		page.time = new Date(2026, 9, 31, 12).getTime();
 		page.view = {
 			dayButtons: Array.from({ length: 7 }, () => ({
 				setLabel(value) { this.label = value; },
+				setAttribute(name, value) { this[name] = value; },
+				getAttribute(name) { return this[name]; },
 				select() { this.selected = true; }, unselect() { this.selected = false; }
 			})),
 			daySelect: { options: Array.from({ length: 7 }, () => ({})) },

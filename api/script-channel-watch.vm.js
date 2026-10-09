@@ -15,6 +15,10 @@ Usushio では使わない
 
 	if (!data.status.feature.streamer) return response.error(403);
 
+	var videoSize;
+	try { videoSize = chinachu.validateVideoSize(request.query.s); }
+	catch (_) { return response.error(400); }
+
 	switch (request.type) {
 		case 'xspf':
 			response.setHeader('content-disposition', 'attachment; filename="' + channel.id + '.xspf"');
@@ -40,7 +44,7 @@ Usushio では使わない
 		case 'mp4':
 
 			var d = {
-				s    : request.query.s      || null, //size(WxH)
+				s    : videoSize, //size(WxH)
 				f    : request.query.f      || null, //format
 				'c:v': request.query['c:v'] || null, //vcodec
 				'c:a': request.query['c:a'] || null, //acodec
@@ -168,7 +172,7 @@ Usushio では使わない
 						stream.pipe(response);
 					} else {
 						var ffmpeg = child_process.spawn('ffmpeg', args);
-						children.push(ffmpeg.pid);
+						children.push(ffmpeg);
 						log('SPAWN: ffmpeg ' + args.join(' ') + ' (pid=' + ffmpeg.pid + ')');
 
 						request.on('close', function() {

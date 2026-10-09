@@ -12,6 +12,13 @@ var path       = require('path');
 var crypto     = require('crypto');
 var dateFormat = require('dateformat').default;
 var child_process = require('child_process');
+var recordingPath = require('./recording-path');
+exports.validateRecordedFormat = recordingPath.validateFormat;
+exports.resolveRecordingPath = recordingPath.resolveRecordingPath;
+exports.openRecordingFile = recordingPath.openRecordingFile;
+exports.removeRecordingFile = recordingPath.removeRecordingFile;
+exports.execFileWithFd = require('./media-process').execFileWithFd;
+exports.validateVideoSize = require('./media-process').validateVideoSize;
 
 var execSync   = function (command) {
 	try {
@@ -161,6 +168,7 @@ exports.createTimeout = function (a, b) {
 };
 
 exports.formatRecordedName = function (program, name) {
+	recordingPath.validateFormat(name);
 	name = name.replace(/<([^>]+)>/g, function (z, a) {
 
 		// date:
@@ -202,6 +210,7 @@ exports.formatRecordedName = function (program, name) {
 			if (isNaN(digit)) {
 				digit = 1;
 			}
+			if (Number(digit) > 64) { throw new Error('話数の桁数が大きすぎます。'); }
 			return program.episode === null ? 'n' : program.episode.toString(10).padStart(Number(digit), '0');
 		}
 
@@ -212,12 +221,12 @@ exports.formatRecordedName = function (program, name) {
 		if (a.match(/^category$/) !== null) { return program.category; }
 	});
 
+	recordingPath.validateFormat(name);
 	var info = path.parse(name);
 	var limit = 255 - Buffer.byteLength(info.ext);
-	var basename = info.name;
-	while (Buffer.byteLength(basename) > limit) {
-		basename = basename.slice(0, -1);
-	}
+	var characters = Array.from(info.name);
+	while (Buffer.byteLength(characters.join('')) > limit) { characters.pop(); }
+	var basename = characters.join('');
 	name = path.join(info.dir, basename + info.ext);
 
 	return name;

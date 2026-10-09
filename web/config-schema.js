@@ -31,14 +31,10 @@
 	field(connection, 'excludeServices', '除外するサービスID', 'numbers', 'カンマまたは改行で区切ったサービスID。');
 	field(connection, 'serviceOrder', 'サービスの表示順', 'numbers', '優先して表示する順にサービスIDを指定します。');
 	field(connection, 'wuiUsers', 'Web認証ユーザー', 'strings', '1行に ユーザー名:パスワード を入力。空欄は認証なし。', { credentials: true });
-	field(connection, 'wuiAllowCountries', 'アクセスを許可する国', 'strings', 'JP などの2文字の国コードを1行ずつ指定。空欄は国による制限なし。', { countries: true });
-	field(connection, 'wuiPort', 'Web待受ポート', 'number', '1〜65535。空欄なら通常のWeb待受を無効にします。', { nullable: true, min: 1, max: 65535 });
-	field(connection, 'wuiHost', 'Web待受アドレス', 'string', '例: 0.0.0.0、127.0.0.1');
-	field(connection, 'wuiOpenServer', '認証なしサーバー', 'boolean', '認証なしのWeb待受を有効にします。');
-	field(connection, 'wuiOpenPort', '認証なしサーバーのポート', 'number', '1〜65535。省略時は 20772。', { min: 1, max: 65535 });
-	field(connection, 'wuiOpenHost', '認証なしサーバーのアドレス', 'string', '省略時はサーバーのネットワークアドレスを自動選択します。');
+	field(connection, 'wuiPort', 'Web待受ポート', 'number', 'リバースプロキシが接続するポート。1〜65535。空欄なら待受を無効にします。', { nullable: true, min: 1, max: 65535 });
+	field(connection, 'wuiHost', 'Web待受アドレス', 'select', '同じホストのリバースプロキシからのみ接続できます。', { choices: [['127.0.0.1', '127.0.0.1'], ['::1', '::1']] });
+	field(connection, 'wuiAllowedOrigins', '公開URL', 'strings', 'リバースプロキシのURLを1行ずつ指定。例: https://chinachu.example.com。パスは含めません。', { origins: true });
 	field(connection, 'wuiXFF', '転送元IPヘッダーを使用', 'boolean', '信頼できるリバースプロキシ経由の場合に使用します。');
-	field(connection, 'wuiMdnsAdvertisement', 'mDNSで公開', 'boolean', 'ネットワーク内へWebサービスを通知します。');
 	['Key', 'Cert', 'Ca'].forEach(function(name) {
 		field(connection, 'wuiTls' + name + 'Path', { Key: 'TLS秘密鍵', Cert: 'TLS証明書', Ca: 'TLS CA証明書' }[name], 'string', '証明書ファイルのパス。空欄は null。', { nullable: true });
 	});
@@ -90,7 +86,11 @@
 			if (f.type === 'identity') valid = (typeof value === 'string' && value.trim().length > 0) || (Number.isSafeInteger(value) && value >= 0);
 			if (f.type === 'select') valid = f.choices.some(function(choice) { return choice[0] === value; });
 			if (f.type === 'numbers') valid = Array.isArray(value) && value.every(function(n) { return Number.isSafeInteger(n) && n >= 0; });
-			if (f.type === 'strings') valid = Array.isArray(value) && value.every(function(s) { return typeof s === 'string' && (!f.credentials || /^[^:]+:.+$/.test(s)) && (!f.countries || /^[A-Z]{2}$/.test(s)); });
+			if (f.type === 'strings') valid = Array.isArray(value) && value.every(function(s) { return typeof s === 'string' && (!f.credentials || /^[^:]+:.+$/.test(s)); });
+			if (valid && f.origins) valid = value.every(function(s) {
+				try { var url = new URL(s); return ['http:', 'https:'].indexOf(url.protocol) !== -1 && url.hostname.indexOf('*') === -1 && !url.username && !url.password && url.pathname === '/' && !url.search && !url.hash; }
+				catch (_) { return false; }
+			});
 			if (valid && f.directory) valid = /\/$/.test(value);
 			if (valid && (f.url || f.mirakurun)) {
 				try {

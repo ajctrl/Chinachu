@@ -4,7 +4,7 @@ Chinachu
 Requirements
 ------------
 
-- Linux
+- Linux with `/proc/self/fd` available for recording file access
 - Node.js 24.x
 - The npm version bundled with Node.js 24
 - FFmpeg (including ffprobe)
@@ -22,3 +22,5 @@ Reservation keywords and automatic exclusion: [configuration and behavior](docs/
 Browser UI architecture, vendored assets and checks: [documentation](docs/browser-ui.md).
 
 Node dependency versions, native replacements and checks: [documentation](docs/npm-dependencies.md).
+
+Web UI access through a reverse proxy, migration and API requirements: [documentation](docs/reverse-proxy.md).

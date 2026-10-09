@@ -24,9 +24,13 @@
 
 ## 標準機能への置き換え
 
+- `geoip-lite`を削除しました。国制限は廃止し、必要な制限はリバースプロキシ側で適用します。
+- `bonjour-service`を削除しました。ループバックのみの待受へ移行し、mDNSでのサービス公開も廃止しました。
+  公開URLの設定と移行手順は[Web UIの公開方法](reverse-proxy.md)を参照してください。
 - `mkdirp`を削除し、録画先の作成を `fs.mkdirSync(path, { recursive: true })` に変更しました。
 - `diskusage`を削除し、容量取得を `fs.statfs()` に変更しました。一般ユーザーが利用できる
   空き容量は `bavail * bsize` で求め、取得失敗時には容量不足の動作を実行しません。
+  WebのストレージAPIも同じ標準APIを使用し、`df` のシェル実行を廃止しています。
 - `@chezearth/string`を削除し、録画ファイル名の話数ゼロ埋めを `String.prototype.padStart()` に変更しました。
 
 `chinachu-common`は外部配布物ではなく `file:common` を参照します。

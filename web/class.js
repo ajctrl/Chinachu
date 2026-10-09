@@ -1355,6 +1355,7 @@
           });
           xhr.open('PUT', './api/' + resource + '/' + num + '.json');
           xhr.setRequestHeader('Content-Type', 'application/json');
+          xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
           xhr.send(JSON.stringify(query));
         }
       }, {
@@ -1633,6 +1634,7 @@
 
 								xhr.open('POST', './api/' + resource + '.json');
 								xhr.setRequestHeader('Content-Type', 'application/json');
+								xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
 								xhr.send(JSON.stringify(query));
 							}
 						},
@@ -1907,6 +1909,7 @@
 
 								xhr.open('POST', './api/rules.json');
 								xhr.setRequestHeader('Content-Type', 'application/json');
+								xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
 								xhr.send(JSON.stringify(query));
 							}
 						},
