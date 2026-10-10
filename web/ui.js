@@ -250,9 +250,31 @@
         this.entity.appendChild(this.footer);
         this.setButtons(options.buttons || [{ label: '閉じる', onSelect: function () { self.close(); } }]);
         if (options.disableCloseButton) this.entity.classList.add('without-close-button');
+        if (options.closeOnClickOutside) {
+            function outsideDialog(event) {
+                var dialog = self.entity.shadowRoot && self.entity.shadowRoot.querySelector('dialog');
+                if (!dialog || event.composedPath()[0] !== dialog) return false;
+                var rect = dialog.getBoundingClientRect();
+                return event.clientX < rect.left || event.clientX > rect.right ||
+                    event.clientY < rect.top || event.clientY > rect.bottom;
+            }
+            // Keep the same native modal through the entire pointer gesture.
+            // Opening a confirmation on pointerdown changes its target before
+            // pointerup, and Firefox's touch simulator may only send click.
+            this.entity.addEventListener('pointerdown', function (event) {
+                if (outsideDialog(event)) event.stopPropagation();
+            }, true);
+            this.entity.addEventListener('click', function (event) {
+                if (!outsideDialog(event)) return;
+                event.stopPropagation();
+                self.close();
+            }, true);
+        }
         this.entity.addEventListener('wa-hide', function (event) {
             if (event.target !== self.entity) return;
             if (options.disableCloseByEsc && !self._closing) { event.preventDefault(); return; }
+            if (!self._closing && !self._canClose()) { event.preventDefault(); return; }
+            self._closing = true;
             self._finishClose();
         });
         this.entity.addEventListener('wa-after-hide', function (event) {
@@ -264,9 +286,11 @@
                 if (self._previousFocus && self._previousFocus.isConnected && !document.querySelector('wa-dialog[open]')) self._previousFocus.focus();
             }
         });
-        // Light dismissal is opt-in in Web Awesome; destructive dialogs remain explicit.
+        // Outside dismissal is opt-in; destructive dialogs remain explicit.
         this._isOpen = false;
         this._cleanup = scopedCleanup(function () {
+            // Page disposal must release the native modal and its focus trap.
+            self._closing = true;
             self.close(); self.entity.remove(); self._cleanup.unregister();
         });
     }
@@ -301,7 +325,11 @@
         this._isOpen = false;
         if (this.options.onClose) this.options.onClose.call(this, this);
     };
+    Modal.prototype._canClose = function () {
+        return !this._isOpen || !this.options.onBeforeClose || this.options.onBeforeClose.call(this, this) !== false;
+    };
     Modal.prototype.close = function () {
+        if (!this._closing && !this._canClose()) return this;
         this._closing = true;
         this.entity.open = false;
         this._finishClose();
@@ -540,7 +568,11 @@
         }
         input.addEventListener('keydown', function (event) { if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); commit(); result.dispatchEvent(new Event('change', { bubbles: true })); } });
         input.addEventListener('blur', commit);
-        result.getValues = function () { commit(); return values.slice(); };
+        result.getValues = function (options) {
+            if (!options || options.commit !== false) { commit(); return values.slice(); }
+            var pending = String(input.value || '').trim();
+            return pending && values.indexOf(pending) === -1 ? values.concat(pending) : values.slice();
+        };
         result.setValues = function (value) { values = Array.isArray(value) ? value.slice() : value ? [String(value)] : []; redraw(); return result; };
         result.enable = function () { input.disabled = false; redraw(); return result; };
         result.disable = function () { input.disabled = true; redraw(); return result; };
@@ -571,7 +603,7 @@
         if (typeof type === 'object') {
             control = type.create.call(input);
             input.element = control;
-            get = function () { return type.getVal.call(input); };
+            get = function (options) { return type.getVal.call(input, options); };
             set = function (value) { type.setVal.call(input, value); };
         } else if (type === 'checkboxes' || type === 'radios') {
             control = element('div', { 'class': 'chinachu-choice-group', role: type === 'radios' ? 'radiogroup' : 'group', 'aria-label': specification.label || '' });
@@ -647,7 +679,7 @@
             field.element.hidden = !field.active;
         });
     };
-    Form.prototype.getResult = Form.prototype.result = function () {
+    Form.prototype.getResult = Form.prototype.result = function (options) {
         this._dependencies();
         var result = {};
         this.fields.forEach(function (field) {
@@ -658,7 +690,7 @@
             if (!keys[0] || keys.some(function (key) { return ['__proto__', 'constructor', 'prototype'].includes(key); })) return;
             var target = result;
             keys.slice(0, -1).forEach(function (key) { if (!target[key]) target[key] = {}; target = target[key]; });
-            target[keys[keys.length - 1]] = field.get();
+            target[keys[keys.length - 1]] = field.get(options);
         });
         return result;
     };

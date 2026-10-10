@@ -240,6 +240,8 @@ Chinachu.definePage({
 
 		this.grid = new ChinachuVirtualGrid({
 			multiSelect: true,
+			responsiveLayout: false,
+			compactWhenOverflow: true,
 			compactColumn: 'reserve_titles',
 			compactFormatter: this.formatCompactRule.bind(this),
 			stateKey: this.isExclusion ? 'exclusion-rules' : 'rules',

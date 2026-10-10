@@ -10,7 +10,7 @@ const common = require('chinachu-common');
 function browser() {
 	const context = vm.createContext({ console: { log() {} } });
 	vm.runInContext(`
-		var requests = [], events = [], modals = [], forms = [], handlers = {};
+		var requests = [], events = [], modals = [], forms = [], handlers = {}, deferSave = false, pendingXHR;
 		var result = { duration: {}, reserve_titles: ['再放送'], isEnabled: true };
 		var rules = [{ reserve_titles: ['再放送'], isDisabled: true, sid: 2 }];
 		var ui = {}, P = {}, window = { location: {} }, global = { chinachu: { rules: [] } };
@@ -33,7 +33,9 @@ function browser() {
 				this.children.push.apply(this.children, arguments);
 			} };
 		} };
-		function Button(options) { this.options = options; }
+		function Button(options) { this.options = options; this.attributes = {}; }
+		Button.prototype.setAttribute = function(key, value) { this.attributes[key] = value; };
+		Button.prototype.removeAttribute = function(key) { delete this.attributes[key]; };
 		Button.prototype.disable = function() { this.disabled = true; return this; };
 		Button.prototype.enable = function() { this.disabled = false; return this; };
 
@@ -41,7 +43,7 @@ function browser() {
 			Object.assign(this, options);
 			(this.buttons || []).forEach(function(button) { button.button = new Button({}); });
 			this.show = function() { modals.push(this); return this; };
-			this.close = function() { this.closed = true; };
+			this.close = function() { if (this.onBeforeClose && this.onBeforeClose() === false) return; this.closed = true; if (this.onClose) this.onClose(); };
 			this.content = { updateText: function() {} };
 		}
 		var ChinachuUI = {
@@ -55,7 +57,7 @@ function browser() {
 			},
 			ActionButton: Button, ElementView: function() {},
 			Modal: Modal, createModal: function(options) { return new Modal(options); },
-			createForm: function(options) { forms.push(options); return { element: {}, getResult: function() { return result; } }; },
+			createForm: function(options) { forms.push(options); return { element: { addEventListener: function() {} }, getResult: function() { return JSON.parse(JSON.stringify(result)); } }; },
 			Grid: function(options) {
 				this.options = options;
 				this.destroy = function() {};
@@ -90,6 +92,8 @@ function browser() {
 			this.open = function(method, url) { this.method = method; this.url = url; };
 			this.send = function(body) {
 				requests.push({ method: this.method, url: this.url, headers: this.headers, body: JSON.parse(body) });
+				pendingXHR = this;
+				if (deferSave) return;
 				this.status = this.method === 'POST' ? 201 : 200;
 				this.loaded();
 			};
@@ -101,6 +105,108 @@ function browser() {
 }
 
 describe('common exclusion rule GUI', function () {
+	for (const exclusion of [false, true]) {
+		it('opens only one editor during loading and editing, then allows reopening: ' + exclusion, function() {
+			const ctx = browser();
+			const source = fs.readFileSync(path.join(__dirname, '../web/class.js'), 'utf8');
+			vm.runInContext(source.slice(source.indexOf('\tui.EditRule ='), source.indexOf('\tui.NewRule =')), ctx);
+			vm.runInContext(`
+				var loads = [];
+				Chinachu.request = function(url, options) { loads.push(options); };
+				function openEditor() { new ui.EditRule(0, ${exclusion}); }
+				openEditor(); openEditor();
+			`, ctx);
+			assert.equal(ctx.loads.length, 1, 'reserve the editor before its GET completes');
+			vm.runInContext('loads[0].onSuccess({ responseJSON: rules[0] }); openEditor();', ctx);
+			assert.equal(ctx.loads.length, 1);
+			assert.equal(ctx.modals.length, 1);
+			vm.runInContext("result.reserve_titles = ['変更']; modals[0].close(); openEditor();", ctx);
+			assert.equal(ctx.loads.length, 1, 'keep the reservation during discard confirmation');
+			vm.runInContext('modals[1].buttons[1].onSelect({}, modals[1]); openEditor();', ctx);
+			assert.ok(ctx.modals.every(modal => modal.closed), 'discard leaves no editor underneath');
+			assert.equal(ctx.loads.length, 2, 'closing releases the reservation');
+			vm.runInContext('loads[1].onFailure({ status: 500 }); openEditor();', ctx);
+			assert.equal(ctx.loads.length, 3, 'a failed load allows retry');
+		});
+	}
+
+	it('releases pending editors on page disposal and ignores their late responses', function() {
+		const ctx = browser();
+		const source = fs.readFileSync(path.join(__dirname, '../web/class.js'), 'utf8');
+		vm.runInContext(source.slice(source.indexOf('\tui.EditRule ='), source.indexOf('\tui.NewRule =')), ctx);
+		vm.runInContext(`
+			var loads = [], oldScope = { _cleanups: [] };
+			Chinachu.scope = oldScope;
+			Chinachu.request = function(url, options) { loads.push(options); };
+			new ui.EditRule(0);
+			oldScope._cleanups.splice(0).forEach(cleanup => cleanup());
+			Chinachu.scope = { _cleanups: [] };
+			new ui.EditRule(0);
+			loads[0].onSuccess({ responseJSON: rules[0] });
+		`, ctx);
+		assert.equal(ctx.loads.length, 2);
+		assert.equal(ctx.modals.length, 0, 'disposed page cannot open an editor');
+		vm.runInContext('loads[1].onSuccess({ responseJSON: rules[0] }); modals[0].close();', ctx);
+		assert.equal(ctx.Chinachu.scope._cleanups.length, 0, 'closing unregisters the cleanup');
+	});
+
+	it('keeps normal and exclusion rule identities separate', function() {
+		const ctx = browser();
+		const source = fs.readFileSync(path.join(__dirname, '../web/class.js'), 'utf8');
+		vm.runInContext(source.slice(source.indexOf('\tui.EditRule ='), source.indexOf('\tui.NewRule =')), ctx);
+		vm.runInContext('new ui.EditRule(0); new ui.EditRule(0, true);', ctx);
+		assert.equal(ctx.modals.length, 2);
+	});
+
+	for (const status of [500, 0]) {
+		it('keeps unsaved input after a failed save with status ' + status, function() {
+			const ctx = browser();
+			const source = fs.readFileSync(path.join(__dirname, '../web/class.js'), 'utf8');
+			vm.runInContext(source.slice(source.indexOf('\tui.EditRule ='), source.indexOf('\tui.NewRule =')), ctx);
+			vm.runInContext("new ui.EditRule(0); var editor = modals[0]; result.reserve_titles = ['未保存']; deferSave = true; var saveButton = editor.buttons[0].button; editor.buttons[0].onSelect({ targetButton: saveButton }, editor); editor.close();", ctx);
+			assert.equal(ctx.modals[0].closed, undefined, 'cannot dismiss while saving');
+			assert.equal(ctx.modals[0].element.inert, true);
+			assert.equal(ctx.modals.length, 1);
+			vm.runInContext('pendingXHR.status = ' + status + '; pendingXHR.loaded();', ctx);
+			assert.equal(ctx.modals[0].closed, undefined);
+			assert.equal(ctx.modals[0].element.inert, false);
+			assert.equal(ctx.saveButton.disabled, false);
+			assert.equal(ctx.modals[1].title, '失敗');
+			vm.runInContext('modals[1].close(); editor.close();', ctx);
+			assert.equal(ctx.modals[2].title, '未保存の変更');
+			assert.deepEqual(Array.from(ctx.result.reserve_titles), ['未保存']);
+			vm.runInContext('modals[2].close(); deferSave = false; editor.buttons[0].onSelect({ targetButton: saveButton }, editor);', ctx);
+			assert.equal(ctx.modals[0].closed, true, 'successful retry closes without a discard confirmation');
+			assert.equal(ctx.modals.at(-1).title, '成功');
+			assert.equal(ctx.modals.length, 4);
+		});
+	}
+
+	for (const exclusion of [false, true]) {
+		it('checks unsaved edits before closing ' + (exclusion ? 'exclusion' : 'normal') + ' rules', function() {
+			const ctx = browser();
+			const source = fs.readFileSync(path.join(__dirname, '../web/class.js'), 'utf8');
+			vm.runInContext(source.slice(source.indexOf('\tui.EditRule ='), source.indexOf('\tui.NewRule =')), ctx);
+			vm.runInContext('new ui.EditRule(0, ' + exclusion + '); var editor = modals[0];', ctx);
+			assert.equal(ctx.modals[0].closeOnClickOutside, true);
+			assert.equal(ctx.modals[0].onBeforeClose(), true);
+			vm.runInContext("result.reserve_titles = ['変更したタイトル']; editor.close();", ctx);
+			assert.equal(ctx.modals[0].closed, undefined);
+			assert.equal(ctx.modals[1].title, '未保存の変更');
+			vm.runInContext('editor.close();', ctx);
+			assert.equal(ctx.modals.length, 2, 'repeated dismissal opens only one confirmation');
+			vm.runInContext('modals[1].buttons[0].onSelect({}, modals[1]);', ctx);
+			assert.equal(ctx.modals[0].closed, undefined);
+			assert.deepEqual(Array.from(ctx.result.reserve_titles), ['変更したタイトル']);
+			vm.runInContext("result.reserve_titles = ['再放送'];", ctx);
+			assert.equal(ctx.modals[0].onBeforeClose(), true, 'restoring the original values clears unsaved changes');
+			vm.runInContext("result.reserve_titles = ['変更']; editor.close(); modals[2].buttons[1].onSelect({}, modals[2]);", ctx);
+			assert.equal(ctx.modals[0].closed, true);
+			assert.equal(ctx.modals[2].closed, true);
+			assert.ok(ctx.requests.every(request => request.method === 'get'), 'discarding never saves');
+		});
+	}
+
 	for (const [action, method, url] of [
 		['new ui.NewRule()', 'POST', './api/rules.json'],
 		['new ui.EditRule(0)', 'PUT', './api/rules/0.json'],

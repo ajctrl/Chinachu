@@ -2,6 +2,7 @@
  * then run NODE_PATH=/path/to/node_modules node scripts/check-browser-pages.cjs.
  * Set CHINACHU_BROWSER_EPG_ONLY=1 to check only the program table popup.
  * Set CHINACHU_BROWSER_EPG_ONLY=1 to check just the timetable program popup.
+ * Set CHINACHU_BROWSER_RULES_ONLY=1 to check repeated rule editor activation.
  * All HTTP/Socket.IO data comes from a temporary loopback fixture server. API
  * writes are rejected except a browser-intercepted mock config save; no DVR
  * service, real configuration files or recording files are accessed.
@@ -201,6 +202,54 @@ async function run() {
 		});
 		await page.goto(origin + '/#!/dashboard/top/');
 		await page.waitForFunction(() => window.app?.pm?.p && app.chinachu.schedule.length && app.chinachu.reserves.length && app.chinachu.recorded.length);
+		if (process.env.CHINACHU_BROWSER_EPG_ONLY !== '1') {
+			for (const width of [1280, 360]) {
+				await page.setViewportSize({ width, height: 720 });
+				for (const exclusion of [false, true]) {
+					await page.goto(origin + '/#!/rules/list/' + (exclusion ? 'kind=exclusion/' : ''));
+					const row = page.locator('.tabulator-row').first();
+					await row.waitFor();
+					const resource = exclusion ? 'exclusion-rules' : 'rules';
+					const title = exclusion ? '共通除外ルール編集' : 'ルール編集';
+					let release, loads = 0;
+					const pending = new Promise(resolve => { release = resolve; });
+					const endpoint = '**/api/' + resource + '/0.json';
+					await page.route(endpoint, async route => {
+						loads++;
+						await pending;
+						await route.fulfill({ json: fixture[resource][0] });
+					});
+					const cell = row.locator('[tabulator-field="reserve_titles"]');
+					await cell.click();
+					assert.equal(await row.getByRole('checkbox').isChecked(), true, 'single click selects the rule');
+					await cell.dblclick();
+					await cell.dblclick();
+					release();
+					const editor = page.locator('wa-dialog[label="' + title + '"]');
+					await editor.getByRole('dialog').waitFor();
+					assert.equal(loads, 1, 'repeated activation sends one request, including during loading');
+					assert.equal(await editor.count(), 1, 'only one editor is created');
+					await editor.locator('wa-input[aria-label="何時から"]').getByRole('spinbutton').fill('5');
+					await page.mouse.click(4, 4);
+					const confirmation = page.locator('wa-dialog[label="未保存の変更"]');
+					await confirmation.getByRole('button', { name: '破棄して閉じる', exact: true }).click();
+					await page.waitForFunction(() => !document.querySelector('wa-dialog'));
+					await cell.dblclick();
+					await editor.getByRole('dialog').waitFor();
+					assert.equal(loads, 2, 'the rule can be reopened after discard');
+					await editor.getByRole('button', { name: 'キャンセル', exact: true }).click();
+					await editor.waitFor({ state: 'detached' });
+					await page.unroute(endpoint);
+				}
+			}
+			assert.deepEqual(errors, []);
+			assert.deepEqual(writes, []);
+			console.log('PASS repeated rule activation: one editor during loading, discard and reopen at 1280/360px for normal/exclusion rules');
+			if (process.env.CHINACHU_BROWSER_RULES_ONLY === '1') return;
+			await page.setViewportSize({ width: 1280, height: 900 });
+			await page.goto(origin + '/#!/dashboard/top/');
+			await page.waitForFunction(() => app.pm.p?.self.category === 'dashboard' && app.pm.p.self.page === 'top');
+		}
 		if (process.env.CHINACHU_BROWSER_EPG_ONLY === '1') {
 			async function openTable(targetPage) {
 				await targetPage.goto(origin + '/#!/schedule/table/');
@@ -875,7 +924,7 @@ async function run() {
 		for (const exclusion of [false, true]) {
 			await route('rules/list', exclusion ? 'kind=exclusion' : '');
 			await page.waitForFunction(exclusion => app.pm.p.isExclusion === exclusion, exclusion);
-			for (const width of [800, 390, 320]) {
+			for (const width of [1440, 1280, 1024, 801, 800, 390, 320]) {
 				await page.setViewportSize({ width, height: 844 });
 				await page.waitForFunction(() => app.pm.p.grid._ready && app.pm.p.grid._compact);
 				await page.waitForFunction(() => {
@@ -887,11 +936,13 @@ async function run() {
 				assert.match(await card.innerText(), exclusion ? /除外タイトル：.*再放送/ : /タイトル：.*番組/);
 				assert.doesNotMatch(await card.innerText(), /CH指定なし|除外なし|時間帯：all/);
 				assert.deepEqual(await page.evaluate(() => app.pm.p.grid.table.getColumns().filter(c => c.isVisible()).map(c => c.getField())), ['_selection', 'reserve_titles', '_menu']);
+				assert.equal(await page.locator('.tabulator-responsive-collapse-toggle').count(), 0);
 				assert.equal(await page.locator('.tabulator-tableholder').evaluate(el => el.scrollWidth > el.clientWidth + 1), false);
 				if (!exclusion) {
 					assert.match(await page.locator('.chinachu-rule-summary').nth(1).innerText(), /\[AND\] ニュース, <特集>/);
 					assert.match(await page.locator('.chinachu-rule-summary').nth(1).innerText(), /無視タイトル：再放送/);
 				}
+				if (width === 1280) await screenshot(exclusion ? 'narrow-exclusion-rules' : 'narrow-rule-cards');
 				if (width === 390) await screenshot(exclusion ? 'mobile-exclusion-rules' : 'mobile-rule-cards');
 			}
 			await page.locator('.tabulator-cell[tabulator-field="_selection"] input').first().check();
@@ -902,9 +953,13 @@ async function run() {
 			assert.deepEqual(await page.evaluate(() => window.editedRule), { index: 0, exclusion });
 			assert.equal(await page.evaluate(() => app.pm.p.grid.getSelectedRows().length), 1);
 			await page.evaluate(() => { chinachu.ui.EditRule = window.savedEditRule; });
-			await page.setViewportSize({ width: 1280, height: 900 });
+			await page.setViewportSize({ width: 1920, height: 900 });
 			await page.waitForFunction(() => app.pm.p.grid._ready && !app.pm.p.grid._compact);
 			assert.equal(await page.locator('.chinachu-rule-summary').count(), 0);
+			assert.equal(await page.locator('.tabulator-responsive-collapse-toggle').count(), 0);
+			assert.equal(await page.locator('.tabulator-tableholder').evaluate(el => el.scrollWidth > el.clientWidth + 1), false);
+			assert.deepEqual(await page.evaluate(() => app.pm.p.grid.table.getColumns().filter(c => c.isVisible()).map(c => c.getField())),
+				await page.evaluate(() => ['_selection'].concat(app.pm.p.grid._opt.cols.map(c => c.key))));
 			assert.equal(await page.evaluate(() => app.pm.p.grid.getSelectedRows().length), 1);
 		}
 		for (const name of ['search/top', 'recorded/search']) {

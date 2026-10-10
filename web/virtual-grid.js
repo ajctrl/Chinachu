@@ -46,7 +46,7 @@
 				}
 			};
 		});
-		if (!this._compact) columns.unshift({
+		if (!this._compact && options.responsiveLayout !== false) columns.unshift({
 			title: '', field: '_collapse', width: 40, minWidth: 40, responsive: 0,
 			headerSort: false, resizable: false, formatter: 'responsiveCollapse'
 		});
@@ -92,6 +92,15 @@
 		return columns;
 	};
 	Grid.prototype._isCompact = function() {
+		var options = this._opt;
+		if (options.compactWhenOverflow) {
+			// Use the full table's minimum width, independent of the current layout.
+			// Reserve scrollbar space to avoid switching back and forth as row heights change.
+			var minimum = options.cols.reduce(function(width, column) { return width + (column.width || 128); }, 24);
+			minimum += options.disableSelect ? 34 : 36;
+			if (options.responsiveLayout !== false) minimum += 40;
+			if (this.element.clientWidth < minimum) return true;
+		}
 		return this._opt.cols.some(function(column) { return column.key === 'title' || column.key === this._opt.compactColumn; }, this) &&
 			!!root.matchMedia && root.matchMedia('(max-width: 800px)').matches;
 	};
@@ -145,7 +154,7 @@
 		this.table = new root.Tabulator(this.element, {
 			index: '_key', height: '100%', layout: 'fitColumns', renderVertical: 'virtual', renderVerticalBuffer: 300,
 			headerVisible: !this._compact,
-			responsiveLayout: this._compact ? false : 'collapse', responsiveLayoutCollapseStartOpen: false,
+			responsiveLayout: this._compact || options.responsiveLayout === false ? false : 'collapse', responsiveLayoutCollapseStartOpen: false,
 			responsiveLayoutCollapseFormatter: function(fields) { return grid._collapsedDetails(fields); },
 			placeholder: '該当する項目がありません', columns: columns, data: [],
 			selectableRows: false, initialSort: initialSort,

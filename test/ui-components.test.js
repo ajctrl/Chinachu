@@ -50,6 +50,50 @@ function loadUI(timers = {}, chinachu) {
 const plain = value => JSON.parse(JSON.stringify(value));
 
 describe('Web Awesome application UI', function () {
+    it('waits for an outside click before checking unsaved changes, including click-only touch simulation', function () {
+        const { UI } = loadUI();
+        let checks = 0, stopped = 0;
+        const modal = new UI.Modal({ closeOnClickOutside: true,
+            onBeforeClose() { checks++; return false; }
+        }).open();
+        const dialog = { open: true, getBoundingClientRect: () => ({ left: 20, right: 340, top: 72, bottom: 648 }) };
+        modal.entity.shadowRoot = { querySelector: () => dialog };
+        const outside = { clientX: 4, clientY: 360, composedPath: () => [dialog, modal.entity], stopPropagation() { stopped++; } };
+        modal.entity.dispatchEvent({ ...outside, type: 'pointerdown' });
+        assert.equal(checks, 0, 'do not change dialogs during a pointer gesture');
+        assert.equal(stopped, 1, 'suppress the component pulse and pointerdown dismissal');
+        modal.entity.dispatchEvent({ ...outside, type: 'click' });
+        assert.equal(checks, 1);
+        assert.equal(modal.entity.open, true);
+        modal.entity.dispatchEvent({ ...outside, type: 'click' });
+        assert.equal(checks, 2, 'a click without pointerdown also checks unsaved changes');
+        modal.entity.dispatchEvent({ ...outside, type: 'click', clientX: 180 });
+        modal.entity.dispatchEvent({ ...outside, type: 'click', composedPath: () => [{}, dialog, modal.entity] });
+        assert.equal(checks, 2, 'dialog contents do not trigger outside dismissal');
+    });
+
+    it('guards explicit and native dialog dismissal without closing or notifying twice', function () {
+        const { UI } = loadUI();
+        let allow = false, checks = 0, closed = 0;
+        const modal = new UI.Modal({ closeOnClickOutside: true,
+            onBeforeClose() { checks++; return allow; }, onClose() { closed++; }
+        }).open();
+        assert.equal(Object.hasOwn(modal.entity.attributes, 'light-dismiss'), false, 'outside clicks use the guarded application close path');
+        modal.close();
+        assert.equal(modal.entity.open, true);
+        assert.equal(closed, 0);
+        let prevented = false;
+        modal.entity.dispatchEvent({ type: 'wa-hide', preventDefault() { prevented = true; } });
+        assert.equal(prevented, true);
+        assert.equal(modal._isOpen, true);
+        allow = true;
+        modal.close();
+        modal.entity.dispatchEvent({ type: 'wa-hide' });
+        assert.equal(checks, 3);
+        assert.equal(closed, 1);
+        assert.equal(modal.entity.open, false);
+    });
+
     it('releases closed dialogs and registers reopened dialogs with their original page', function () {
         const scope = { _cleanups: [] };
         const chinachu = { scope };
@@ -171,6 +215,24 @@ describe('Web Awesome application UI', function () {
         };
         const form = UI.createForm({ fields: [{ key: 'channels', input: { type: inputType, val: ['27', 'BS_211', 'unavailable'] } }] });
         assert.deepEqual(plain(form.getResult()), { channels: ['27', 'BS_211', 'unavailable'] });
+    });
+
+    it('checks draft keywords without committing or clearing the text being typed', function () {
+        const { UI } = loadUI();
+        const form = UI.createForm({ fields: [{ key: 'keywords', input: { val: ['元の語'], type: {
+            create() { return UI.createTokenizer(); },
+            getVal(options) { return this.element.getValues(options); },
+            setVal(value) { this.element.setValues(value); }
+        } } }] });
+        const input = form.fields[0].control.children[1];
+        input.value = '新しい語';
+        assert.deepEqual(plain(form.getResult({ commit: false })), { keywords: ['元の語', '新しい語'] });
+        assert.equal(input.value, '新しい語');
+        input.value = '';
+        assert.deepEqual(plain(form.getResult({ commit: false })), { keywords: ['元の語'] });
+        input.value = '新しい語';
+        assert.deepEqual(plain(form.getResult()), { keywords: ['元の語', '新しい語'] });
+        assert.equal(input.value, '');
     });
 
     it('validates only active required controls', function () {

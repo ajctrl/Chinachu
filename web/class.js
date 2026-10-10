@@ -152,8 +152,8 @@
 				placeholder: '...'
 			});
 		},
-		getVal: function () {
-			return this.element.getValues();
+		getVal: function (options) {
+			return this.element.getValues(options);
 		},
 		setVal: function (val) {
 			this.element.setValues(val);
@@ -1090,9 +1090,25 @@
 			} else {
 				// フォームに表示させるルールを読み込む
 				var num = this.num;
+				// Reserve the editor before the request: repeated activation can
+				// otherwise create identical dialogs before either is visible.
+				var editors = ui.EditRule._activeEditors || (ui.EditRule._activeEditors = new Map());
+				var key = resource + '/' + num;
+				if (editors.has(key)) return this;
+				var owner = {}, scope = Chinachu.scope;
+				editors.set(key, owner);
+				function releaseEditor() {
+				    if (editors.get(key) === owner) editors.delete(key);
+				    if (scope && scope._cleanups) {
+				        var index = scope._cleanups.indexOf(releaseEditor);
+				        if (index !== -1) scope._cleanups.splice(index, 1);
+				    }
+				}
+				if (scope && scope._cleanups) scope._cleanups.push(releaseEditor);
 				Chinachu.request('./api/' + resource + '/' + num + '.json', {
   method: 'get',
   onSuccess: function (t) {
+    if (editors.get(key) !== owner) return;
     var rule = t.responseJSON;
     var form = ChinachuUI.createForm({
       fields: [{
@@ -1302,16 +1318,47 @@
         return !isExclusion || field.key !== 'recorded_format';
       })
     });
+    function editState() { return JSON.stringify(form.getResult({ commit: false })); }
+    var initialState = editState();
+    var saving = false, discardConfirmed = false, closeConfirmation = null;
     var modal = new ChinachuUI.Modal({
       title: isExclusion ? '共通除外ルール編集' : 'ルール編集',
       subtitle: isExclusion ? '一致した自動予約をスキップします。手動予約は対象外です。保存後、スケジューラー実行時に反映します。' : '',
       element: form.element,
+      closeOnClickOutside: true,
+      onClose: releaseEditor,
+      onBeforeClose: function () {
+        if (saving) return false;
+        if (discardConfirmed || editState() === initialState) return true;
+        if (!closeConfirmation) {
+          closeConfirmation = new ChinachuUI.Modal({
+            title: '未保存の変更',
+            text: '変更が保存されていません。変更を破棄して閉じますか？',
+            buttons: [{
+              label: '編集を続ける',
+              onSelect: function (e, confirmation) { confirmation.close(); }
+            }, {
+              label: '破棄して閉じる', color: '@accent',
+              onSelect: function (e, confirmation) {
+                discardConfirmed = true;
+                confirmation.close();
+                modal.close();
+              }
+            }],
+            onClose: function () { closeConfirmation = null; }
+          }).show();
+        }
+        return false;
+      },
       buttons: [{
         label: '変更',
-        color: '@pink',
         onSelect: function (e, modal) {
+          if (saving) return;
           e.targetButton.disable();
           var query = form.getResult();
+          var submittedState = JSON.stringify(query);
+          saving = true;
+          form.element.inert = true;
           if (isExclusion) {
             ['sid', 'category'].forEach(function (key) {
               if (typeof rule[key] !== 'undefined') {
@@ -1336,8 +1383,14 @@
           }
           console.log(query);
           var xhr = new XMLHttpRequest();
-          xhr.addEventListener('load', function () {
+          function finishSave() {
+            if (!saving) return;
+            saving = false;
+            form.element.inert = false;
+            e.targetButton.enable();
             if (xhr.status === 200) {
+              initialState = submittedState;
+              modal.close();
               if (isExclusion) {
                 Chinachu.emit(document, 'chinachu:exclusion-rules');
               }
@@ -1348,11 +1401,11 @@
             } else {
               ChinachuUI.createModal({
                 title: '失敗',
-                text: 'ルール変更に失敗しました (' + xhr.status + ')'
+                text: 'ルール変更に失敗しました (' + xhr.status + ')。入力内容は保持されています。'
               }).show();
             }
-            modal.close();
-          });
+          }
+          ['load', 'error', 'abort', 'timeout'].forEach(function (event) { xhr.addEventListener(event, finishSave); });
           xhr.open('PUT', './api/' + resource + '/' + num + '.json');
           xhr.setRequestHeader('Content-Type', 'application/json');
           xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
@@ -1365,8 +1418,17 @@
         }
       }]
     }).show();
+    function updateSaveButton() {
+      var button = modal.buttons[0].button;
+      if (editState() !== initialState) button.setAttribute('data-color', '@accent');
+      else button.removeAttribute('data-color');
+    }
+    form.element.addEventListener('input', updateSaveButton);
+    form.element.addEventListener('change', updateSaveButton);
+    updateSaveButton();
   }.bind(this),
   onFailure: function (t) {
+    releaseEditor();
     new ChinachuUI.Modal({
       title: '失敗',
       text: 'ルールを読み込めませんでした (' + t.status + ')'

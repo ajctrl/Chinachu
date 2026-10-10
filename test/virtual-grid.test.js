@@ -168,6 +168,22 @@ describe('Tabulator list adapter', function() {
 		assert.equal(list.children[1].innerHTML, undefined);
 	});
 
+	it('uses available grid width to wrap rules before their columns overflow', function() {
+		const { Grid, window } = implementation();
+		window.matchMedia = () => ({ matches: false });
+		const view = new Grid({ compactWhenOverflow: true, responsiveLayout: false,
+			compactColumn: 'reserve_titles', cols: [{ key: 'channels', width: 700 }, { key: 'reserve_titles' }] });
+		// 828px of columns, 36px of selection, and 24px for the scrollbar.
+		view.element.clientWidth = 887;
+		assert.equal(view._isCompact(), true);
+		view._compact = true;
+		view.element.clientWidth = 888;
+		assert.equal(view._isCompact(), false);
+		view._opt.compactWhenOverflow = false;
+		view.element.clientWidth = 500;
+		assert.equal(view._isCompact(), false, 'other desktop lists keep their existing behavior');
+	});
+
 	it('preserves selection, sort and scroll anchor while rebuilding across the compact breakpoint', function() {
 		const view = grid(), row = model('one', 1);
 		view.splice(0, undefined, [row]);

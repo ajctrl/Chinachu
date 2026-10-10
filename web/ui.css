@@ -83,6 +83,7 @@
 .chinachu-button:hover:not([disabled])::part(base) { background: #fff0f6; border-color: #c24186; }
 .chinachu-button[data-color] { --button-fill: #388dd6; --button-hover: #287bc2; }
 .chinachu-button[data-color="@pink"] { --button-fill: #d67fae; --button-hover: #cd649d; }
+.chinachu-button[data-color="@accent"] { --button-fill: var(--chinachu-accent-color, #c24186); --button-hover: #ab3373; }
 .chinachu-button[data-color="@red"], .chinachu-button[data-color="@danger"] { --button-fill: #d2322d; --button-hover: #b52b27; }
 .chinachu-button[data-color="@orange"], .chinachu-button[data-color="@warning"] { --button-fill: #faa732; --button-hover: #f9980f; }
 .chinachu-button[data-color="@green"], .chinachu-button[data-color="@success"] { --button-fill: #5bb75b; --button-hover: #49a649; }
