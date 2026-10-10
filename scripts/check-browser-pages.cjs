@@ -1,5 +1,7 @@
 /* Optional end-to-end browser check. Install Playwright and Chromium separately,
  * then run NODE_PATH=/path/to/node_modules node scripts/check-browser-pages.cjs.
+ * Set CHINACHU_BROWSER_EPG_ONLY=1 to check only the program table popup.
+ * Set CHINACHU_BROWSER_EPG_ONLY=1 to check just the timetable program popup.
  * All HTTP/Socket.IO data comes from a temporary loopback fixture server. API
  * writes are rejected except a browser-intercepted mock config save; no DVR
  * service, real configuration files or recording files are accessed.
@@ -88,7 +90,7 @@ async function run() {
 	const origin = 'http://127.0.0.1:' + server.address().port;
 	let browser;
 	try {
-		browser = await browserType.launch({ headless: true, args: browserName === 'chromium' ? ['--no-sandbox'] : [] });
+		browser = await browserType.launch({ headless: true, executablePath: process.env.CHINACHU_BROWSER_EXECUTABLE_PATH, args: browserName === 'chromium' ? ['--no-sandbox'] : [] });
 		const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'ja-JP' });
 		const errors = [], external = [];
 		await context.route('**/*', route => {
@@ -101,12 +103,130 @@ async function run() {
 		async function screenshot(name, target = page) {
 			if (screenshotDir) await target.screenshot({ path: path.join(screenshotDir, name + '.png'), fullPage: true });
 		}
+		async function checkProgramPopup(targetPage, card, prefix, alreadyOpen = false) {
+			const popup = targetPage.locator('.schedule-program-popover:popover-open');
+			async function open() {
+				await card.scrollIntoViewIfNeeded();
+				if (prefix.startsWith('native-touch')) await card.tap();
+				else await card.click();
+				await popup.waitFor();
+				await targetPage.waitForFunction(() => app.pm.p.data.target && document.querySelectorAll('.rect.spot').length === 1);
+			}
+			async function closed() {
+				await popup.waitFor({ state: 'hidden' });
+				await targetPage.waitForFunction(() => !app.pm.p.data.target && !document.querySelector('.rect.spot'));
+			}
+			if (!alreadyOpen) await open();
+			await popup.waitFor();
+			const program = await targetPage.evaluate(() => app.pm.p.data.target);
+			assert.equal(await popup.locator('.title').innerText(), program.title);
+			assert.equal(await popup.locator('.program-category').innerText(), 'アニメ');
+			assert.equal(await popup.locator('.channel').innerText(), program.channel.name);
+			assert.equal(await popup.locator('.detail').innerText(), program.detail);
+			assert.equal(await popup.locator('.detail img').count(), 0, 'popup descriptions must remain plain text');
+			assert.match(await popup.locator('.date').innerText(), /^\d{2}\/\d{2}（[日月火水木金土]） \d{2}:\d{2}–\d{2}:\d{2}（30分）$/);
+			assert.equal(await popup.locator('.reservation-status').innerText(), '未予約');
+			assert.equal(await popup.locator('.program-reserve-button').innerText(), '＋ 予約する');
+			assert.equal(await popup.locator('.id').count(), 0, 'summary omits internal program IDs');
+			assert.equal(await popup.evaluate(element => {
+				const box = element.getBoundingClientRect();
+				return box.left >= 0 && box.right <= innerWidth + 1 && box.top >= 0 && box.bottom <= innerHeight + 1;
+			}), true, 'program popup must fit the viewport at ' + prefix);
+			await screenshot(prefix + '-program-popup', targetPage);
+			await popup.locator('.drawer-close').click();
+			await closed();
+			await open();
+			await targetPage.keyboard.press('Escape');
+			await closed();
+			await open();
+			await targetPage.locator('.header').click({ position: { x: 2, y: 2 } });
+			await closed();
+			await open();
+			await popup.locator('.program-reserve-button').click();
+			await closed();
+			const reserveDialog = targetPage.locator('wa-dialog[label="手動予約"][open]');
+			await reserveDialog.getByRole('button', { name: 'キャンセル', exact: true }).waitFor();
+			assert.ok((await reserveDialog.innerText()).includes(program.title), 'reserve confirmation must identify the selected program');
+			await reserveDialog.getByRole('button', { name: 'キャンセル', exact: true }).click();
+			await targetPage.waitForFunction(() => !document.querySelector('wa-dialog[label="手動予約"][open]'));
+			await open();
+			await popup.locator('.program-details-button').click();
+			await targetPage.waitForFunction(id => app.pm.p?.self.category === 'program' && app.pm.p.self.query.id === id, program.id);
+			assert.equal(await targetPage.locator('.schedule-program-popover').count(), 0, 'navigation must dispose the program popup');
+			console.log('PASS ' + prefix + ' program popup: content, bounds, close/Escape/outside, reservation confirmation, details');
+		}
+		async function checkProgramPopupEdges(targetPage) {
+			const popup = targetPage.locator('.schedule-program-popover:popover-open');
+			for (const [id, status, label] of [
+				['future-1', '予約済み', '予約を取り消す'],
+				['future-2', 'スキップ中', 'スキップを解除'],
+				['future-3', '予約済み', '予約をスキップ']
+			]) {
+				await targetPage.locator('.rect[rel="' + id + '"]').click();
+				await popup.waitFor();
+				await targetPage.waitForFunction(id => app.pm.p.data.target?.id === id, id);
+				assert.equal(await popup.locator('.reservation-status').innerText(), status);
+				assert.equal(await popup.locator('.program-reserve-button').innerText(), label);
+				assert.equal(await targetPage.locator('.rect.spot').getAttribute('rel'), id, 'direct program switching must move the selected highlight');
+			}
+			await targetPage.keyboard.press('Escape');
+			await popup.waitFor({ state: 'hidden' });
+			for (const width of [1280, 390, 320]) {
+				await targetPage.setViewportSize({ width, height: 844 });
+				await targetPage.evaluate(() => {
+					const owner = app.pm.p, item = owner.data.piece['future-10'];
+					owner.view.content.scrollTop = item.posY - owner.view.content.clientHeight + 80;
+					owner.render();
+				});
+				const lowerCard = targetPage.locator('.rect[rel="future-10"]');
+				await lowerCard.click({ position: { x: 10, y: 10 } });
+				await popup.waitFor();
+				await popup.evaluate(async element => {
+					await Promise.all(Array.from(element.querySelectorAll('wa-button'), button => button.updateComplete));
+					await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+				});
+				assert.equal(await popup.evaluate(element => {
+					const box = element.getBoundingClientRect();
+					return box.left >= 0 && box.right <= innerWidth + 1 && box.top >= 0 && box.bottom <= innerHeight + 1;
+				}), true, 'popup at the bottom must fit after buttons render at ' + width + 'px');
+				await screenshot('program-popup-bottom-' + width, targetPage);
+				await popup.locator('.drawer-close').click();
+				await popup.waitFor({ state: 'hidden' });
+			}
+			console.log('PASS program popup: reserved/skipped status, direct switching, lower viewport bounds at 1280/390/320px');
+		}
 		page.on('pageerror', error => errors.push(error.stack || error.message));
 		page.on('console', message => {
 			if (message.type() === 'error' && !message.text().startsWith('Failed to load resource:')) errors.push(message.text());
 		});
 		await page.goto(origin + '/#!/dashboard/top/');
 		await page.waitForFunction(() => window.app?.pm?.p && app.chinachu.schedule.length && app.chinachu.reserves.length && app.chinachu.recorded.length);
+		if (process.env.CHINACHU_BROWSER_EPG_ONLY === '1') {
+			async function openTable(targetPage) {
+				await targetPage.goto(origin + '/#!/schedule/table/');
+				await targetPage.waitForFunction(() => window.app?.pm?.p?.self.page === 'table' && app.pm.p.data.pieces?.length);
+				await targetPage.locator('.rect[rel]').first().waitFor();
+			}
+			await openTable(page);
+			await checkProgramPopup(page, page.locator('.rect[rel]').first(), 'desktop');
+			await openTable(page);
+			await checkProgramPopupEdges(page);
+			const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: browserName === 'chromium', hasTouch: true, locale: 'ja-JP' });
+			await mobile.route('**/*', route => {
+				if (new URL(route.request().url()).origin === origin) return route.continue();
+				external.push(route.request().url()); return route.abort();
+			});
+			const mobilePage = await mobile.newPage();
+			mobilePage.on('pageerror', error => errors.push(error.stack || error.message));
+			await openTable(mobilePage);
+			await checkProgramPopup(mobilePage, mobilePage.locator('.rect[rel]').first(), 'native-touch-390');
+			await mobile.close();
+			assert.equal(errors.length, 0, errors.join('\n'));
+			assert.equal(writes.length, 0, 'popup checks must not write to the fixture server');
+			assert.equal(external.length, 0, 'popup checks must not request external resources');
+			console.log('Browser program popup checks passed (' + browserName + ').');
+			return;
+		}
 		const cleanupCounts = await page.evaluate(() => {
 			localStorage.setItem('dashboard.showChannels', 'yes');
 			app.pm.p.drawChannels();
@@ -192,17 +312,268 @@ async function run() {
 			channel.programs.push(Object.assign({}, channel.programs[0], { id: 'literal-percent', title: '%41', fullTitle: '%41', detail: '%2F' }));
 			app.pm.p.viewSearchModal();
 		});
-		await page.locator('.chinachu-search-form input[name="title"]').fill('%41');
-		await page.locator('.chinachu-search-form input[name="desc"]').fill('%2F');
-		await page.evaluate(() => document.querySelector('.chinachu-search-form').requestSubmit());
+		await page.locator('wa-dialog .chinachu-search-form input[name="keyword"]').fill('%41 %2F');
+		await page.evaluate(() => document.querySelector('wa-dialog .chinachu-search-form').requestSubmit());
 		await page.waitForFunction(() => app.pm.p?.self.query.searchVersion === '2');
-		assert.match(await page.locator('.chinachu-search-summary').innerText(), /タイトル：%41/);
-		assert.match(await page.locator('.chinachu-search-summary').innerText(), /説明：%2F/);
-		assert.deepEqual(await page.evaluate(() => ({ title: app.pm.p.self.query.title, desc: app.pm.p.self.query.desc, ids: app.pm.p.grid.rows.map(row => row.data.id) })),
-			{ title: '%41', desc: '%2F', ids: ['literal-percent'] }, 'submission and page initialization must preserve literal percent escapes');
+		assert.ok((await page.locator('.chinachu-search-summary').innerText()).includes('%41 %2F'));
+		assert.deepEqual(await page.evaluate(() => ({ keyword: app.pm.p.self.query.keyword, ids: app.pm.p.grid.rows.map(row => row.data.id) })),
+			{ keyword: '%41 %2F', ids: ['literal-percent'] }, 'keywords preserve percent escapes and match separate title and description terms');
 		await page.evaluate(() => {
 			app.chinachu.schedule[0].programs = app.chinachu.schedule[0].programs.filter(program => program.id !== 'literal-percent');
 		});
+		for (const name of ['search/top', 'recorded/search']) {
+			await page.setViewportSize({ width: 1280, height: 900 });
+			await page.evaluate(recorded => {
+				const source = recorded ? app.chinachu.recorded : app.chinachu.schedule[0].programs;
+				source.push(Object.assign({}, source[0], { id: 'keyword-fixture', title: '海旅[特別]', fullTitle: '海旅[特別]', detail: '温泉散策' }));
+			}, name === 'recorded/search');
+			async function searchKeyword(keyword, target = 'all') {
+				await route(name);
+				const form = page.locator('.chinachu-search-inline');
+				assert.equal(await form.locator('[name="title"], [name="desc"]').count(), 0, 'new searches use one keyword field');
+				await form.locator('[name="keyword"]').fill(keyword);
+				await form.getByRole('button', { name: '詳細条件', exact: true }).click();
+				assert.equal(await form.locator('[name="searchTarget"]').inputValue(), 'all');
+				await form.locator('[name="searchTarget"]').selectOption(target);
+				await form.locator('.chinachu-search-submit').click();
+				await page.waitForFunction(value => app.pm.p.self.query.keyword === value, keyword);
+				assert.equal(await page.locator(':popover-open').count(), 0);
+				assert.equal(await page.locator('.chinachu-search-chip').count(), target === 'all' ? 1 : 2, 'only restricted scopes add a scope chip');
+				return page.evaluate(() => app.pm.p.grid.rows.map(row => row.data.id));
+			}
+			for (const keyword of ['海旅 温泉', '海旅　温泉', '温泉', '[特別]']) {
+				assert.deepEqual(await searchKeyword(keyword), ['keyword-fixture'], 'default search matches literal AND terms across title and description: ' + keyword);
+			}
+			assert.deepEqual(await searchKeyword('温泉', 'title'), [], 'title-only search excludes description matches');
+			assert.deepEqual(await searchKeyword('海旅', 'title'), ['keyword-fixture']);
+			assert.deepEqual(await searchKeyword('温泉', 'desc'), ['keyword-fixture']);
+			assert.deepEqual(await searchKeyword('海旅', 'desc'), [], 'description-only search excludes title matches');
+			assert.deepEqual(await searchKeyword('海旅 温泉', 'title'), [], 'every AND term must occur in the selected title scope');
+			assert.deepEqual(await searchKeyword('海旅 温泉', 'desc'), [], 'every AND term must occur in the selected description scope');
+			await page.evaluate(recorded => {
+				if (recorded) app.chinachu.recorded = app.chinachu.recorded.filter(program => program.id !== 'keyword-fixture');
+				else app.chinachu.schedule[0].programs = app.chinachu.schedule[0].programs.filter(program => program.id !== 'keyword-fixture');
+			}, name === 'recorded/search');
+			await page.evaluate(recorded => {
+				const source = recorded ? app.chinachu.recorded : app.chinachu.schedule[0].programs;
+				window.originalGenrePair = source.slice(0, 2).map(program => program.category);
+				source[0].category = 'news'; source[1].category = 'drama';
+			}, name === 'recorded/search');
+			await route(name, 'skip=1&cat=anime,news');
+			assert.equal(await page.locator('.chinachu-search-count').innerText(), name === 'search/top' ? '47件' : '14件', 'multiple genres include both selected categories and exclude drama');
+			await page.getByRole('button', { name: 'アニメを解除', exact: true }).click();
+			await page.waitForFunction(() => app.pm.p.self.query.cat === 'news');
+			assert.equal(await page.locator('.chinachu-search-count').innerText(), '1件', 'removing one genre retains the other genre');
+			await page.getByRole('button', { name: 'ニュース・報道を解除', exact: true }).click();
+			await page.waitForFunction(() => app.pm.p.self.query.cat === '');
+			assert.equal(await page.locator('.chinachu-search-count').innerText(), name === 'search/top' ? '48件' : '15件', 'removing the last genre restores all genres');
+			await page.evaluate(recorded => {
+				const source = recorded ? app.chinachu.recorded : app.chinachu.schedule[0].programs;
+				source.slice(0, 2).forEach((program, index) => { program.category = window.originalGenrePair[index]; });
+				delete window.originalGenrePair;
+			}, name === 'recorded/search');
+			await route(name, 'skip=1&searchVersion=2&title=' + encodeURIComponent('^番組') + '&desc=' + encodeURIComponent('説明'));
+			await page.locator('.chinachu-search-inline').getByRole('button', { name: '詳細条件', exact: true }).click();
+			assert.equal(await page.locator('.chinachu-search-inline [name="title"]').inputValue(), '^番組');
+			assert.equal(await page.locator('.chinachu-search-inline [name="desc"]').inputValue(), '説明');
+			assert.equal(await page.locator('.chinachu-search-count').innerText(), name === 'search/top' ? '48件' : '15件', 'legacy title and description regular expressions remain effective');
+			await page.keyboard.press('Escape');
+			await route(name);
+			assert.equal(await page.locator('wa-dialog[open]').count(), 0, 'desktop opens directly into search controls');
+			assert.equal(await page.locator('.chinachu-virtual-grid').isVisible(), false, 'results stay hidden until a search is executed');
+			assert.equal(await page.locator('.chinachu-search-count').count(), 0);
+			assert.equal(await page.locator('.chinachu-search-hint').isVisible(), true);
+			await page.evaluate(() => app.pm.p.refresh());
+			assert.equal(await page.evaluate(() => app.pm.p.grid.rows.length), 0, 'data refresh must not start an initial search');
+			assert.equal(await page.locator('.chinachu-search-inline').isVisible(), true);
+			assert.equal(await page.locator('.chinachu-search-mobile-button').isVisible(), false);
+			const inline = page.locator('.chinachu-search-inline');
+			await inline.locator('[name="keyword"]').fill('番組');
+			await inline.getByRole('button', { name: 'チャンネル', exact: true }).click();
+			const channelCheck = inline.getByRole('checkbox', { name: '[GR] テスト放送 <channel>', exact: true });
+			await channelCheck.check();
+			await page.mouse.move(0, 0);
+			assert.deepEqual(await channelCheck.evaluate(input => {
+				const row = input.closest('label');
+				const check = input.getBoundingClientRect(), label = row.getBoundingClientRect();
+				return {
+					fullHeight: label.height >= 44,
+					background: getComputedStyle(row).backgroundColor,
+					rightCheck: check.left >= label.left + label.width / 2,
+					checkVisible: getComputedStyle(input).backgroundImage !== 'none'
+				};
+			}), { fullHeight: true, background: 'rgb(251, 237, 244)', rightCheck: true, checkVisible: true }, 'channel rows match the broadcast menu with a right-side pink check');
+			await page.keyboard.press('Escape');
+			assert.equal(await page.locator(':popover-open').count(), 0);
+			const genreButton = inline.getByRole('button', { name: 'ジャンル', exact: true });
+			await genreButton.click();
+			const genrePanel = inline.locator('.chinachu-search-genres');
+			const unspecifiedGenre = genrePanel.getByRole('checkbox', { name: '指定なし', exact: true });
+			const animeGenre = genrePanel.getByRole('checkbox', { name: 'アニメ', exact: true });
+			const newsGenre = genrePanel.getByRole('checkbox', { name: 'ニュース・報道', exact: true });
+			assert.equal(await unspecifiedGenre.isChecked(), true, 'an empty genre has an explicit checked choice');
+			await animeGenre.check();
+			assert.equal(await inline.locator('[name="cat"]').inputValue(), 'anime');
+			await newsGenre.check();
+			assert.equal(await animeGenre.isChecked(), true, 'selecting another genre retains existing choices');
+			await unspecifiedGenre.check();
+			assert.equal(await inline.locator('[name="cat"]').inputValue(), '', 'choosing unspecified clears the stored genre');
+			assert.equal(await genrePanel.locator('input[value]:checked').count(), 1);
+			await animeGenre.check();
+			await newsGenre.focus();
+			await page.keyboard.press('Space');
+			await page.mouse.move(0, 0);
+			assert.equal(await animeGenre.isChecked(), true, 'keyboard selection retains other genres');
+			assert.equal(await inline.locator('[name="cat"]').inputValue(), 'anime,news', 'keyboard selection updates the submitted values');
+			assert.equal(await genrePanel.locator('input[type="checkbox"]:checked').count(), 2);
+			assert.equal(await page.evaluate(() => app.pm.p.self.query.cat), undefined, 'changing dropdown choices does not execute a search');
+			assert.equal(await genreButton.getAttribute('aria-expanded'), 'true');
+			await screenshot('desktop-genre-menu-' + name.replace('/', '-'));
+			await page.keyboard.press('Escape');
+			assert.equal(await genreButton.getAttribute('aria-expanded'), 'false');
+			await inline.getByRole('button', { name: '詳細条件', exact: true }).click();
+			assert.equal(await inline.locator('[name="searchTarget"]').inputValue(), 'all');
+			await inline.locator('[name="start"]').fill('0');
+			await inline.locator('[name="end"]').fill('25');
+			await page.keyboard.press('Escape');
+			await inline.locator('.chinachu-search-submit').click();
+			assert.equal(await page.locator('.chinachu-search-advanced').isVisible(), true, 'invalid hidden hour is revealed');
+			await inline.locator('[name="end"]').fill('24');
+			await inline.locator('[name="end"]').press('Enter');
+			await page.waitForFunction(() => app.pm.p.self.query.keyword === '番組');
+			assert.equal(await page.locator('.chinachu-virtual-grid').isVisible(), true);
+			assert.equal(await page.locator(':popover-open').count(), 0);
+			assert.equal(await page.locator('.chinachu-search-chip').count(), 6);
+			assert.equal(await page.locator('.chinachu-search-count').innerText(), name === 'search/top' ? '48件' : '15件');
+			await genreButton.click();
+			assert.equal(await animeGenre.isChecked(), true, 'submitted genre choices are restored');
+			assert.equal(await newsGenre.isChecked(), true);
+			await page.keyboard.press('Escape');
+			await screenshot('desktop-compact-' + name.replace('/', '-'));
+			await inline.getByRole('button', { name: '詳細条件', exact: true }).click();
+			await inline.locator('[name="end"]').press('Enter');
+			assert.equal(await page.locator(':popover-open').count(), 0, 'resubmitting unchanged filters closes the panel');
+			await page.getByRole('button', { name: 'アニメを解除', exact: true }).click();
+			await page.waitForFunction(() => app.pm.p.self.query.cat === 'news');
+			assert.equal(await page.locator('.chinachu-search-count').innerText(), '0件');
+			await page.getByRole('button', { name: 'ニュース・報道を解除', exact: true }).click();
+			await page.waitForFunction(() => app.pm.p.self.query.cat === '');
+			assert.equal(await page.evaluate(() => app.pm.p.self.query.channels), 'test-channel');
+			await page.getByRole('button', { name: 'すべて解除', exact: true }).click();
+			await page.waitForFunction(() => app.pm.p.self.query.keyword === '');
+			assert.equal(await page.locator('.chinachu-search-chip').count(), 0);
+			await page.goBack();
+			await page.waitForFunction(() => app.pm.p.self.query.keyword === '番組');
+			assert.equal(await page.locator('.chinachu-search-inline [name="keyword"]').inputValue(), '番組');
+			await page.setViewportSize({ width: 820, height: 700 });
+			assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+			for (const width of [320, 390, 800]) {
+				await page.setViewportSize({ width, height: 844 });
+				await route(name);
+				assert.equal(await page.locator('.chinachu-search-inline').isVisible(), false);
+				assert.equal(await page.locator('.chinachu-virtual-grid').isVisible(), false);
+				const mobileForm = page.locator('wa-dialog[open] .chinachu-search-modal');
+				await mobileForm.waitFor();
+				const mobileGenreButton = mobileForm.getByRole('button', { name: 'ジャンル', exact: true });
+				const mobileChannelButton = mobileForm.getByRole('button', { name: 'チャンネル', exact: true });
+				const mobileGenrePanel = mobileForm.locator('.chinachu-search-genres');
+				const mobileChannelPanel = mobileForm.locator('.chinachu-search-channels');
+				assert.equal(await mobileForm.locator('.chinachu-search-category-field > span').innerText(), 'ジャンル', 'mobile genre label stays short enough to retain the dropdown layout');
+				assert.equal(await mobileGenreButton.innerText(), '指定なし', 'mobile genre trigger shows the current selection');
+				assert.equal(await mobileGenrePanel.isVisible(), false, 'mobile genres stay in a closed dropdown initially');
+				assert.equal(await mobileChannelPanel.isVisible(), false, 'mobile channels use a closed dropdown instead of the old always-visible list');
+				assert.equal(await mobileGenreButton.getAttribute('aria-expanded'), 'false');
+				assert.equal(await mobileChannelButton.getAttribute('aria-expanded'), 'false');
+				await mobileChannelButton.click();
+				const mobileChannel = mobileChannelPanel.getByRole('checkbox', { name: '[GR] テスト放送 <channel>', exact: true });
+				await mobileChannel.check();
+				await page.mouse.move(0, 0);
+				async function assertMobileMenuRow(input, kind) {
+					assert.deepEqual(await input.evaluate(node => {
+						const row = node.closest('label');
+						const check = node.getBoundingClientRect(), label = row.getBoundingClientRect();
+						return {
+							fullHeight: label.height >= 44,
+							background: getComputedStyle(row).backgroundColor,
+							rightCheck: check.left >= label.left + label.width / 2,
+							checkVisible: getComputedStyle(node).backgroundImage !== 'none',
+							fitsViewport: label.left >= 0 && label.right <= innerWidth + 1
+						};
+					}), { fullHeight: true, background: 'rgb(251, 237, 244)', rightCheck: true, checkVisible: true, fitsViewport: true }, 'mobile ' + kind + ' rows match the broadcast dropdown at ' + width + 'px');
+				}
+				await assertMobileMenuRow(mobileChannel, 'channel');
+				assert.equal(await mobileChannelButton.getAttribute('aria-expanded'), 'true', 'selecting a mobile channel keeps its menu open');
+				await page.keyboard.press('Escape');
+				assert.equal(await mobileChannelPanel.isVisible(), false);
+				assert.equal(await mobileForm.isVisible(), true, 'Escape closes only the dropdown');
+				await mobileGenreButton.click();
+				assert.deepEqual(await mobileGenrePanel.evaluate(panel => {
+					const menu = panel.getBoundingClientRect();
+					const dialog = panel.closest('wa-dialog').shadowRoot.querySelector('dialog').getBoundingClientRect();
+					const trigger = panel.previousElementSibling.getBoundingClientRect();
+					return { extendsBelowDialog: menu.bottom > dialog.bottom, opensBelowTrigger: menu.top >= trigger.bottom, fitsScreen: menu.bottom <= innerHeight - 12 };
+				}), { extendsBelowDialog: true, opensBelowTrigger: true, fitsScreen: true }, 'genre dropdown uses screen space below the search dialog at ' + width + 'px');
+				const mobileAnime = mobileGenrePanel.getByRole('checkbox', { name: 'アニメ', exact: true });
+				const mobileNews = mobileGenrePanel.getByRole('checkbox', { name: 'ニュース・報道', exact: true });
+				await mobileAnime.check();
+				await mobileNews.focus();
+				await page.keyboard.press('Space');
+				await page.mouse.move(0, 0);
+				assert.equal(await mobileAnime.isChecked(), true);
+				assert.equal(await mobileNews.isChecked(), true, 'mobile genre keyboard selection retains both choices');
+				await assertMobileMenuRow(mobileAnime, 'genre');
+				assert.equal(await mobileGenreButton.getAttribute('aria-expanded'), 'true');
+				assert.equal(await mobileForm.locator('[name="cat"]').inputValue(), 'anime,news');
+				assert.equal(await mobileGenreButton.innerText(), 'アニメ、ニュース・報道', 'mobile genre trigger displays both selected genres');
+				assert.equal(await page.evaluate(() => app.pm.p.self.query.cat), undefined, 'mobile dropdown choices do not execute search before submit');
+				await screenshot('mobile-genre-menu-' + width + '-' + name.replace('/', '-'));
+				await page.keyboard.press('Escape');
+				assert.equal(await mobileGenrePanel.isVisible(), false);
+				await mobileForm.locator('[name="keyword"]').fill('モバイル');
+				await mobileForm.locator('[name="keyword"]').press('Enter');
+				await page.waitForFunction(() => app.pm.p.self.query.keyword === 'モバイル');
+				assert.equal(await page.locator('wa-dialog[open]').count(), 0);
+				assert.equal(await page.locator('.chinachu-search-count').innerText(), '0件');
+				assert.equal(await page.evaluate(() => app.pm.p.self.query.cat), 'anime,news');
+				assert.equal(await page.evaluate(() => app.pm.p.self.query.channels), 'test-channel');
+				assert.equal(await page.locator('.chinachu-search-chip').count(), 4, 'mobile search retains keyword, channel, and both genre chips');
+				assert.equal(await page.locator('.chinachu-search-mobile-button').isVisible(), true);
+				await page.locator('.chinachu-search-mobile-button').click();
+				await mobileForm.waitFor();
+				assert.equal(await mobileGenrePanel.isVisible(), false);
+				assert.equal(await mobileChannelPanel.isVisible(), false);
+				assert.equal(await mobileGenreButton.innerText(), 'アニメ、ニュース・報道', 'reopened mobile trigger restores the selected genre labels');
+				await mobileChannelButton.click();
+				assert.equal(await mobileChannel.isChecked(), true, 'submitted mobile channel is restored');
+				await page.keyboard.press('Escape');
+				await mobileGenreButton.click();
+				assert.equal(await mobileAnime.isChecked(), true, 'submitted mobile genres are restored');
+				assert.equal(await mobileNews.isChecked(), true);
+				await mobileGenrePanel.getByRole('checkbox', { name: '指定なし', exact: true }).check();
+				await page.keyboard.press('Escape');
+				await mobileForm.locator('[name="keyword"]').press('Enter');
+				await page.waitForFunction(() => app.pm.p.self.query.cat === '');
+				assert.equal(await page.evaluate(() => app.pm.p.self.query.channels), 'test-channel', 'clearing mobile genres keeps channel selection');
+				assert.equal(await page.locator(':popover-open').count(), 0);
+				assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'mobile search does not overflow at ' + width + 'px');
+				await screenshot('mobile-compact-' + width + '-' + name.replace('/', '-'));
+				const submittedQuery = await page.evaluate(() => app.pm.p.self.query);
+				await page.locator('.chinachu-search-mobile-button').click();
+				await mobileForm.waitFor();
+				await mobileGenreButton.click();
+				await mobileNews.check();
+				await mobileGenreButton.click();
+				assert.equal(await mobileGenrePanel.isVisible(), false, 'tapping the trigger closes the menu before using covered dialog actions');
+				await page.locator('wa-dialog[open]').getByRole('button', { name: 'キャンセル', exact: true }).click();
+				await mobileForm.waitFor({ state: 'hidden' });
+				assert.equal(await page.locator('wa-dialog[open]').count(), 0);
+				assert.equal(await page.locator(':popover-open').count(), 0, 'canceling a mobile search also closes its dropdown');
+				assert.deepEqual(await page.evaluate(() => app.pm.p.self.query), submittedQuery, 'canceling unsubmitted dropdown changes preserves the search query');
+				assert.equal(await page.locator('.chinachu-search-count').innerText(), '0件', 'canceling preserves existing results');
+			}
+		}
+		await page.setViewportSize({ width: 1280, height: 900 });
+
 		await route('search/top', 'skip=1&title=%25E7%2595%25AA%25E7%25B5%2584');
 		assert.equal(await page.evaluate(() => app.pm.p.self.query.title), '番組', 'legacy double-encoded bookmarks must still work');
 		await route('program/view', 'id=recorded-0');
@@ -321,6 +692,13 @@ async function run() {
 				assert.equal(await page.locator('.schedule-day-navigation select').inputValue(), '2');
 				await route('schedule/table', 'day=7');
 				assert.equal(await page.locator('.schedule-day-navigation select').inputValue(), '0', 'invalid URL day must fall back to today');
+				await route('schedule/table');
+				await page.waitForSelector('.rect[rel]');
+				await checkProgramPopup(page, page.locator('.rect[rel]').first(), 'desktop');
+				await route('schedule/table');
+				await page.waitForSelector('.rect[rel]');
+				await checkProgramPopupEdges(page);
+				await page.setViewportSize({ width: 1280, height: 900 });
 				await route('schedule/table');
 				await page.waitForSelector('.rect[rel]');
 			}
@@ -544,14 +922,15 @@ async function run() {
 					return grid.top >= summary.bottom - 1 && grid.bottom <= el.getBoundingClientRect().bottom + 1 && grid.height > 0;
 				}), true, 'summary must sit above a usable results grid');
 				const text = await summary.innerText();
-				for (const expected of ['タイトル：' + term, '説明：経済', 'チャンネル：テスト放送 <channel>', 'ジャンル：anime', '放送種別：GR', '開始時刻：0時', '終了時刻：24時']) assert.ok(text.includes(expected), expected);
+				for (const expected of ['タイトル：' + term, '説明：経済', 'テスト放送 <channel>', 'アニメ', '放送種別：GR', '開始時刻：0時', '終了時刻：24時']) assert.ok(text.includes(expected), expected);
 				assert.equal(await summary.locator('img').count(), 0);
 				assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
 				assert.equal(await summary.evaluate(el => el.scrollWidth > el.clientWidth + 1), false);
 				if (width === 390) await screenshot('mobile-search-summary-' + name.replace('/', '-'));
 			}
 			await route(name, 'skip=1');
-			assert.equal(await page.locator('.chinachu-search-summary').isVisible(), false);
+			assert.equal(await page.locator('.chinachu-search-chip').count(), 0);
+			assert.match(await page.locator('.chinachu-search-count').innerText(), /件$/);
 		}
 		const touchContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: browserName === 'chromium', hasTouch: true, locale: 'ja-JP' });
 		await touchContext.route('**/*', route => {
@@ -676,11 +1055,76 @@ async function run() {
 			await screenshot('mobile-schedule-' + name, touchPage);
 			const box = await card.boundingBox();
 			await touchPage.touchscreen.tap(box.x + Math.min(10, box.width / 2), box.y + Math.min(10, box.height / 2));
-			if (name === 'table') await touchPage.waitForFunction(() => app.pm.p?.self.category === 'program');
+			if (name === 'table') await checkProgramPopup(touchPage, card, 'native-touch-390', true);
 			else await touchPage.waitForFunction(() => app.pm.p?.data.target && !app.pm.p.view.drawer.entity.classList.contains('hide'));
 			assert.equal(errors.length, 0, 'touch ' + name + ': ' + errors.join('\n'));
 			console.log('PASS native touch schedule/' + name);
 		}
+		const touchSession = browserName === 'chromium' ? await touchContext.newCDPSession(touchPage) : null;
+		for (const name of ['search/top', 'recorded/search']) {
+			for (const width of [320, 390]) {
+				await touchPage.setViewportSize({ width, height: 844 });
+				await touchPage.evaluate(name => { location.hash = '!/' + name + '/'; }, name);
+				await touchPage.waitForFunction(name => app.pm.p?.self.category + '/' + app.pm.p?.self.page === name, name);
+				const form = touchPage.locator('wa-dialog[open] .chinachu-search-modal');
+				await form.waitFor();
+				await form.locator('[name="keyword"]').fill('番組');
+				const genreButton = form.getByRole('button', { name: 'ジャンル', exact: true });
+				const genrePanel = form.locator('.chinachu-search-genres');
+				await genreButton.tap();
+				const anime = genrePanel.getByRole('checkbox', { name: 'アニメ', exact: true });
+				const news = genrePanel.getByRole('checkbox', { name: 'ニュース・報道', exact: true });
+				await anime.tap();
+				await news.tap();
+				assert.equal(await anime.isChecked(), true);
+				assert.equal(await news.isChecked(), true, 'native touch selects multiple genres at ' + width + 'px');
+				assert.equal(await genreButton.getAttribute('aria-expanded'), 'true');
+				if (touchSession) {
+					const box = await genrePanel.boundingBox();
+					const point = { x: box.x + box.width / 2, y: box.y + box.height - 40 };
+					await touchSession.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+					for (const distance of [40, 80, 120]) await touchSession.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: point.x, y: point.y - distance }] });
+					await touchSession.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+				} else {
+					await genrePanel.evaluate(panel => { panel.scrollTop = 120; });
+				}
+				await genrePanel.evaluate(panel => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+				assert.equal(await genrePanel.isVisible(), true, 'scrolling inside the genre dropdown keeps it open');
+				assert.equal(await genrePanel.evaluate(panel => panel.scrollTop > 0), true, 'native touch scrolls the genre dropdown');
+				await touchPage.keyboard.press('Escape');
+				assert.equal(await genrePanel.isVisible(), false);
+				assert.equal(await form.isVisible(), true);
+				const channelButton = form.getByRole('button', { name: 'チャンネル', exact: true });
+				const channelPanel = form.locator('.chinachu-search-channels');
+				await channelButton.tap();
+				const channel = channelPanel.getByRole('checkbox', { name: '[GR] テスト放送 <channel>', exact: true });
+				await channel.tap();
+				assert.equal(await channel.isChecked(), true);
+				await touchPage.keyboard.press('Escape');
+				await touchPage.locator('wa-dialog[open]').getByRole('button', { name: '検索', exact: true }).tap();
+				await touchPage.waitForFunction(() => app.pm.p.self.query.keyword === '番組' && app.pm.p.self.query.cat === 'anime,news' && app.pm.p.self.query.channels === 'test-channel');
+				assert.equal(await touchPage.locator('wa-dialog[open]').count(), 0);
+				assert.equal(await touchPage.locator('.chinachu-search-chip').count(), 4);
+				assert.equal(await touchPage.locator('.chinachu-search-count').innerText(), name === 'search/top' ? '48件' : '15件');
+				await touchPage.locator('.chinachu-search-mobile-button').tap();
+				await form.waitFor();
+				await genreButton.tap();
+				assert.equal(await anime.isChecked(), true);
+				assert.equal(await news.isChecked(), true);
+				await touchPage.keyboard.press('Escape');
+				await channelButton.tap();
+				assert.equal(await channel.isChecked(), true, 'native touch search restores channel selection');
+				await touchPage.keyboard.press('Escape');
+				await touchPage.locator('wa-dialog[open]').getByRole('button', { name: 'キャンセル', exact: true }).tap();
+				await form.waitFor({ state: 'hidden' });
+				assert.equal(await touchPage.locator('wa-dialog[open]').count(), 0);
+				assert.equal(await touchPage.locator(':popover-open').count(), 0);
+				assert.equal(errors.length, 0, 'touch ' + name + ': ' + errors.join('\n'));
+				await screenshot('native-touch-search-' + width + '-' + name.replace('/', '-'), touchPage);
+				console.log('PASS native touch ' + name + ' at ' + width + 'px');
+			}
+		}
+		if (touchSession) await touchSession.detach();
 		await touchContext.close();
 		assert.equal(external.length, 0, 'unexpected external requests: ' + external.join(', '));
 		assert.equal(requests.some(url => /\/lib\/(?:prototype|pep\.|date\.format|hyperform|bootstrap|flagrate|sakurapanel)/i.test(url)), false, 'removed libraries requested');

@@ -25,3 +25,4 @@
 
 /config.json.bak
 /config.json.*.tmp
+output/

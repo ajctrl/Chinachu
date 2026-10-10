@@ -7,7 +7,7 @@ a:hover { text-decoration: underline; }
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 .hide { display: none !important; }
-.header { display: flex; align-items: center; gap: 16px; padding: 0 12px; background: #c24186; color: #fff; z-index: 100; min-height: 42px; }
+.header { display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--chinachu-accent-color); color: #fff; z-index: 100; min-height: 42px; }
 .app-brand { color: #fff; font-size: 20px; white-space: nowrap; }
 .app-brand-gamma { font-style: normal; vertical-align: super; font-size: 10px; margin-left: 2px; }
 .app-brand:hover { text-decoration: none; }
@@ -33,7 +33,7 @@ body > .middle.noside { grid-template-columns: minmax(0, 1fr); }
 .main { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); background: #fff; }
 .main.nohead { grid-template-rows: minmax(0, 1fr); }
 .main.nohead > .main-head { display: none; }
-.main-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: var(--chinachu-space-small) var(--chinachu-space-medium); min-width: 0; background: #c24186; color: #fff; border-bottom: 1px solid #c24186; }
+.main-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: var(--chinachu-space-small) var(--chinachu-space-medium); min-width: 0; background: var(--chinachu-accent-color); color: #fff; border-bottom: 1px solid var(--chinachu-accent-color); }
 .main-head-title { flex: 1; min-width: 120px; }
 .main-head h1 { margin: 0; font-size: 18px; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
 .main-head h1 > .flag { font-size: 11px; margin-right: 3px; padding: 1px 3px; background: rgba(0,0,0,.1); }
@@ -273,9 +273,76 @@ body > .middle.noside { grid-template-columns: minmax(0, 1fr); }
 
 .main-body > .search-results-page { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; padding: 0; background: #fff; }
 .search-results-page > .chinachu-virtual-grid { grid-row: 2; min-height: 0; }
-.chinachu-search-summary { display: flex; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; background: #fff; color: #68707c; min-width: 0; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; line-height: 1.6; }
-.chinachu-search-summary > span { min-width: 0; overflow-wrap: anywhere; }
+.search-results-page.search-awaiting-input > .chinachu-virtual-grid { display: none; }
+.chinachu-search-hint { grid-row: 2; margin: 0; padding: 40px 18px; text-align: center; color: #68707c; font-size: 14px; }
+/* Search controls share one compact header above the virtualized results. */
+.chinachu-search-header { min-width: 0; background: #fff; }
+.chinachu-search-inline { display: grid; grid-template-columns: minmax(140px, 1fr) auto auto auto 76px; gap: 6px; padding: 8px 12px 4px; align-items: center; }
+.chinachu-search-title { position: relative; min-width: 0; }
+.chinachu-search-title > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.chinachu-search-title::before { content: ""; position: absolute; left: 11px; top: 9px; width: 11px; height: 11px; border: 2px solid #68707c; border-radius: 50%; pointer-events: none; }
+.chinachu-search-title::after { content: ""; position: absolute; left: 22px; top: 22px; width: 7px; height: 2px; background: #68707c; transform: rotate(45deg); pointer-events: none; }
+.chinachu-search-title input { width: 100%; min-width: 0; height: 34px; padding: 5px 10px 5px 34px; font-size: 13px; color: #333; border: 1px solid #c8ccd2; border-radius: 4px; background: #fff; }
+.chinachu-search-filter, .chinachu-search-submit { height: 46px; padding: 0 18px; border: 1px solid #c8ccd2; border-radius: 4px; background: #fff; color: #333; font-size: 14px; white-space: nowrap; }
+.chinachu-search-inline > .chinachu-search-filter, .chinachu-search-inline > .chinachu-search-submit { height: 34px; padding-inline: 12px; font-size: 13px; }
+.chinachu-search-filter::after { content: ""; display: inline-block; margin-left: 12px; border: 4px solid transparent; border-bottom: 0; border-top-color: currentColor; vertical-align: middle; }
+.chinachu-search-filter:has(+ .chinachu-search-advanced)::after { content: "+"; border: 0; font-size: 20px; line-height: 1; }
+.chinachu-search-filter:hover, .chinachu-search-filter[aria-expanded="true"] { background: #faf2f6; border-color: #c24186; }
+.chinachu-search-modal .chinachu-search-field > .chinachu-search-filter { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; width: 100%; height: auto; min-height: 40px; padding-inline: 10px; text-align: left; }
+.chinachu-search-modal .chinachu-search-filter > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chinachu-search-modal .chinachu-search-filter::after { flex: none; margin-left: 0; }
+.chinachu-search-submit { background: #c24186; color: #fff; border-color: #c24186; font-weight: 600; }
+.chinachu-search-submit:hover { background: #ab3373; }
+.chinachu-search-popover { position: fixed; inset: auto; margin: 0; width: 360px; max-width: calc(100vw - 24px); padding: 0; overflow-y: auto; border: 1px solid #e5dce1; border-radius: 10px; background: #fff; color: #333; box-shadow: 0 6px 20px #0003; }
+.chinachu-search-popover:popover-open { display: block; }
+.chinachu-search-popover > strong { position: sticky; top: 0; z-index: 1; background: #fff; }
+.chinachu-search-popover .chinachu-search-field[hidden] { display: none; }
+.chinachu-search-advanced > .chinachu-search-field { margin: 0 16px 12px; }
+.chinachu-search-advanced > .chinachu-search-field:last-child { margin-bottom: 16px; }
+.chinachu-search-genres { width: 240px; }
+.chinachu-search-genres .chinachu-search-category-field > span { display: none; }
+.chinachu-search-genres .chinachu-search-choices { max-height: none; overflow: visible; border: 0; border-radius: 0; }
+.chinachu-search-channels { width: 320px; }
+.chinachu-search-popover .chinachu-search-field { grid-template-columns: 1fr; gap: 6px; }
+.chinachu-search-popover .chinachu-search-field > input, .chinachu-search-popover .chinachu-search-field > select { min-height: 38px; }
+.chinachu-search-channels .chinachu-search-channel-field > span, .chinachu-search-channels .channel-selector-picker > summary { display: none; }
+.chinachu-search-channels .channel-selector { max-width: none; }
+.chinachu-search-channels .channel-selector-selected { padding: 0 16px; margin-bottom: 0; }
+.chinachu-search-channels .channel-selector-filters { padding: 10px 16px; }
+.chinachu-search-channels .channel-selector-list { max-height: none; padding: 0; border: 0; overflow: visible; }
+.chinachu-search-channels .channel-selector-list fieldset { margin: 0; }
+.chinachu-search-channels .channel-selector-list legend { width: 100%; margin: 0; padding: 8px 16px; border-top: 1px solid #eee8eb; font-size: 12px; color: #68707c; }
+.chinachu-search-channels .channel-selector-option { margin: 0; }
+.chinachu-search-channels .channel-selector-option > input { order: 2; }
+.chinachu-search-channels .channel-selector-option > span { min-width: 0; overflow-wrap: anywhere; }
+.chinachu-search-channels .channel-selector-list > .channel-selector-empty { margin: 0; padding: 12px 16px; }
+.chinachu-search-channels .channel-selector-manual { margin: 12px 16px; }
+.chinachu-search-channels .channel-selector-manual .channel-selector-filters { padding-inline: 0; }
+.chinachu-search-summary { background: #fff; display: flex; align-items: center; padding: 4px 12px 6px; min-width: 0; flex-wrap: wrap; gap: 6px 8px; font-size: 13px; line-height: 1.6; }
+.chinachu-search-chip { display: inline-flex; align-items: center; gap: 12px; max-width: 100%; min-height: 34px; padding: 5px 12px; border: 0; border-radius: 12px; background: #f6e4ed; color: #94275e; text-align: left; overflow-wrap: anywhere; }
+.chinachu-search-chip::after { content: "×"; flex: none; font-size: 19px; line-height: 1; color: #b53a7b; }
+.chinachu-search-chip:hover { background: #eed0df; }
+.chinachu-search-clear { border: 0; background: transparent; color: #505963; padding: 6px 12px; min-height: 34px; }
+.chinachu-search-clear:hover { text-decoration: underline; }
+.chinachu-search-count { margin-left: auto; padding-left: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .chinachu-search-summary[hidden] { display: none; }
+.chinachu-search-header :is(input, select, button):focus-visible { outline: 2px solid #c24186; outline-offset: 2px; }
+@media (min-width: 801px) {
+ .chinachu-search-mobile-button { display: none; }
+ .chinachu-search-chip { min-height: 26px; padding: 3px 8px; gap: 8px; border-radius: 8px; font-size: 12px; }
+ .chinachu-search-chip::after { font-size: 16px; }
+ .chinachu-search-clear { min-height: 26px; padding: 3px 8px; font-size: 12px; }
+}
+@media (max-width: 1000px) and (min-width: 801px) {
+ .chinachu-search-inline { gap: 6px; padding-inline: 10px; grid-template-columns: minmax(100px, 1fr) auto auto auto 76px; }
+ .chinachu-search-inline > .chinachu-search-filter, .chinachu-search-inline > .chinachu-search-submit { padding-inline: 10px; }
+ .chinachu-search-filter::after { margin-left: 6px; }
+}
+@media (max-width: 800px) {
+ .chinachu-search-inline { display: none; }
+ .chinachu-search-summary { padding: 8px; gap: 6px; max-height: 25dvh; overflow-y: auto; }
+ .chinachu-search-chip, .chinachu-search-clear { min-height: 40px; }
+}
 
 .chinachu-rule-summary { white-space: normal; overflow-wrap: anywhere; line-height: 1.6; color: #333; font-size: 12px; font-style: normal; }
 .chinachu-rule-heading { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
@@ -379,15 +446,15 @@ body > .middle.noside { grid-template-columns: minmax(0, 1fr); }
 .schedule-type-toggle:focus-visible { outline: 2px solid white; outline-offset: -3px; }
 /* Full-row choices keep the compact broadcast menu easy to scan and tap. */
 .schedule-type-options { position: fixed; inset: auto; box-sizing: border-box; margin: 0; width: 240px; max-width: calc(100vw - 8px); padding: 0; overflow: hidden; border: 1px solid #e5dce1; border-radius: 10px; background: white; color: #333; box-shadow: 0 6px 20px #0003; }
-.schedule-type-options strong { display: block; padding: 14px 16px; font-size: 13px; }
-.schedule-type-options label { display: flex; justify-content: space-between; align-items: center; gap: 16px; min-height: 44px; padding: 0 16px; border-top: 1px solid #eee8eb; font-size: 14px; cursor: pointer; }
-.schedule-type-options label:has(input:checked) { background: #fbedf4; }
-.schedule-type-options label:hover { background: #f6f2f4; }
-.schedule-type-options label:has(input:checked):hover { background: #f6dfeb; }
-.schedule-type-options label:has(input:focus-visible) { outline: 2px solid #c24186; outline-offset: -3px; }
-.schedule-type-options input { appearance: none; flex: none; width: 20px; height: 20px; margin: 0; border: 0; border-radius: 0; background: transparent; cursor: pointer; }
-.schedule-type-options input:checked { background: center / 20px 20px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c24186' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12 4 4L19 6'/%3E%3C/svg%3E"); }
-.schedule-type-options input:focus-visible { outline: none; }
+.schedule-type-options strong, .chinachu-search-popover > strong { display: block; padding: 14px 16px; font-size: 13px; }
+.schedule-type-options label, .chinachu-search-choices > label, .chinachu-search-channels .channel-selector-option { display: flex; justify-content: space-between; align-items: center; gap: 16px; min-height: 44px; padding: 0 16px; border-top: 1px solid #eee8eb; font-size: 14px; cursor: pointer; }
+.schedule-type-options label:has(input:checked), .chinachu-search-choices > label:has(input:checked), .chinachu-search-channels .channel-selector-option:has(input:checked) { background: #fbedf4; }
+.schedule-type-options label:hover, .chinachu-search-choices > label:hover, .chinachu-search-channels .channel-selector-option:hover { background: #f6f2f4; }
+.schedule-type-options label:has(input:checked):hover, .chinachu-search-choices > label:has(input:checked):hover, .chinachu-search-channels .channel-selector-option:has(input:checked):hover { background: #f6dfeb; }
+.schedule-type-options label:has(input:focus-visible), .chinachu-search-choices > label:has(input:focus-visible), .chinachu-search-channels .channel-selector-option:has(input:focus-visible) { outline: 2px solid #c24186; outline-offset: -3px; }
+.schedule-type-options input, .chinachu-search-choices input, .chinachu-search-channels .channel-selector-option input { appearance: none; flex: none; width: 20px; height: 20px; margin: 0; border: 0; border-radius: 0; background: transparent; cursor: pointer; }
+.schedule-type-options input:checked, .chinachu-search-choices input:checked, .chinachu-search-channels .channel-selector-option input:checked { background: center / 20px 20px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c24186' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12 4 4L19 6'/%3E%3C/svg%3E"); }
+.schedule-type-options input:focus-visible, .chinachu-search-choices input:focus-visible, .chinachu-search-channels .channel-selector-option input:focus-visible { outline: none; }
 
 .main-head .chinachu-toolbar:not(.schedule-toolbar-split) .schedule-type-menu:not([hidden]) + .schedule-day-controls.schedule-today-short { margin-inline-start: 0; }
 

@@ -15,6 +15,7 @@ Chinachu.definePage({
 	,
 	deinit: function() {
 		if (this.searchModal) this.searchModal.close();
+		if (this.searchControls) this.searchControls.destroy();
 
 		if (this.grid) this.grid.destroy();
 
@@ -44,6 +45,7 @@ Chinachu.definePage({
 		this.view.toolbar.add({
 			key: 'search',
 			ui : new ChinachuUI.ActionButton({
+				className: 'chinachu-search-mobile-button',
 				label  : '録画番組検索',
 				icon   : './icons/magnifier-zoom.png',
 				onClick: this.viewSearchModal.bind(this)
@@ -57,8 +59,7 @@ Chinachu.definePage({
 
 		this.view.content.className = 'search-results-page';
 		this.view.content.update();
-		this.searchSummary = null;
-		ChinachuSearchForm.updateSummary(this, true);
+		ChinachuSearchForm.mount(this, true);
 
 		this.grid = new ChinachuVirtualGrid({
 			multiSelect  : false,
@@ -107,19 +108,15 @@ Chinachu.definePage({
 			}.bind(this)
 		}).insertTo(this.view.content);
 
-		if (!this.self.query.skip) {
-			this.viewSearchModal();
-		} else {
-			this.drawMain();
-		}
+		this.drawMain();
+		if (!this.self.query.skip && ChinachuSearchForm.isMobile()) this.viewSearchModal();
 
 		return this;
 	}
 	,
 	drawMain: function() {
 
-		if (!this.grid) return this;
-		ChinachuSearchForm.updateSummary(this, true);
+		if (!this.grid || !ChinachuSearchForm.hasSearch(this.self.query)) return this;
 
 		var rows = [];
 		var showDescription = ChinachuPreferences.get('recorded.search');
@@ -135,32 +132,17 @@ Chinachu.definePage({
 			nf = global.chinachu.status.feature.normalizationForm;
 		}
 
-		// query.title, query.descの正規化をキャッシュ
-		var query_title_norm, query_desc_norm;
-		if (nf) {
-			if (this.self.query.title) {
-				query_title_norm = this.self.query.title.normalize(nf);
-			}
-			if (this.self.query.desc) {
-				query_desc_norm = this.self.query.desc.normalize(nf);
-			}
-		}
+		var matchesText = ChinachuSearchForm.textMatcher(this.self.query, nf, true);
+		var matchesCategory = ChinachuSearchForm.categoryMatcher(this.self.query);
 
 		for (var i = 0, l = global.chinachu.recorded.length; i < l; i++) {
 			program = global.chinachu.recorded[i];
 
 			if (this.self.query.pgid && this.self.query.pgid !== program.id) continue;
 			if (!ChinachuSearchForm.matchesChannel(this.self.query, program.channel)) continue;
-			if (this.self.query.cat && this.self.query.cat !== program.category) continue;
+			if (!matchesCategory(program.category)) continue;
 			if (this.self.query.type && this.self.query.type !== program.channel.type) continue;
-			if (nf) {
-				if (this.self.query.title && program.title.normalize(nf).match(query_title_norm) === null) continue;
-				if (this.self.query.desc && (!program.detail || program.detail.normalize(nf).match(query_desc_norm) === null)) continue;
-			}
-			else {
-				if (this.self.query.title && program.title.match(this.self.query.title) === null) continue;
-				if (this.self.query.desc && (!program.detail || program.detail.match(this.self.query.desc) === null)) continue;
-			}
+			if (!matchesText(program)) continue;
 
 			if (this.self.query.start || this.self.query.end) {
 				var ruleStart = parseInt(this.self.query.start || 0, 10);
@@ -290,6 +272,7 @@ Chinachu.definePage({
 		});
 
 		this.grid.splice(0, void 0, rows);
+		ChinachuSearchForm.updateSummary(this, true, rows.length);
 
 		return this;
 	}

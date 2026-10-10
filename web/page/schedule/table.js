@@ -536,62 +536,100 @@
 				}).insertTo(this.view.timescale);
 			}
 
-			// drawer
-			this.view.drawer = ChinachuUI.createElement('div', {'class': 'drawer'});
+			// Program summary popup.
+			this.view.drawer = ChinachuUI.createElement('div', {
+				'class': 'drawer schedule-program-drawer', role: 'dialog',
+				'aria-labelledby': 'schedule-program-title'
+			});
 			this.view.drawerHead = ChinachuUI.createElement('div', {'class': 'head'}).insertTo(this.view.drawer);
 			this.view.drawerBody = ChinachuUI.createElement('div', {'class': 'body'}).insertTo(this.view.drawer);
 			this.view.drawerFoot = ChinachuUI.createElement('div', {'class': 'foot'}).insertTo(this.view.drawer);
 
-			this.view.popoverDrawer = ChinachuUI.createPopover({
-				element: this.view.drawer
-			});
+			this.view.popoverDrawer = ChinachuUI.createPopover({ element: this.view.drawer });
+			this.view.popoverDrawer.entity.classList.add('schedule-program-popover');
 
-			// events
+			var popupProgram = null;
+			var clearSelection = function () {
+				this.data.target = null;
+				this.data.pieces.forEach(function (item) {
+					if (item._rect) item._rect.removeClassName('spot');
+				});
+			}.bind(this);
+			var closeDrawer = function () {
+				clearSelection();
+				this.view.popoverDrawer.close();
+			}.bind(this);
+			Chinachu.on(this.view.popoverDrawer.entity, 'toggle', function (event) {
+				if (event.newState === 'closed' && !this.view.popoverDrawer.entity.matches(':popover-open') &&
+					(this.data.target === null || this.data.target === popupProgram)) clearSelection();
+			}.bind(this));
+
+			var categoryLabels = {
+				anime: 'アニメ', information: '情報・ワイドショー', news: 'ニュース・報道',
+				sports: 'スポーツ', variety: 'バラエティ', drama: 'ドラマ', music: '音楽',
+				cinema: '映画', theater: '劇場・公演', hobby: '趣味・教育', welfare: '福祉',
+				documentary: 'ドキュメンタリー', etc: 'その他'
+			};
 			var viewDrawer = function () {
-
 				if (this.data.target === null) {
-					this.view.popoverDrawer.close();
+					closeDrawer();
 					return;
 				}
-
-				this.view.popoverDrawer.open(this.data.piece[this.data.target.id]._rect);
-
+				var program = this.data.target;
+				var item = this.data.piece[program.id];
+				var start = new Date(program.start);
+				var end = program.end || program.start + program.seconds * 1000;
+				var duration = Math.round((end - program.start) / 60000);
+				var weekdays = ['日', '月', '火', '水', '木', '金', '土'];
 				this.view.drawerHead.update();
-
 				ChinachuUI.createElement('div', {'class': 'date'}).insertText(
-					Chinachu.formatDate(this.data.target.start, 'mm/dd HH:MM')
-				).insert(
-					ChinachuUI.createElement('small').insert('&plus;' + (this.data.target.seconds / 60) + 'min')
+					Chinachu.pad(start.getMonth() + 1, 2) + '/' + Chinachu.pad(start.getDate(), 2) + '（' + weekdays[start.getDay()] + '） ' +
+					Chinachu.formatDate(program.start, 'HH:MM') + '–' + Chinachu.formatDate(end, 'HH:MM') +
+					'（' + duration + '分）'
 				).insertTo(this.view.drawerHead);
-
-				if (this.view.drawerDt) { this.view.drawerDt.remove(); }
-
-				this.view.drawerDt = new chinachu.ui.DynamicTime({
-					tagName: 'span',
-					type   : 'delta',
-					time   : this.data.target.start
-				});
-
-				this.view.drawerHead.insert(this.view.drawerDt.entity);
-
-				ChinachuUI.createElement('span', { 'class': 'channel' }).insertText(this.data.target.channel.type + ': ' + this.data.target.channel.name).insertTo(this.view.drawerHead.entity || this.view.drawerHead);
+				var closeButton = ChinachuUI.createElement('button', {
+					'class': 'drawer-close', type: 'button', 'aria-label': '番組ポップアップを閉じる'
+				}).insertText('×').insertTo(this.view.drawerHead);
+				Chinachu.on(closeButton, 'click', closeDrawer);
 
 				this.view.drawerBody.update();
-				var drawerTitle = ChinachuUI.createElement('div', { 'class': 'title' }).insertTo(this.view.drawerBody.entity || this.view.drawerBody);
-				ChinachuUI.createElement('span', { 'class': 'label-cat-' + this.data.target.category }).insertText(this.data.target.category).insertTo(drawerTitle);
-				drawerTitle.insertText(' ' + this.data.target.title);
-				ChinachuUI.createElement('div', { 'class': 'detail' }).insertText(this.data.target.detail || '').insertTo(this.view.drawerBody.entity || this.view.drawerBody);
-				ChinachuUI.createElement('div', { 'class': 'id' }).insertText(this.data.target.id).insertTo(this.view.drawerBody.entity || this.view.drawerBody);
+				ChinachuUI.createElement('div', {'class': 'title', id: 'schedule-program-title'}).insertText(program.title).insertTo(this.view.drawerBody);
+				var meta = ChinachuUI.createElement('div', {'class': 'program-meta'}).insertTo(this.view.drawerBody);
+				ChinachuUI.createElement('span', {'class': 'program-category label-cat-' + program.category + ' bg-cat-' + program.category}).insertText(categoryLabels[program.category] || 'その他').insertTo(meta);
+				ChinachuUI.createElement('span', {'class': 'channel'}).insertText(program.channel.name).insertTo(meta);
+				ChinachuUI.createElement('div', {'class': 'detail'}).insertText(program.detail || '').insertTo(this.view.drawerBody);
 
-				this.view.drawerFoot.update(
-					new ChinachuUI.Button({
-						label   : '番組詳細',
-						color   : '@pink',
-						onSelect: function () {
-							location.hash = '!/program/view/id=' + this.data.target.id + '/';
-						}.bind(this)
-					})
-				);
+				var status = item.isRecording ? '録画中' : item.isConflict ? '予約競合' : item.isSkip ? 'スキップ中' : item.isReserved ? '予約済み' : '未予約';
+				var action = item.isRecording ? 'StopRecord' : item.isManualReserved ? 'Unreserve' : item.isSkip ? 'Unskip' : item.isReserved ? 'Skip' : 'Reserve';
+				var actionLabel = item.isRecording ? '録画を中止' : item.isManualReserved ? '予約を取り消す' : item.isSkip ? 'スキップを解除' : item.isReserved ? '予約をスキップ' : '＋ 予約する';
+				this.view.drawerFoot.update();
+				ChinachuUI.createElement('span', {'class': 'reservation-status', 'data-status': item.isRecording ? 'recording' : item.isReserved ? 'reserved' : 'unreserved'}).insertText(status).insertTo(this.view.drawerFoot);
+				var actions = ChinachuUI.createElement('div', {'class': 'drawer-actions'}).insertTo(this.view.drawerFoot);
+				var detailsButton = ChinachuUI.createButton({
+					label: '番組詳細', className: 'program-details-button',
+					onSelect: function () {
+						closeDrawer();
+						location.hash = '!/program/view/id=' + program.id + '/';
+					}
+				}).insertTo(actions);
+				var reserveButton = ChinachuUI.createButton({
+					label: actionLabel, color: '@pink', className: 'program-reserve-button',
+					onSelect: function () {
+						closeDrawer();
+						new chinachu.ui[action](program.id);
+					}
+				}).insertTo(actions);
+
+				// Measure after updating content so the popup stays inside the viewport.
+				this.render();
+				var popover = this.view.popoverDrawer;
+				popupProgram = program;
+				popover.open(item._rect);
+				// Web Awesome buttons render asynchronously after connecting to the page.
+				Promise.all([detailsButton.updateComplete, reserveButton.updateComplete]).then(function () {
+					if (this.view.popoverDrawer === popover && this.data.target === program &&
+						popover.entity.matches(':popover-open')) popover.open(item._rect);
+				}.bind(this));
 			}.bind(this);
 
 			//
@@ -635,13 +673,7 @@
 				inertiaScroll();
 			}.bind(this);
 
-			this.bindPointerEvents(this.view.content, function() {
-				if (window.innerWidth < 640 && this.data.target) {
-					location.hash = '!/program/view/id=' + this.data.target.id + '/';
-				} else {
-					viewDrawer();
-				}
-			}.bind(this));
+			this.bindPointerEvents(this.view.content, viewDrawer);
 
 			Chinachu.on(window, 'keydown', onKeydown);
 			var removeListenersOnUnload = function () {

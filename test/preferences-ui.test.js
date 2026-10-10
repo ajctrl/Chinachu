@@ -165,7 +165,7 @@ describe('browser display preferences and reservation descriptions', function() 
 		vm.runInContext('P.grid.options.onClick({}, P.grid.rows[0]);', ctx);
 		assert.equal(ctx.window.location.href, '#!/program/view/id=one/');
 		vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/search-form.js'), 'utf8'), ctx);
-		vm.runInContext('var ChinachuSearchForm = window.ChinachuSearchForm;', ctx);
+		vm.runInContext('var ChinachuSearchForm = window.ChinachuSearchForm; ChinachuSearchForm.mount = function() {};', ctx);
 		for (const [page, scope] of Object.entries({ 'recording/list': 'recording', 'recorded/list': 'recorded', 'search/top': 'search', 'recorded/search': 'recorded.search' })) {
 			ctx.scope = scope;
 			vm.runInContext(`

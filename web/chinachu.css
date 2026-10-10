@@ -16,6 +16,11 @@ html, body {
 	scrollbar-base-color    : #d67fae; }
 
 :root {
+	--chinachu-accent-color: #c24186;
+	/* Reservation pink uses the header hue with 30% white. */
+	--chinachu-reserved-color: #d47aaa;
+	--chinachu-reserved-hover-color: #ce679e;
+	--chinachu-reserved-text-color: #ffffff;
 	--chinachu-font-sans: "Noto Sans JP", "Noto Sans CJK JP", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif;
 }
 
@@ -104,19 +109,19 @@ div.fullscreen {
 .label-type-CS { background-color: #eccdcd !important; color: #691111 !important; }
 .label-type-SKY, .label-type-EX { background-color: #bcecf7 !important; color: #0b4c5a !important; }
 
-.bg-cat-anime { background: #ffe0ff !important; }
-.bg-cat-information { background: #ffe0f0 !important; }
-.bg-cat-news { background: #ffffe0 !important; }
-.bg-cat-sports { background: #e0e0ff !important; }
-.bg-cat-variety { background: #e0ffff !important; }
-.bg-cat-drama { background: #ffe0e0 !important; }
-.bg-cat-music { background: #e0ffe0 !important; }
-.bg-cat-cinema { background: #fff0e0 !important; }
-.bg-cat-theater { background: #f7efe7 !important; }
-.bg-cat-documentary { background-color: #fff7c4 !important; }
-.bg-cat-hobby { background-color: #cfe5ea !important; }
-.bg-cat-welfare { background-color: #cde5f3 !important; }
-.bg-cat-etc { background: #f0f0f0 !important; }
+.bg-cat-anime { --program-genre-color: #ffe0ff; background: var(--program-genre-color) !important; }
+.bg-cat-information { --program-genre-color: #ffe0f0; background: var(--program-genre-color) !important; }
+.bg-cat-news { --program-genre-color: #ffffe0; background: var(--program-genre-color) !important; }
+.bg-cat-sports { --program-genre-color: #e0e0ff; background: var(--program-genre-color) !important; }
+.bg-cat-variety { --program-genre-color: #e0ffff; background: var(--program-genre-color) !important; }
+.bg-cat-drama { --program-genre-color: #ffe0e0; background: var(--program-genre-color) !important; }
+.bg-cat-music { --program-genre-color: #e0ffe0; background: var(--program-genre-color) !important; }
+.bg-cat-cinema { --program-genre-color: #fff0e0; background: var(--program-genre-color) !important; }
+.bg-cat-theater { --program-genre-color: #f7efe7; background: var(--program-genre-color) !important; }
+.bg-cat-documentary { --program-genre-color: #fff7c4; background-color: var(--program-genre-color) !important; }
+.bg-cat-hobby { --program-genre-color: #cfe5ea; background-color: var(--program-genre-color) !important; }
+.bg-cat-welfare { --program-genre-color: #cde5f3; background-color: var(--program-genre-color) !important; }
+.bg-cat-etc { --program-genre-color: #f0f0f0; background: var(--program-genre-color) !important; }
 
 .bg-green  { background-color: #7ab624 !important; }
 .bg-smoke  { background-color: rgba(0,0,0,0.05) !important; }
@@ -327,7 +332,7 @@ div.timetable > div.board {
 		position  : absolute;
 		left      : 0;
 		height    : 2px;
-		background: rgba(255,102,0,0.5); }
+		background: var(--chinachu-accent-color); }
 
 	div.timetable > div.board > div.cutline {
 		z-index     : 1;
@@ -356,10 +361,25 @@ div.timetable > div.board {
 		background  : white !important; }
 
 	div.timetable > div.board > div.rect.skip {
-		background  : gray !important; }
+		background: linear-gradient(to left, var(--program-genre-color, #ccc) 5px, gray 5px) !important; }
+
+	div.timetable > div.board > div.rect.skip:hover {
+		background: linear-gradient(to left, var(--program-genre-color, #ccc) 5px, white 5px) !important; }
 
 	div.timetable > div.board > div.rect.conflict {
 		background  : gray !important; }
+
+	/* Reserve state and genre share the background without changing text bounds.
+	 * A hard stop keeps the 5px genre band visible even in very short programs. */
+	div.timetable > div.board > div.rect.reserved:not(.recording):not(.skip):not(.conflict) {
+		background: linear-gradient(to left, var(--program-genre-color, #ccc) 5px, var(--chinachu-reserved-color) 5px) !important; }
+
+	div.timetable > div.board > div.rect.reserved:not(.recording):not(.skip):not(.conflict):hover {
+		background: linear-gradient(to left, var(--program-genre-color, #ccc) 5px, var(--chinachu-reserved-hover-color) 5px) !important; }
+
+	div.timetable > div.board > div.rect.reserved:not(.recording):not(.skip):not(.conflict) > div > h4,
+	div.timetable > div.board > div.rect.reserved:not(.recording):not(.skip):not(.conflict) > div > span {
+		color: var(--chinachu-reserved-text-color); }
 
 	div.timetable > div.board > div.rect.muted {
 		opacity     : 0.5 !important; }
@@ -502,6 +522,148 @@ div.timetable > div.board {
 		div.drawer > div.foot > wa-button {
 			display: block;
 			width  : 100%; }
+
+/* Program card opened from the timetable. */
+.chinachu-popover.schedule-program-popover {
+	width: 460px;
+	max-width: calc(100vw - 16px);
+	max-height: calc(100dvh - 16px);
+	border: 1px solid #a4a4a4;
+	border-radius: 10px;
+	background: #fff;
+	box-shadow: 0 5px 16px rgba(0,0,0,.28);
+	color: #191d24;
+	font-family: var(--chinachu-font-sans);
+}
+.schedule-program-drawer {
+	padding: 14px 16px 10px;
+}
+div.schedule-program-drawer > div.head {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 0;
+	margin: 0 0 8px;
+	background: transparent;
+	text-align: left;
+}
+div.schedule-program-drawer > div.head > div.date {
+	flex: 1;
+	min-width: 0;
+	color: #191d24;
+	font-size: 13px;
+	line-height: 1.6;
+	text-align: left;
+	white-space: normal;
+}
+.schedule-program-drawer .drawer-close {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 32px;
+	height: 32px;
+	margin: -4px -8px 0 0;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: #808080;
+	font-size: 24px;
+	line-height: 1;
+}
+.schedule-program-drawer .drawer-close:hover {
+	background: #fff0f6;
+	color: #c24186;
+}
+.schedule-program-drawer .drawer-close:focus-visible {
+	outline: 2px solid #c24186;
+	outline-offset: 2px;
+}
+div.schedule-program-drawer > div.body {
+	background: transparent;
+	color: #191d24;
+	white-space: normal;
+	word-break: normal;
+	overflow-wrap: anywhere;
+}
+div.schedule-program-drawer > div.body > div.title {
+	margin: 0 0 10px;
+	color: #191d24;
+	font-size: 20px;
+	font-weight: 700;
+	line-height: 1.4;
+}
+.schedule-program-drawer .program-meta {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px 12px;
+	margin-bottom: 10px;
+	color: #555;
+	font-size: 13px;
+	line-height: 1.5;
+}
+.schedule-program-drawer .program-category {
+	padding: 3px 10px;
+	border-radius: 5px;
+	background: var(--program-genre-color, #f0f0f0) !important;
+	color: #555 !important;
+	font-weight: 500;
+}
+.schedule-program-drawer .program-category.label-cat-drama {
+	background: #ffe4e8 !important;
+	color: #c63379 !important;
+}
+div.schedule-program-drawer > div.body > div.detail {
+	margin: 0 0 10px;
+	font-size: 14px;
+	line-height: 1.6;
+	white-space: pre-wrap;
+}
+div.schedule-program-drawer > div.foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 0;
+	padding-top: 8px;
+	border-top: 1px solid #ddd;
+}
+.schedule-program-drawer .reservation-status {
+	color: #777;
+	font-size: 12px;
+}
+.schedule-program-drawer .drawer-actions {
+	display: flex;
+	gap: 6px;
+	margin-left: auto;
+}
+.schedule-program-drawer .drawer-actions wa-button::part(base) {
+	min-height: 32px;
+	padding: 0 12px;
+	border-radius: 5px;
+	font-size: 13px;
+	font-weight: 700;
+}
+.schedule-program-drawer wa-button.program-details-button::part(base) {
+	border: 1px solid #909090;
+	background: #fff;
+	color: #444;
+}
+.schedule-program-drawer wa-button.program-reserve-button::part(base) {
+	border-color: #c63379;
+	background: #c63379;
+	color: #fff;
+}
+.schedule-program-drawer wa-button.program-reserve-button:hover:not([disabled])::part(base) {
+	border-color: #ab2466;
+	background: #ab2466;
+}
+@media (max-width: 479px) {
+	.schedule-program-drawer { padding: 12px; }
+	div.schedule-program-drawer > div.body > div.title { font-size: 18px; }
+}
 
 div.timetable > div.head {
 	z-index   : 98;
