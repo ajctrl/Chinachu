@@ -27,7 +27,7 @@
   ],
 
   "wuiUsers": [
-    "chinachu:yoshikawa"
+    { "username": "chinachu" }
   ],
 
   "wuiPort": 20772,

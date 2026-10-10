@@ -80,7 +80,7 @@ async function main() {
 	const config = { ...JSON.parse(fs.readFileSync(path.join(repo, 'config.sample.json'))),
 		uid: process.getuid(), gid: process.getgid(), wuiPort: backendPort,
 		wuiHost: '127.0.0.1', wuiAllowedOrigins: [origin, publicOrigin],
-		wuiUsers: ['proxy-test:' + password], wuiXFF: true };
+		wuiUsers: [{ username: 'proxy-test', passwordHash: require('../lib/password-auth').hashPassword(password) }], wuiXFF: true };
 	fs.writeFileSync(path.join(app, 'config.json'), JSON.stringify(config));
 	fs.writeFileSync(path.join(app, 'rules.json'), '[]');
 	fs.writeFileSync(path.join(app, 'excludes.json'), '[]');

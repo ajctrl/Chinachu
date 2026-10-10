@@ -41,6 +41,7 @@ const { watchExclusionRules } = require('./lib/exclusion-rule-watcher');
 const { log } = require('./lib/logger');
 const { configureMirakurunClient } = require('./lib/mirakurun-client');
 const { createBasicAuthMiddleware } = require('./lib/socket-auth');
+const { createVerifier } = require('./lib/password-auth');
 const { createRequestGuard, listenAddress, readBody, isLoopback } = require('./lib/http-security');
 const requestGuard = createRequestGuard(config);
 
@@ -155,12 +156,16 @@ if (tlsEnabled) {
 
 // Basic Auth
 let basic = null;
+const verifyPassword = (() => {
+	try { return createVerifier(config.wuiUsers, { trustForwarded: config.wuiXFF === true }); }
+	catch (error) { console.error('[fatal] ' + error.message); process.exit(1); }
+})();
 const basicAuthEnabled = config.wuiUsers && (config.wuiUsers.length > 0);
 if (basicAuthEnabled) {
 	basic = auth.basic({
 		realm: 'Authentication.'
-	}, function (username, password, callback) {
-		callback(config.wuiUsers.indexOf([username, password].join(':')) !== -1);
+	}, function (username, password, callback, request) {
+		verifyPassword(username, password, request).then(callback, () => callback(false));
 	});
 }
 
@@ -702,7 +707,7 @@ function ioAddListener(server) {
 	var io = new Server(server, { allowRequest: (req, done) => done(null, !requestGuard(req)) });
 
 	if (basicAuthEnabled) {
-		io.use(createBasicAuthMiddleware(config.wuiUsers || []));
+		io.use(createBasicAuthMiddleware(verifyPassword));
 	}
 
 	io.on('connection', ioServer);

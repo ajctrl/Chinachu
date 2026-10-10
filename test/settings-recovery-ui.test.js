@@ -78,3 +78,87 @@ describe('settings JSON recovery', function() {
 		assert.match(ui.page.status, /変更はありません/);
 	});
 });
+
+describe('settings password edits across form and JSON', function() {
+	const original = { wuiUsers: [{ username: 'alice', passwordSet: true }] };
+	function setup() { return load(JSON.stringify(original)); }
+	function passwordInput(ui) {
+		const row = { children: [] };
+		ui.page.node = function(tag, parent, text) {
+			const node = { tag, textContent: text, children: [], handlers: {},
+				setAttribute() {}, removeAttribute() {}, focus() {},
+				addEventListener(name, handler) { this.handlers[name] = handler; } };
+			if (parent) parent.children.push(node);
+			return node;
+		};
+		ui.page.inputs = {};
+		ui.page.renderUsers(row, schema.fields.find(field => field.key === 'wuiUsers'), 'users', ui.page.data.config.wuiUsers);
+		return row.children[0].children.find(node => node.tag === 'input');
+	}
+	function enter(input, value) { input.value = value; input.handlers.input(); }
+	function confirm(ui) { ui.page.save(); ui.modal().buttons[0].onSelect({}, { close() {} }); return JSON.parse(ui.saved().text); }
+	it('uses an explicit JSON password instead of the earlier form password', function() {
+		const ui = setup();
+		enter(passwordInput(ui), 'older-form-password');
+		ui.page.selectTab('json');
+		ui.editor.setValue(JSON.stringify({ wuiUsers: [{ ...original.wuiUsers[0], password: 'new-json-password' }] }));
+		assert.equal(confirm(ui).wuiUsers[0].password, 'new-json-password');
+	});
+	it('cancels a pending form password when JSON explicitly supplies an empty string', function() {
+		const ui = setup();
+		enter(passwordInput(ui), 'older-form-password');
+		ui.page.selectTab('json');
+		ui.editor.setValue(JSON.stringify({ wuiUsers: [{ ...original.wuiUsers[0], password: '' }] }));
+		ui.page.save();
+		assert.equal(Object.keys(ui.page.pendingPasswords).length, 0);
+		assert.equal(ui.modal(), undefined);
+		assert.match(ui.page.status, /変更はありません/);
+	});
+	it('shows the JSON password in the masked form and lets a later form edit replace it', function() {
+		const ui = setup();
+		enter(passwordInput(ui), 'older-form-password');
+		ui.page.selectTab('json');
+		ui.editor.setValue(JSON.stringify({ wuiUsers: [{ ...original.wuiUsers[0], password: 'new-json-password' }] }));
+		ui.page.selectTab('form');
+		const input = passwordInput(ui);
+		assert.equal(input.type, 'password');
+		assert.equal(input.value, 'new-json-password');
+		assert.ok(!ui.editor.getValue().includes('new-json-password'));
+		enter(input, 'latest-form-password');
+		ui.page.selectTab('json');
+		assert.ok(!ui.editor.getValue().includes('latest-form-password'));
+		assert.equal(confirm(ui).wuiUsers[0].password, 'latest-form-password');
+	});
+	it('does not restore a JSON password after the user clears it in the form', function() {
+		const ui = setup();
+		ui.page.selectTab('json');
+		ui.editor.setValue(JSON.stringify({ wuiUsers: [{ ...original.wuiUsers[0], password: 'new-json-password' }] }));
+		ui.page.selectTab('form');
+		enter(passwordInput(ui), '');
+		ui.page.selectTab('json');
+		ui.page.save();
+		assert.equal(ui.modal(), undefined);
+		assert.equal(Object.keys(ui.page.pendingPasswords).length, 0);
+	});
+	it('discards pending passwords for users removed in JSON', function() {
+		const ui = setup();
+		enter(passwordInput(ui), 'older-form-password');
+		ui.page.selectTab('json');
+		ui.editor.setValue('{"wuiUsers":[]}');
+		ui.page.selectTab('form');
+		assert.equal(Object.keys(ui.page.pendingPasswords).length, 0);
+		ui.page.selectTab('json');
+		ui.editor.setValue(JSON.stringify(original));
+		ui.page.save();
+		assert.equal(ui.modal(), undefined);
+	});
+	it('retains invalid JSON password types for validation instead of silently dropping them', function() {
+		const ui = setup();
+		ui.page.selectTab('json');
+		ui.editor.setValue(JSON.stringify({ wuiUsers: [{ ...original.wuiUsers[0], password: null }] }));
+		ui.page.save();
+		assert.equal(ui.page.data.config.wuiUsers[0].password, null);
+		assert.equal(ui.modal(), undefined);
+		assert.match(ui.page.status, /Web認証ユーザー/);
+	});
+});

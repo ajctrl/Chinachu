@@ -37,6 +37,18 @@ function request(context, method = 'GET', url = '/api/rules.json', headers = {},
 }
 
 describe('WUI request security', function() {
+	it('trusts only one valid forwarded IP from an explicitly trusted loopback connection', function() {
+		const request = (peer, forwarded) => ({ socket: { remoteAddress: peer }, headers: { 'x-forwarded-for': forwarded } });
+		assert.equal(security.authenticationSource(request('192.0.2.1', '192.0.2.2'), true), '192.0.2.1');
+		assert.equal(security.authenticationSource(request('127.0.0.1', '192.0.2.2')), '127.0.0.1');
+		assert.equal(security.authenticationSource(request('::ffff:127.0.0.1', '192.0.2.2'), true), '192.0.2.2');
+		assert.equal(security.authenticationSource(request('::1', '192.0.2.2, 192.0.2.3'), true), '::1');
+		for (const malformed of ['invalid', '', ['192.0.2.2'], 'fe80::1%eth0']) {
+			assert.equal(security.authenticationSource(request('127.0.0.1', malformed), true), '127.0.0.1');
+		}
+		assert.equal(security.authenticationSource(request('2001:0DB8:0:0::1')), '2001:db8::1');
+		assert.equal(security.authenticationSource(request('::ffff:192.0.2.1')), '192.0.2.1');
+	});
 	it('keeps all legacy listen addresses local', function() {
 		for (const wuiHost of [undefined, '0.0.0.0', '::', '192.168.1.3', 'public.example']) {
 			assert.equal(security.listenAddress({ wuiHost }), '127.0.0.1');
@@ -144,10 +156,10 @@ describe('WUI request security', function() {
 		} finally { await new Promise(resolve => context.server.close(resolve)); }
 	});
 	it('uses the authenticated server for a legacy Open Server port', async function() {
-		const config = { wuiUsers: ['alice:secret'], wuiHost: '0.0.0.0', wuiOpenServer: true, wuiOpenPort: 12345 };
+		const config = { wuiUsers: require('./helpers/auth').users, wuiHost: '0.0.0.0', wuiOpenServer: true, wuiOpenPort: 12345 };
 		let binding;
 		const server = vm.runInNewContext(source.slice(source.indexOf('// Basic Auth'), source.indexOf('// HTTP Server')) + '\nserver;', {
-			auth: require('http-auth'), https: {}, tlsEnabled: false, config, listenAddress: security.listenAddress,
+			auth: require('http-auth'), createVerifier: require('../lib/password-auth').createVerifier, https: {}, tlsEnabled: false, config, listenAddress: security.listenAddress,
 			http: { createServer(handler) { const server = http.createServer(handler); server.listen = function(port, host) { binding = { port, host }; return this; }; return server; } },
 			httpServer: (req, res) => res.end('ok'), log() {}, util: {}
 		});
@@ -162,11 +174,48 @@ describe('WUI request security', function() {
 });
 
 describe('WUI Socket.IO request security', function() {
+	it('shares source limits across HTTP and Socket.IO without locking out another proxy client', async function() {
+		const { createVerifier, parseHash } = require('../lib/password-auth');
+		const users = require('./helpers/auth').users;
+		const key = parseHash(users[0].passwordHash).key;
+		let calls = 0;
+		const context = vm.runInNewContext(source.slice(source.indexOf('// Basic Auth'), source.indexOf('// HTTP Server')) + '\n({ server, verifyPassword });', {
+			auth: require('http-auth'), http, tlsEnabled: false,
+			config: { wuiUsers: users, wuiXFF: true }, httpServer: (_req, res) => res.end('ok'),
+			createVerifier(entries, options) { return createVerifier(entries, { ...options, derive: async password => {
+				calls++; return password === 'secret' ? key : Buffer.alloc(32);
+			} }); }
+		});
+		const io = new (require('socket.io').Server)(context.server);
+		io.use(require('../lib/socket-auth').createBasicAuthMiddleware(context.verifyPassword));
+		context.server.listen(0, '127.0.0.1'); await once(context.server, 'listening');
+		const port = context.server.address().port;
+		const headers = (address, password) => ({ 'x-forwarded-for': address, authorization: 'Basic ' + Buffer.from('alice:' + password).toString('base64') });
+		async function connect(address, password) {
+			const socket = require('socket.io-client').io('http://127.0.0.1:' + port, {
+				transports: ['websocket'], extraHeaders: headers(address, password), reconnection: false, timeout: 2500
+			});
+			try {
+				return await new Promise(resolve => { socket.once('connect', () => resolve(true)); socket.once('connect_error', () => resolve(false)); });
+			} finally { socket.close(); }
+		}
+		try {
+			for (let i = 0; i < 5; i++) assert.equal((await request({ port }, 'GET', '/', headers('192.0.2.1', 'wrong'))).status, 401);
+			assert.equal(calls, 5);
+			assert.equal(await connect('192.0.2.1', 'wrong'), false);
+			assert.equal(calls, 5, 'Socket.IO must share the HTTP client\'s exhausted limit');
+			assert.equal(await connect('192.0.2.2', 'secret'), true);
+			assert.equal(calls, 6, 'another client must receive a fresh credential check');
+			assert.equal((await request({ port }, 'GET', '/', headers('192.0.2.3', 'other-wrong'))).status, 401);
+			assert.equal(calls, 7, 'HTTP must also distinguish clients behind the proxy');
+		} finally { await new Promise(resolve => io.close(resolve)); }
+	});
 	it('applies the public origin guard and authentication to polling and WebSocket connections', async function() {
-		const config = { wuiUsers: ['alice:secret'], wuiAllowedOrigins: ['https://tv.example'] };
+		const config = { wuiUsers: require('./helpers/auth').users, wuiAllowedOrigins: ['https://tv.example'] };
 		const server = http.createServer((req, res) => res.end());
 		const start = vm.runInNewContext(source.slice(source.indexOf('function ioAddListener(server)'), source.indexOf('\nioAddListener(server);')) + '\nioAddListener;', {
 			Server: require('socket.io').Server, config, basicAuthEnabled: true,
+			verifyPassword: require('../lib/password-auth').createVerifier(config.wuiUsers),
 			requestGuard: security.createRequestGuard(config),
 			createBasicAuthMiddleware: require('../lib/socket-auth').createBasicAuthMiddleware,
 			ioServer() {}, iosAddEventListner() {}
@@ -175,7 +224,7 @@ describe('WUI Socket.IO request security', function() {
 		server.listen(0, '127.0.0.1'); await once(server, 'listening');
 		const url = 'http://127.0.0.1:' + server.address().port;
 		async function connect(transport, headers) {
-			const socket = require('socket.io-client').io(url, { transports: [transport], extraHeaders: headers, reconnection: false, timeout: 500 });
+			const socket = require('socket.io-client').io(url, { transports: [transport], extraHeaders: headers, reconnection: false, timeout: 2500 });
 			try {
 				return await new Promise(resolve => {
 					socket.once('connect', () => resolve(true));

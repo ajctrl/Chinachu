@@ -11,7 +11,7 @@ async function startServer(options) {
 	const server = http.createServer();
 	const io = new Server(server, { path: options.path });
 	if (options.users) {
-		io.use(createBasicAuthMiddleware(options.users));
+		io.use(createBasicAuthMiddleware(require('../lib/password-auth').createVerifier(options.users)));
 	}
 	server.listen(0, '127.0.0.1');
 	await once(server, 'listening');
@@ -26,7 +26,7 @@ function connect(url, options) {
 	return new Promise((resolve, reject) => {
 		const socket = createClient(url, {
 			reconnection: false,
-			timeout: 1000,
+			timeout: 2500,
 			...options
 		});
 		socket.once('connect', () => resolve(socket));
@@ -49,7 +49,7 @@ describe('Socket.IO 4', function() {
 	});
 
 	it('accepts valid Basic authentication', async function() {
-		const context = await startServer({ path, users: ['alice:secret'] });
+		const context = await startServer({ path, users: require('./helpers/auth').users });
 		try {
 			const socket = await connect(context.url, {
 				path,
@@ -63,7 +63,7 @@ describe('Socket.IO 4', function() {
 	});
 
 	it('rejects missing Basic authentication', async function() {
-		const context = await startServer({ path, users: ['alice:secret'] });
+		const context = await startServer({ path, users: require('./helpers/auth').users });
 		try {
 			await assert.rejects(connect(context.url, { path }), /not authorized/);
 		} finally {

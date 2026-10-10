@@ -24,3 +24,5 @@ Browser UI architecture, vendored assets and checks: [documentation](docs/browse
 Node dependency versions, native replacements and checks: [documentation](docs/npm-dependencies.md).
 
 Web UI access through a reverse proxy, migration and API requirements: [documentation](docs/reverse-proxy.md).
+
+Web authentication, initial password setup and plaintext migration: [documentation](docs/authentication.md).

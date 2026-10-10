@@ -30,7 +30,7 @@
 	field(connection, 'gid', '実行グループ', 'identity', 'グループ名または数値ID。空欄は null。', { nullable: true });
 	field(connection, 'excludeServices', '除外するサービスID', 'numbers', 'カンマまたは改行で区切ったサービスID。');
 	field(connection, 'serviceOrder', 'サービスの表示順', 'numbers', '優先して表示する順にサービスIDを指定します。');
-	field(connection, 'wuiUsers', 'Web認証ユーザー', 'strings', '1行に ユーザー名:パスワード を入力。空欄は認証なし。', { credentials: true });
+	field(connection, 'wuiUsers', 'Web認証ユーザー', 'users', '新しいパスワードを入力したユーザーだけ更新します。空欄なら現在のパスワードを維持します。');
 	field(connection, 'wuiPort', 'Web待受ポート', 'number', 'リバースプロキシが接続するポート。1〜65535。空欄なら待受を無効にします。', { nullable: true, min: 1, max: 65535 });
 	field(connection, 'wuiHost', 'Web待受アドレス', 'select', '同じホストのリバースプロキシからのみ接続できます。', { choices: [['127.0.0.1', '127.0.0.1'], ['::1', '::1']] });
 	field(connection, 'wuiAllowedOrigins', '公開URL', 'strings', 'リバースプロキシのURLを1行ずつ指定。例: https://chinachu.example.com。パスは含めません。', { origins: true });
@@ -87,6 +87,17 @@
 			if (f.type === 'select') valid = f.choices.some(function(choice) { return choice[0] === value; });
 			if (f.type === 'numbers') valid = Array.isArray(value) && value.every(function(n) { return Number.isSafeInteger(n) && n >= 0; });
 			if (f.type === 'strings') valid = Array.isArray(value) && value.every(function(s) { return typeof s === 'string' && (!f.credentials || /^[^:]+:.+$/.test(s)); });
+			if (f.type === 'users') {
+				var names = [];
+				valid = Array.isArray(value) && value.length <= 16 && value.every(function(user) {
+					if (!user || typeof user !== 'object' || Array.isArray(user) || typeof user.username !== 'string' ||
+						!user.username.length || user.username.length > 128 || /[:\s\x00-\x1f\x7f]/.test(user.username) || names.indexOf(user.username) !== -1) return false;
+					names.push(user.username);
+					return (user.password === undefined || typeof user.password === 'string') &&
+						(user.passwordSet === undefined || typeof user.passwordSet === 'boolean') &&
+						Object.keys(user).every(function(key) { return ['username', 'password', 'passwordSet', 'passwordHash'].indexOf(key) !== -1; });
+				});
+			}
 			if (valid && f.origins) valid = value.every(function(s) {
 				try { var url = new URL(s); return ['http:', 'https:'].indexOf(url.protocol) !== -1 && url.hostname.indexOf('*') === -1 && !url.username && !url.password && url.pathname === '/' && !url.search && !url.hash; }
 				catch (_) { return false; }

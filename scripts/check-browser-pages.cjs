@@ -3,6 +3,7 @@
  * Set CHINACHU_BROWSER_EPG_ONLY=1 to check only the program table popup.
  * Set CHINACHU_BROWSER_EPG_ONLY=1 to check just the timetable program popup.
  * Set CHINACHU_BROWSER_RULES_ONLY=1 to check repeated rule editor activation.
+ * Set CHINACHU_BROWSER_SETTINGS_ONLY=1 to check settings and write-only passwords.
  * All HTTP/Socket.IO data comes from a temporary loopback fixture server. API
  * writes are rejected except a browser-intercepted mock config save; no DVR
  * service, real configuration files or recording files are accessed.
@@ -38,7 +39,7 @@ function makeFixture() {
 		schedule: [Object.assign({}, channel, { programs })], reserves, recording, recorded,
 		rules: [{ reserve_titles: ['番組'], types: ['GR'], categories: ['anime'], isDisabled: false }, { reserve_titles: ['ニュース', '<特集>'], reserve_titles_operator: 'and', ignore_titles: ['再放送'], hour: { start: 18, end: 23 }, duration: { min: 900, max: 3600 }, isDisabled: true }],
 		'exclusion-rules': [{ reserve_titles: ['再放送'], types: ['GR'], isDisabled: false }],
-		config: { recordedDir: './recorded/', wuiPort: 10772, recordingPriority: 2 },
+		config: { recordedDir: './recorded/', wuiPort: 10772, recordingPriority: 2, wuiUsers: [{ username: 'alice', passwordSet: true }] },
 		storage: { size: 1024 ** 4, used: 512 * 1024 ** 3, avail: 500 * 1024 ** 3, recorded: 400 * 1024 ** 3, lowSpaceThreshold: 3 * 1024 ** 3 }
 	};
 }
@@ -202,6 +203,14 @@ async function run() {
 		});
 		await page.goto(origin + '/#!/dashboard/top/');
 		await page.waitForFunction(() => window.app?.pm?.p && app.chinachu.schedule.length && app.chinachu.reserves.length && app.chinachu.recorded.length);
+		if (process.env.CHINACHU_BROWSER_SETTINGS_ONLY === '1') {
+			await checkSettings();
+			assert.deepEqual(errors, []);
+			assert.deepEqual(writes, []);
+			assert.deepEqual(external, []);
+			console.log('PASS settings: write-only passwords, masked input, JSON secrecy and no password resend');
+			return;
+		}
 		if (process.env.CHINACHU_BROWSER_EPG_ONLY !== '1') {
 			for (const width of [1280, 360]) {
 				await page.setViewportSize({ width, height: 720 });
@@ -636,65 +645,83 @@ async function run() {
 			assert.equal(await page.locator('wa-dialog[open]').count(), 1);
 			assert.ok(await page.locator('wa-dialog .chinachu-form-field').count() >= 3);
 		}
-		await route('pref/config');
-		await page.waitForFunction(() => app.pm.p.data.editor && app.pm.p.inputs);
-		await page.getByText('JSON編集', { exact: true }).first().click();
-		assert.equal(await page.evaluate(() => app.pm.p.activeTab), 'json');
-		assert.equal(await page.evaluate(() => JSON.parse(app.pm.p.data.editor.getValue()).wuiPort), 10772);
-		const aceVersion = JSON.parse(fs.readFileSync(path.join(webRoot, 'lib/ace/package.json'), 'utf8')).version;
-		assert.equal(await page.evaluate(() => ace.version), aceVersion, 'the browser must load the pinned Ace version');
-		await page.waitForFunction(() => app.pm.p.data.editor.session.getMode().$id === 'ace/mode/json' && app.pm.p.data.editor.session.$worker);
-		assert.equal(await page.evaluate(() => app.pm.p.data.editor.getTheme()), 'ace/theme/github');
-		const originalJson = await page.evaluate(() => app.pm.p.data.editor.getValue());
-		async function editJson(text) {
-			await page.evaluate(() => { app.pm.p.data.editor.focus(); app.pm.p.data.editor.selectAll(); });
-			await page.keyboard.insertText(text);
-			assert.equal(await page.evaluate(() => app.pm.p.data.editor.getValue()), text, 'Ace must preserve typed JSON and Japanese text');
+		async function checkSettings() {
+			await route('pref/config');
+			await page.waitForFunction(() => app.pm.p.data.editor && app.pm.p.inputs);
+			assert.equal(await page.locator('#setting-wuiUsers-password-0').getAttribute('type'), 'password');
+			assert.equal(await page.locator('#setting-wuiUsers-password-0').inputValue(), '');
+			await page.getByText('JSON編集', { exact: true }).first().click();
+			assert.equal(await page.evaluate(() => app.pm.p.activeTab), 'json');
+			assert.equal(await page.evaluate(() => JSON.parse(app.pm.p.data.editor.getValue()).wuiPort), 10772);
+			const aceVersion = JSON.parse(fs.readFileSync(path.join(webRoot, 'lib/ace/package.json'), 'utf8')).version;
+			assert.equal(await page.evaluate(() => ace.version), aceVersion, 'the browser must load the pinned Ace version');
+			await page.waitForFunction(() => app.pm.p.data.editor.session.getMode().$id === 'ace/mode/json' && app.pm.p.data.editor.session.$worker);
+			assert.equal(await page.evaluate(() => app.pm.p.data.editor.getTheme()), 'ace/theme/github');
+			const originalJson = await page.evaluate(() => app.pm.p.data.editor.getValue());
+			async function editJson(text) {
+				await page.evaluate(() => { app.pm.p.data.editor.focus(); app.pm.p.data.editor.selectAll(); });
+				await page.keyboard.insertText(text);
+				assert.equal(await page.evaluate(() => app.pm.p.data.editor.getValue()), text, 'Ace must preserve typed JSON and Japanese text');
+			}
+			const invalidJson = '{ "wuiPort": }';
+			await editJson(invalidJson);
+			await page.waitForFunction(() => app.pm.p.data.editor.session.getAnnotations().some(annotation => annotation.type === 'error'));
+			await page.getByRole('button', { name: 'サーバー設定を保存', exact: true }).click();
+			assert.match(await page.locator('.config-status').innerText(), /JSONを確認してください/);
+			assert.equal(await page.locator('wa-dialog[open]').count(), 0, 'invalid JSON must not open the save confirmation');
+			await page.evaluate(() => app.pm.p.data.editor.focus());
+			await page.keyboard.press('Control+z');
+			assert.equal(await page.evaluate(() => app.pm.p.data.editor.getValue()), originalJson);
+			await page.keyboard.press('Control+Shift+z');
+			assert.equal(await page.evaluate(() => app.pm.p.data.editor.getValue()), invalidJson);
+			const editedConfig = { ...JSON.parse(originalJson), wuiPort: 10773, customSetting: { text: '日本語の設定 <img src=x onerror="window.fixtureXss=true">' } };
+			await editJson(JSON.stringify(editedConfig, null, '  '));
+			await page.waitForFunction(() => app.pm.p.data.editor.session.getAnnotations().length === 0);
+			await page.getByRole('button', { name: '設定フォームに戻る', exact: true }).click();
+			assert.equal(await page.locator('#setting-wuiPort').inputValue(), '10773');
+			await page.locator('#setting-wuiPort').fill('10774');
+			await page.locator('#setting-wuiUsers-password-0').fill('browser-test-new-password');
+			await page.getByRole('button', { name: 'JSON編集', exact: true }).click();
+			editedConfig.wuiPort = 10774;
+			assert.deepEqual(await page.evaluate(() => JSON.parse(app.pm.p.data.editor.getValue())), editedConfig, 'form edits must preserve settings outside the form');
+			const savedConfig = [];
+			const configUrl = origin + '/api/config.json';
+			const mockConfigSave = async route => {
+				if (route.request().method() !== 'PUT') return route.continue();
+				savedConfig.push(new URLSearchParams(route.request().postData()));
+				const visible = JSON.parse(savedConfig.at(-1).get('json'));
+				visible.wuiUsers = visible.wuiUsers.map(user => ({ username: user.username, passwordSet: true }));
+				return route.fulfill({ status: 200, headers: { 'Content-Type': 'application/json', ETag: '"fixture-saved"' }, body: JSON.stringify(visible) });
+			};
+			await page.route(configUrl, mockConfigSave);
+			await page.getByRole('button', { name: 'サーバー設定を保存', exact: true }).click();
+			assert.equal(await page.locator('wa-dialog[label="サーバー設定の保存"][open]').count(), 1, await page.locator('.config-status').innerText());
+			// The footer is slotted light DOM outside the native dialog's subtree.
+			await page.locator('wa-dialog[label="サーバー設定の保存"][open]').getByRole('button', { name: '保存', exact: true }).click();
+			await page.waitForFunction(() => !app.pm.p.saving && app.pm.p.data.original?.wuiPort === 10774);
+			assert.equal(savedConfig.length, 1);
+			assert.deepEqual(JSON.parse(savedConfig[0].get('json')), { ...editedConfig, wuiUsers: [{ ...editedConfig.wuiUsers[0], password: 'browser-test-new-password' }] });
+			assert.equal(savedConfig[0].get('revision'), 'fixture-revision');
+			assert.equal(await page.evaluate(() => app.pm.p.data.revision), 'fixture-saved');
+			assert.equal(await page.evaluate(() => app.pm.p.data.editor.getReadOnly()), false);
+			assert.equal(await page.locator('#setting-wuiUsers-password-0').inputValue(), '');
+			assert.equal(await page.evaluate(() => app.pm.p.data.editor.getValue().includes('browser-test-new-password')), false);
+			assert.equal(await page.evaluate(() => Object.keys(app.pm.p.pendingPasswords).length), 0);
+			assert.match(await page.locator('.config-status').innerText(), /設定を保存しました/);
+			assert.equal(await page.evaluate(() => window.fixtureXss), undefined);
+			assert.ok(requests.includes('/lib/ace/src-min-noconflict/worker-json.js'), 'JSON validation must use the local Worker');
+			await page.getByRole('button', { name: '設定フォームに戻る', exact: true }).click();
+			await page.locator('#setting-wuiPort').fill('10775');
+			await page.getByRole('button', { name: 'サーバー設定を保存', exact: true }).click();
+			await page.locator('wa-dialog[label="サーバー設定の保存"][open]').getByRole('button', { name: '保存', exact: true }).click();
+			await page.waitForFunction(() => !app.pm.p.saving && app.pm.p.data.original?.wuiPort === 10775);
+			assert.equal(savedConfig.length, 2);
+			assert.deepEqual(JSON.parse(savedConfig[1].get('json')).wuiUsers, editedConfig.wuiUsers, 'blank passwords must not be sent on subsequent saves');
+			await page.unroute(configUrl, mockConfigSave);
+			await page.evaluate(() => { window.fixtureEditor = app.pm.p.data.editor; });
+			console.log('PASS Ace ' + aceVersion + ': local JSON Worker/theme, Japanese editing, undo/redo, form synchronization and mock save');
 		}
-		const invalidJson = '{ "wuiPort": }';
-		await editJson(invalidJson);
-		await page.waitForFunction(() => app.pm.p.data.editor.session.getAnnotations().some(annotation => annotation.type === 'error'));
-		await page.getByRole('button', { name: 'サーバー設定を保存', exact: true }).click();
-		assert.match(await page.locator('.config-status').innerText(), /JSONを確認してください/);
-		assert.equal(await page.locator('wa-dialog[open]').count(), 0, 'invalid JSON must not open the save confirmation');
-		await page.evaluate(() => app.pm.p.data.editor.focus());
-		await page.keyboard.press('Control+z');
-		assert.equal(await page.evaluate(() => app.pm.p.data.editor.getValue()), originalJson);
-		await page.keyboard.press('Control+Shift+z');
-		assert.equal(await page.evaluate(() => app.pm.p.data.editor.getValue()), invalidJson);
-		const editedConfig = { ...JSON.parse(originalJson), wuiPort: 10773, customSetting: { text: '日本語の設定 <img src=x onerror="window.fixtureXss=true">' } };
-		await editJson(JSON.stringify(editedConfig, null, '  '));
-		await page.waitForFunction(() => app.pm.p.data.editor.session.getAnnotations().length === 0);
-		await page.getByRole('button', { name: '設定フォームに戻る', exact: true }).click();
-		assert.equal(await page.locator('#setting-wuiPort').inputValue(), '10773');
-		await page.locator('#setting-wuiPort').fill('10774');
-		await page.getByRole('button', { name: 'JSON編集', exact: true }).click();
-		editedConfig.wuiPort = 10774;
-		assert.deepEqual(await page.evaluate(() => JSON.parse(app.pm.p.data.editor.getValue())), editedConfig, 'form edits must preserve settings outside the form');
-		const savedConfig = [];
-		const configUrl = origin + '/api/config.json';
-		const mockConfigSave = async route => {
-			if (route.request().method() !== 'PUT') return route.continue();
-			savedConfig.push(new URLSearchParams(route.request().postData()));
-			return route.fulfill({ status: 200, headers: { 'Content-Type': 'application/json', ETag: '"fixture-saved"' }, body: '{}' });
-		};
-		await page.route(configUrl, mockConfigSave);
-		await page.getByRole('button', { name: 'サーバー設定を保存', exact: true }).click();
-		assert.equal(await page.locator('wa-dialog[label="サーバー設定の保存"][open]').count(), 1, await page.locator('.config-status').innerText());
-		// The footer is slotted light DOM outside the native dialog's subtree.
-		await page.locator('wa-dialog[label="サーバー設定の保存"][open]').getByRole('button', { name: '保存', exact: true }).click();
-		await page.waitForFunction(() => !app.pm.p.saving && app.pm.p.data.original?.wuiPort === 10774);
-		assert.equal(savedConfig.length, 1);
-		assert.deepEqual(JSON.parse(savedConfig[0].get('json')), editedConfig);
-		assert.equal(savedConfig[0].get('revision'), 'fixture-revision');
-		assert.equal(await page.evaluate(() => app.pm.p.data.revision), 'fixture-saved');
-		assert.equal(await page.evaluate(() => app.pm.p.data.editor.getReadOnly()), false);
-		assert.match(await page.locator('.config-status').innerText(), /設定を保存しました/);
-		assert.equal(await page.evaluate(() => window.fixtureXss), undefined);
-		assert.ok(requests.includes('/lib/ace/src-min-noconflict/worker-json.js'), 'JSON validation must use the local Worker');
-		await page.unroute(configUrl, mockConfigSave);
-		await page.evaluate(() => { window.fixtureEditor = app.pm.p.data.editor; });
-		console.log('PASS Ace ' + aceVersion + ': local JSON Worker/theme, Japanese editing, undo/redo, form synchronization and mock save');
+		await checkSettings();
 		for (const name of ['schedule/table', 'schedule/timeline']) {
 			await route(name);
 			assert.equal(await page.evaluate(() => fixtureEditor.destroyed && !fixtureEditor.session.$worker), true, 'leaving settings must destroy the editor and its Worker');

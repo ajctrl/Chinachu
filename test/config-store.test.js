@@ -123,14 +123,15 @@ describe('configuration validation and atomic storage', function() {
 		}
 		assert.deepEqual(schema.validate({ operGotifyUrl: 'https://gotify.example.com/' }), []);
 	});
-	it('repairs malformed source JSON with a backup and still rejects a stale revision', function() {
-		const damaged = '{"recordedDir":';
+	it('requires local repair of malformed JSON to avoid exposing or dropping credentials', function() {
+		const damaged = '{"wuiUsers":["alice:do-not-disclose"],';
 		fs.writeFileSync(file, damaged);
-		assert.equal(request('PUT', { json: before, revision: store.revision(damaged) }).status, 200);
-		assert.equal(fs.readFileSync(file, 'utf8'), before);
-		assert.equal(fs.readFileSync(file + '.bak', 'utf8'), damaged);
-		assert.equal(request('PUT', { json: '{}', revision: store.revision(damaged) }).status, 409);
-		assert.equal(fs.readFileSync(file, 'utf8'), before);
+		const loaded = request('GET');
+		assert.equal(loaded.status, 500);
+		assert.ok(!JSON.stringify(loaded).includes('do-not-disclose'));
+		assert.equal(request('PUT', { json: before, revision: store.revision(damaged) }).status, 409);
+		assert.equal(fs.readFileSync(file, 'utf8'), damaged);
+		assert.equal(request('PUT', { json: '{}', revision: store.revision(before) }).status, 409);
 	});
 	it('edits nested form fields without losing unknown notification options', function() {
 		const config = { operGotifyFormat: { custom: 'keep', start: 'before' }, extra: { keep: true } };

@@ -7,21 +7,24 @@ LAN・インターネットから利用するときは、同じホストのリ�
 ## Chinachuの設定
 
 既存の `config.json` に次の値を設定します。以下は関連部分だけの例です。
-公開するホスト名・ポートに合わせて `wuiAllowedOrigins` を変更し、認証情報は自分専用の値にしてください。
+公開するホスト名・ポートに合わせて `wuiAllowedOrigins` を変更してください。
+`wuiUsers` はパスワード設定コマンドが生成した値を維持します。
 
 ```json
 {
   "wuiPort": 20772,
   "wuiHost": "127.0.0.1",
   "wuiAllowedOrigins": ["https://chinachu.example.com"],
-  "wuiUsers": ["your-user:replace-with-a-long-unique-password"],
   "wuiXFF": true,
   "wuiTlsKeyPath": null,
   "wuiTlsCertPath": null
 }
 ```
 
-TLSはプロキシで終端し、ChinachuのBasic認証を通す構成です。既存のサンプルパスワードは変更してください。
+TLSはプロキシで終端し、ChinachuのBasic認証を通す構成です。
+初回は `npm run password -- chinachu` で固有のパスワードを設定します。
+旧平文設定は `npm run password -- --migrate` で移行できます。保存後はWUIを再起動してください。
+詳しい設定・移行方法は [Web認証の説明](authentication.md) を参照してください。
 プロキシ側の認証だけを使う場合は `wuiUsers` を空にできますが、UI・API・Socket.IOの全経路を
 プロキシの認証対象にする必要があります。ローカルの他のプロセスからはバックエンドへ直接接続できます。
 
@@ -70,7 +73,8 @@ Authorization、Origin、`X-Requested-With`、`Sec-Fetch-*` をそのまま転�
 プロキシ側で `X-Requested-With` やOriginを付け足すとCSRF検証を損なうため、付け足さないでください。
 CORSを追加して任意の外部サイトへAPIを開放することも避けてください。
 `X-Forwarded-For` は受信値を連結せず、クライアントの接続元で上書きします。
-`wuiXFF` が有効でも、Chinachuはループバック接続の場合だけこの値をログに採用します。
+`wuiXFF` が有効でも、Chinachuはループバック接続の場合だけこの値を採用します。
+認証の試行制限では単一の有効なIPだけを使います。`wuiXFF` が無効だと、プロキシ経由の接続はプロキシのIPとして同じ制限を共有します。
 
 WebSocketの転送は[Nginxの公式手順](https://nginx.org/en/docs/http/websocket.html)に従っています。
 配信データを逐次返すため、[応答バッファリング](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_buffering)を無効にしています。

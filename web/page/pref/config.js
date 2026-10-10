@@ -2,6 +2,7 @@ Chinachu.definePage({
 	init: function() {
 		this.activeTab = 'form';
 		this.closed = false;
+		this.pendingPasswords = Object.create(null);
 		this.view.toolbar.add({ key: 'save', ui: new ChinachuUI.ActionButton({
 			label: 'サーバー設定を保存', icon: './icons/disk.png', onClick: this.save.bind(this)
 		}).disable() });
@@ -120,6 +121,10 @@ Chinachu.definePage({
 			label.htmlFor = id;
 			this.node('span', label, '再起動が必要', 'config-restart');
 			var value = ChinachuConfig.get(this.data.config, field.key);
+			if (field.type === 'users') {
+				this.renderUsers(row, field, id, value || []);
+				return;
+			}
 			var input = this.node(field.type === 'select' ? 'select' : /^(strings|numbers)$/.test(field.type) ? 'textarea' : 'input', row);
 			input.id = id;
 			input.setAttribute('aria-describedby', id + '-help ' + id + '-error');
@@ -153,11 +158,61 @@ Chinachu.definePage({
 			}.bind(this));
 		}, this);
 	},
-	readJson: function() {
+	renderUsers: function(row, field, id, users) {
+		if (!this.pendingPasswords) this.pendingPasswords = Object.create(null);
+		var group = this.node('div', row);
+		group.id = id;
+		group.tabIndex = -1;
+		group.setAttribute('role', 'group');
+		group.setAttribute('aria-label', field.label);
+		group.setAttribute('aria-describedby', id + '-help ' + id + '-error');
+		var help = this.node('p', row, field.description + ' ユーザーの追加・初回設定はサーバー上のパスワード設定コマンドで行います。', 'config-help');
+		help.id = id + '-help';
+		var error = this.node('p', row, '', 'config-field-error');
+		error.id = id + '-error';
+		this.inputs[field.key] = { input: group, error: error };
+		var errors = ChinachuConfig.validate({ wuiUsers: users });
+		if (errors.length) { error.textContent = errors[0].message; return; }
+		if (!users.length) this.node('p', group, 'Web認証は無効です。');
+		users.forEach(function(user, index) {
+			var label = this.node('label', group, user.username + (user.passwordSet ? '（設定済み）' : '（未設定）'));
+			var input = this.node('input', group);
+			input.id = id + '-password-' + index;
+			label.htmlFor = input.id;
+			input.type = 'password';
+			input.autocomplete = 'new-password';
+			input.placeholder = '変更する場合だけ入力（12文字以上）';
+			input.setAttribute('aria-describedby', help.id + ' ' + error.id);
+			input.value = this.pendingPasswords[user.username] || '';
+			input.addEventListener('input', function() {
+				if (input.value) this.pendingPasswords[user.username] = input.value;
+				else delete this.pendingPasswords[user.username];
+				error.textContent = '';
+				this.message('サーバー設定に未保存の変更があります。');
+			}.bind(this));
+		}, this);
+	},
+	readJson: function(clearPasswords) {
 		try {
 			var config = JSON.parse(this.data.editor.getValue());
 			if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('設定全体はJSONオブジェクトにしてください。');
+			var pending = Object.create(null), consumed = false;
+			if (Array.isArray(config.wuiUsers)) config.wuiUsers.forEach(function(user) {
+				if (!user || typeof user.username !== 'string') return;
+				if (Object.prototype.hasOwnProperty.call(user, 'password')) {
+					// Explicit JSON input wins, including an empty string cancelling a form edit.
+					if (typeof user.password !== 'string') return;
+					if (user.password) pending[user.username] = user.password;
+					delete user.password;
+					consumed = true;
+				} else if (this.pendingPasswords && this.pendingPasswords[user.username]) {
+					pending[user.username] = this.pendingPasswords[user.username];
+				}
+			}, this);
+			this.pendingPasswords = pending;
 			this.data.config = config;
+			// Do not restore an old JSON password after the user edits or clears it in the form.
+			if (clearPasswords && consumed) this.data.editor.setValue(JSON.stringify(config, null, '  '), -1);
 			return true;
 		} catch (error) {
 			this.message('JSONを確認してください。' + error.message, true);
@@ -167,7 +222,7 @@ Chinachu.definePage({
 	selectTab: function(tab) {
 		if (!this.data.editor || this.saving || tab === this.activeTab) return;
 		if (tab === 'form') {
-			if (!this.readJson()) return;
+			if (!this.readJson(true)) return;
 			this.renderForm();
 		} else if (this.formEdited) {
 			this.data.editor.setValue(JSON.stringify(this.data.config, null, '  '), -1);
@@ -205,16 +260,27 @@ Chinachu.definePage({
 		this.showErrors(errors);
 		if (errors.length) return;
 		var changed = this.data.original === null ? ['設定ファイルの修復'] : ChinachuConfig.changes(this.data.original, this.data.config);
+		var passwordChanged = (this.data.config.wuiUsers || []).some(function(user) { return !!(this.pendingPasswords && this.pendingPasswords[user.username]); }, this);
+		if (passwordChanged && changed.indexOf('wuiUsers') === -1) changed.push('wuiUsers');
 		if (!changed.length) { this.message('サーバー設定に変更はありません。' + (this.restartPending ? '保存済みの変更を反映するにはサービスの再起動が必要です。' : '')); return; }
 		var labels = changed.map(function(key) {
 			var field = ChinachuConfig.fields.filter(function(f) { return f.key === key; })[0];
 			return field ? field.label : key === 'operGotifyFormat' ? '通知メッセージ' : key;
 		});
 		var text = this.activeTab === 'json' ? this.data.editor.getValue() : JSON.stringify(this.data.config, null, '  ');
+		if (passwordChanged) {
+			var outgoing = JSON.parse(text);
+			outgoing.wuiUsers.forEach(function(user) {
+				if (this.pendingPasswords[user.username]) user.password = this.pendingPasswords[user.username];
+			}, this);
+			text = JSON.stringify(outgoing, null, '  ');
+		}
 		var page = this;
+		var disablesAuth = this.data.original && this.data.original.wuiUsers && this.data.original.wuiUsers.length &&
+			Array.isArray(this.data.config.wuiUsers) && !this.data.config.wuiUsers.length;
 		ChinachuUI.createModal({
 			title: 'サーバー設定の保存',
-			text: '変更項目: ' + labels.join('、') + '\n保存後、変更を反映するにはサービスの再起動が必要です。\n直前の設定を config.json.bak にバックアップします。',
+			text: '変更項目: ' + labels.join('、') + (disablesAuth ? '\nWeb認証を無効にします。公開する場合はプロキシ側の認証が必要です。' : '') + '\n保存後、変更を反映するにはサービスの再起動が必要です。\n直前の設定を config.json.bak にバックアップします。',
 			buttons: [
 				{ label: '保存', color: '@orange', onSelect: function(e, modal) {
 					modal.close();
@@ -236,10 +302,11 @@ Chinachu.definePage({
 			method: 'put', parameters: { json: text, revision: this.data.revision },
 			onSuccess: function(t) {
 				if (this.closed) return;
-				this.data.original = JSON.parse(text);
-				this.data.config = JSON.parse(text);
+				this.data.original = JSON.parse(t.responseText);
+				this.data.config = JSON.parse(t.responseText);
+				this.pendingPasswords = Object.create(null);
 				this.data.revision = (t.getHeader('ETag') || '').replace(/"/g, '');
-				this.data.editor.setValue(text, -1);
+				this.data.editor.setValue(t.responseText, -1);
 				this.formEdited = false;
 				this.restartPending = this.restartPending || restart;
 				this.renderForm();

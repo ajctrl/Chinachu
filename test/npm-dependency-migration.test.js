@@ -28,8 +28,8 @@ describe('updated HTTP authentication', function() {
 			// Run the application's server setup without starting its DVR services.
 			const source = read('app-wui.js');
 			const server = vm.runInNewContext(source.slice(source.indexOf('// Basic Auth'), source.indexOf('// HTTP Server')) + '\nserver;', {
-				auth: require('http-auth'), http, https, tlsEnabled, tlsOption,
-				config: { wuiUsers: ['alice:secret'] }, httpServer: (req, res) => res.end('authenticated:' + req.user)
+				auth: require('http-auth'), createVerifier: require('../lib/password-auth').createVerifier, http, https, tlsEnabled, tlsOption,
+				config: { wuiUsers: require('./helpers/auth').users }, httpServer: (req, res) => res.end('authenticated:' + req.user)
 			});
 			server.listen(0, '127.0.0.1');
 			await once(server, 'listening');

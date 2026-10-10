@@ -32,6 +32,7 @@
     "node": "^24.0.0"
   },
   "scripts": {
+    "password": "node ./scripts/set-wui-password.cjs",
     "test": "npm run test:syntax && npm run test:unit",
     "test:proxy": "node ./scripts/test-reverse-proxy.cjs",
     "test:syntax": "bash ./scripts/check-syntax.sh",
