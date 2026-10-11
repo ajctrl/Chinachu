@@ -246,6 +246,14 @@ async function run() {
 					await cell.dblclick();
 					await editor.getByRole('dialog').waitFor();
 					assert.equal(loads, 2, 'the rule can be reopened after discard');
+					await editor.locator('wa-input[aria-label="何時から"]').getByRole('spinbutton').fill('5');
+					await editor.getByRole('button', { name: 'キャンセル', exact: true }).click();
+					await editor.waitFor({ state: 'detached' });
+					assert.equal(await confirmation.count(), 0, 'Cancel discards changes without confirmation');
+					await cell.dblclick();
+					await editor.getByRole('dialog').waitFor();
+					assert.equal(loads, 3, 'the rule can be reopened after Cancel');
+					assert.equal(await editor.locator('wa-input[aria-label="何時から"]').getByRole('spinbutton').inputValue(), '0', 'Cancel does not save changes');
 					await editor.getByRole('button', { name: 'キャンセル', exact: true }).click();
 					await editor.waitFor({ state: 'detached' });
 					await page.unroute(endpoint);
@@ -253,7 +261,7 @@ async function run() {
 			}
 			assert.deepEqual(errors, []);
 			assert.deepEqual(writes, []);
-			console.log('PASS repeated rule activation: one editor during loading, discard and reopen at 1280/360px for normal/exclusion rules');
+			console.log('PASS rule editors: repeated activation, outside discard confirmation, explicit Cancel and reopen at 1280/360px for normal/exclusion rules');
 			if (process.env.CHINACHU_BROWSER_RULES_ONLY === '1') return;
 			await page.setViewportSize({ width: 1280, height: 900 });
 			await page.goto(origin + '/#!/dashboard/top/');

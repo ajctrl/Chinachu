@@ -1382,6 +1382,8 @@
       }, {
         label: 'キャンセル',
         onSelect: function (e, modal) {
+          if (saving) return;
+          discardConfirmed = true;
           modal.close();
         }
       }]

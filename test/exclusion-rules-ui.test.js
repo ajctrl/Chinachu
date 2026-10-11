@@ -326,6 +326,34 @@ describe('common exclusion rule GUI', function () {
 	}
 
 	for (const exclusion of [false, true]) {
+		it('discards edited ' + (exclusion ? 'exclusion' : 'normal') + ' rules immediately on Cancel', function() {
+			const ctx = browser();
+			const source = fs.readFileSync(path.join(__dirname, '../web/class.js'), 'utf8');
+			vm.runInContext(source.slice(source.indexOf('\tui.EditRule ='), source.indexOf('\tui.NewRule =')), ctx);
+			vm.runInContext('new ui.EditRule(0, ' + exclusion + '); var editor = modals[0];', ctx);
+			vm.runInContext("result.reserve_titles = ['変更したタイトル']; editor.buttons[1].onSelect({}, editor);", ctx);
+			assert.equal(ctx.modals[0].closed, true);
+			assert.equal(ctx.modals.length, 1, 'explicit cancellation does not ask for discard confirmation');
+			assert.deepEqual(Array.from(ctx.rules[0].reserve_titles), ['再放送']);
+			vm.runInContext('new ui.EditRule(0, ' + exclusion + ');', ctx);
+			assert.equal(ctx.modals.length, 2, 'cancellation releases the editor so it can be reopened');
+			assert.ok(ctx.requests.every(request => request.method === 'get'), 'cancellation never saves');
+		});
+
+		it('ignores Cancel while saving ' + (exclusion ? 'exclusion' : 'normal') + ' rules without bypassing later close confirmation', function() {
+			const ctx = browser();
+			const source = fs.readFileSync(path.join(__dirname, '../web/class.js'), 'utf8');
+			vm.runInContext(source.slice(source.indexOf('\tui.EditRule ='), source.indexOf('\tui.NewRule =')), ctx);
+			vm.runInContext('new ui.EditRule(0, ' + exclusion + '); var editor = modals[0];', ctx);
+			vm.runInContext("result.reserve_titles = ['変更したタイトル']; deferSave = true; editor.buttons[0].onSelect({ targetButton: editor.buttons[0].button }, editor); editor.buttons[1].onSelect({}, editor);", ctx);
+			assert.equal(ctx.modals[0].closed, undefined);
+			assert.equal(ctx.modals.length, 1);
+			assert.equal(ctx.pendingXHR.aborted, undefined);
+			vm.runInContext('pendingXHR.status = 500; pendingXHR.loaded(); modals[1].close(); editor.close();', ctx);
+			assert.equal(ctx.modals[2].title, '未保存の変更');
+			assert.deepEqual(Array.from(ctx.result.reserve_titles), ['変更したタイトル']);
+		});
+
 		it('checks unsaved edits before closing ' + (exclusion ? 'exclusion' : 'normal') + ' rules', function() {
 			const ctx = browser();
 			const source = fs.readFileSync(path.join(__dirname, '../web/class.js'), 'utf8');
