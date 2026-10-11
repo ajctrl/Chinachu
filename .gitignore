@@ -1,5 +1,6 @@
 /config.json
 /rules.json
+/rules.json.*
 /excludes.json
 /excludes.json.bak
 /excludes.json.*.tmp

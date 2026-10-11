@@ -408,8 +408,6 @@
 						height = maxH - posY;
 					}
 
-					// color: this.app.def.categoryColor[program.category] || '#ffffff'
-
 					// add to piece
 					piece[program.id] = {
 						id     : program.id,

@@ -6,7 +6,6 @@ Chinachu.definePage({
 
 		this.time = new Date().getTime();
 
-		this.initToolbar();
 		this.draw();
 
 		this.onNotify = this.refresh.bind(this);
@@ -32,46 +31,6 @@ Chinachu.definePage({
 		Chinachu.off(document, 'chinachu:schedule', this.onNotify);
 
 		this.app.pm.realizeHash(true);
-
-		return this;
-	},
-
-	initToolbar: function _initToolbar() {
-
-		/*
-		this.view.toolbar.add({
-			key: 'yesterday',
-			ui : new ChinachuUI.ActionButton({
-				label  : Chinachu.t('TO {0}', Chinachu.t('YESTERDAY')),
-				icon   : './icons/arrow-180-medium.png',
-				onClick: function() {
-
-				}.bind(this)
-			})
-		});
-
-		this.view.toolbar.add({
-			key: 'tomorrow',
-			ui : new ChinachuUI.ActionButton({
-				label  : Chinachu.t('TO {0}', Chinachu.t('TOMORROW')),
-				icon   : './icons/arrow-000-medium.png',
-				onClick: function() {
-
-				}.bind(this)
-			})
-		});
-
-		this.view.toolbar.add({
-			key: 'config',
-			ui : new ChinachuUI.ActionButton({
-				label  : Chinachu.t('CONFIG {0}', Chinachu.t('VIEW')),
-				icon   : './icons/wrench-screwdriver.png',
-				onClick: function() {
-
-				}.bind(this)
-			})
-		});
-		*/
 
 		return this;
 	},
@@ -153,17 +112,11 @@ Chinachu.definePage({
 					channel.programs = channel.programs.filter(function (item) { return item !== program; });
 					return;
 				}
-				//if ((program.start - this.time) > 1000 * 60 * 60 * 24) {
-				//	channel.programs = channel.programs.filter(function (item) { return item !== program; });
-				//	return;
-				//}
 
 				var posX  = Math.floor(1 + (program.start - this.time) / 1000 / 1000 * unitlen + 150);
 				var width = Math.floor(program.seconds / 1000 * unitlen - 1);
 
 				if (maxlen < program.end) maxlen = program.end;
-
-				// color: this.app.def.categoryColor[program.category] || '#ffffff'
 
 				// add to piece
 				piece[program.id] = {

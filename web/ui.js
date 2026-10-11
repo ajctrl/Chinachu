@@ -170,7 +170,7 @@
         result.setLabel(options.label || '');
         if (options.labelHTML) result.insertAdjacentHTML('beforeend', options.labelHTML);
         if (options.color === '@transparent') result.setAttribute('appearance', 'plain');
-        else if (options.color) result.setAttribute('variant', /red|pink/.test(options.color) ? 'danger' : /orange/.test(options.color) ? 'warning' : 'brand');
+        else if (options.color) result.setAttribute('variant', /orange/.test(options.color) ? 'warning' : 'brand');
         if (options.isDisabled || options.disabled) result.disable();
         result.select = function () { result.classList.add('selected'); result.setAttribute('aria-pressed', 'true'); return result; };
         result.unselect = function () { result.classList.remove('selected'); result.setAttribute('aria-pressed', 'false'); return result; };

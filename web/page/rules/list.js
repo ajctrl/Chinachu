@@ -106,18 +106,6 @@ Chinachu.definePage({
 			}).disable()
 		});
 
-		/*this.view.toolbar.add({
-			key: 'copy',
-			ui : new ChinachuUI.ActionButton({
-				label  : Chinachu.t('COPY'),
-				icon   : './icons/document-copy.png',
-				onClick: function() {
-					//console.log(this.grid.getSelectedRows()[0]);
-					//new chinachu.ui.CreateRuleByProgram(this.grid.getSelectedRows()[0].data.id);
-				}.bind(this)
-			}).disable()
-		});*/
-
 		this.view.toolbar.add({
 			key: 'delete',
 			ui : new ChinachuUI.ActionButton({
@@ -143,7 +131,7 @@ Chinachu.definePage({
 						buttons: [
 							{
 								label: '削除',
-								color: '@red',
+								color: '@pink',
 								onSelect: function(e, modal) {
 
 									modal.buttons.forEach(function(a) {
@@ -208,15 +196,12 @@ Chinachu.definePage({
 
 		if (selected.length === 0) {
 			this.view.toolbar.one('edit').disable();
-			//this.view.toolbar.one('copy').disable();
 			this.view.toolbar.one('delete').disable();
 		} else if (selected.length === 1) {
 			this.view.toolbar.one('edit').enable();
-			//this.view.toolbar.one('copy').enable();
 			this.view.toolbar.one('delete').enable();
 		} else {
 			this.view.toolbar.one('edit').disable();
-			//this.view.toolbar.one('copy').disable();
 		}
 	}
 	,

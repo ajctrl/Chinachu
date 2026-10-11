@@ -16,7 +16,6 @@
 		window.global = { chinachu: app.chinachu };
 		app.def.apiRoot = window.location.query.api || './api/';
 		app.def.colors = ['#6495ed', '#f39700', '#769164', '#e60012', '#663300', '#ec6d71', '#1e50a2'];
-		app.def.categoryColor = { anime: '#fcbde1', information: '#bdfce8', news: '#d7fcbd', sports: '#bdf1fc', variety: '#fbfcbd', drama: '#fce1c4', music: '#bdc9fc', cinema: '#d6bdfc', etc: '#eeeeee' };
 		app.view.body = new ChinachuUI.Body().clear();
 		app.view.loadingMask = new ChinachuUI.Container({ className: 'fullmask loading' }).render(app.view.body);
 		app.view.panicMask = new ChinachuUI.Container({ className: 'fullmask panic' }).render(app.view.body).hide();

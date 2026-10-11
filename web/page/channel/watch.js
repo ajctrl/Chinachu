@@ -350,8 +350,6 @@ Chinachu.definePage({
 
 		d.ss = d.ss || 0;
 
-		// if (p._isRecording) d.ss = '';
-
 		var getRequestURI = function() {
 
 			var r = window.location.protocol + '//' + window.location.host + window.location.pathname.replace(/\/[^\/]*$/, '');

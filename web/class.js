@@ -628,7 +628,7 @@
 
 				buttons.push({
 					label   : '予約',
-					color   : '@red',
+					color   : '@pink',
 					onSelect: function (e, modal) {
 						e.targetButton.disable();
 
@@ -652,38 +652,6 @@
 });
 					}.bind(this)
 				});
-
-				if (false && this.program.channel.type === 'GR') {
-					buttons.push({
-						label   : '予約 (ワンセグ)',
-						color   : '@red',
-						onSelect: function (e, modal) {
-							e.targetButton.disable();
-
-							var dummy = Chinachu.request('./api/program/' + this.program.id + '.json', {
-  method: 'put',
-  parameters: {
-    mode: '1seg'
-  },
-  onComplete: function () {
-    modal.close();
-  },
-  onSuccess: function () {
-    new ChinachuUI.Modal({
-      title: '成功',
-      text: '予約しました。'
-    }).show();
-  },
-  onFailure: function (t) {
-    new ChinachuUI.Modal({
-      title: '失敗',
-      text: '予約に失敗しました (' + t.status + ')'
-    }).show();
-  }
-});
-						}.bind(this)
-					});
-				}
 
 				buttons.push({
 					label   : 'キャンセル',
@@ -738,7 +706,7 @@
 					buttons: [
 						{
 							label   : '予約取消',
-							color   : '@red',
+							color   : '@pink',
 							onSelect: function (e, modal) {
 								e.targetButton.disable();
 
@@ -831,7 +799,7 @@
 					buttons: [
 						{
 							label   : 'スキップの取消',
-							color   : '@red',
+							color   : '@pink',
 							onSelect: function (e, modal) {
 								e.targetButton.disable();
 
@@ -893,7 +861,7 @@
 					buttons: [
 						{
 							label   : '録画中止',
-							color   : '@red',
+							color   : '@pink',
 							onSelect: function (e, modal) {
 								e.targetButton.disable();
 
@@ -956,7 +924,7 @@
 					buttons: [
 						{
 							label  : '削除',
-							color  : '@red',
+							color  : '@pink',
 							onSelect: function (e, modal) {
 								e.targetButton.disable();
 
@@ -1022,7 +990,7 @@
 				buttons: [
 					{
 						label  : 'クリーンアップ',
-						color  : '@red',
+						color  : '@pink',
 						onSelect: function (e, modal) {
 							e.targetButton.disable();
 
