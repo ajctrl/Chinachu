@@ -63,7 +63,8 @@ describe('schedule table date navigation', function() {
 	function setup(day) {
 		const location = {};
 		const page = loadPage('schedule/table', {
-			location, window: { matchMedia: () => ({ matches: false }) }, Chinachu: { serializeQuery: query => new URLSearchParams(query).toString() }
+			location, ChinachuResponsive: { media: { scheduleCompact: { matches: false } } },
+			Chinachu: { serializeQuery: query => new URLSearchParams(query).toString() }
 		});
 		page.self = { query: { day, channel: 'test-channel' } };
 		page.time = new Date(2026, 9, 31, 12).getTime();

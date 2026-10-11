@@ -309,555 +309,6 @@ div.program-cards {
 		font-weight: normal;
 		padding: 0 2px; }
 
-div.timetable {
-	background: #555; }
-
-div.timetable,
-div.timetable * {
-	-webkit-box-sizing : border-box;
-	-moz-box-sizing    : border-box;
-	-ms-box-sizing     : border-box;
-	-o-box-sizing      : border-box;
-	box-sizing         : border-box; }
-
-div.timetable > div.board {
-	z-index    : 10;
-	position   : absolute;
-	top        : 0;
-	left       : 20px;
-	overflow   : visible; }
-
-	div.timetable > div.board > div.handline {
-		z-index   : 2;
-		position  : absolute;
-		left      : 0;
-		height    : 2px;
-		background: var(--chinachu-accent-color); }
-
-	div.timetable > div.board > div.cutline {
-		z-index     : 1;
-		position    : absolute;
-		top         : 0;
-		bottom      : 0;
-		width       : 0;
-		border-right: 1px dashed rgba(255,0,0,0.5); }
-
-	div.timetable > div.board > div.rect {
-		z-index     : 0;
-		position    : absolute;
-		background  : #ccc;
-		cursor      : pointer;
-		box-shadow  : inset 0 1px 0 rgba(25,25,25,0.3); }
-
-	div.timetable > div.board > div.rect:hover {
-		box-shadow  : inset 0 0 0 2px rgba(194,65,134,0.4); }
-
-	div.timetable > div.board > div.rect.reserved,
-	div.timetable > div.board > div.rect.recording {
-		background  : red !important; }
-
-	div.timetable > div.board > div.rect.reserved:hover,
-	div.timetable > div.board > div.rect.recording:hover {
-		background  : white !important; }
-
-	div.timetable > div.board > div.rect.skip {
-		background: linear-gradient(to left, var(--program-genre-color, #ccc) 5px, gray 5px) !important; }
-
-	div.timetable > div.board > div.rect.skip:hover {
-		background: linear-gradient(to left, var(--program-genre-color, #ccc) 5px, white 5px) !important; }
-
-	div.timetable > div.board > div.rect.conflict {
-		background  : gray !important; }
-
-	/* Reserve state and genre share the background without changing text bounds.
-	 * A hard stop keeps the 5px genre band visible even in very short programs. */
-	div.timetable > div.board > div.rect.reserved:not(.recording):not(.skip):not(.conflict) {
-		background: linear-gradient(to left, var(--program-genre-color, #ccc) 5px, var(--chinachu-reserved-color) 5px) !important; }
-
-	div.timetable > div.board > div.rect.reserved:not(.recording):not(.skip):not(.conflict):hover {
-		background: linear-gradient(to left, var(--program-genre-color, #ccc) 5px, var(--chinachu-reserved-hover-color) 5px) !important; }
-
-	div.timetable > div.board > div.rect.reserved:not(.recording):not(.skip):not(.conflict) > div > h4,
-	div.timetable > div.board > div.rect.reserved:not(.recording):not(.skip):not(.conflict) > div > span {
-		color: var(--chinachu-reserved-text-color); }
-
-	div.timetable > div.board > div.rect.muted {
-		opacity     : 0.5 !important; }
-
-	div.timetable > div.board > div.rect.spot {
-		z-index     : 1;
-		box-shadow  : inset 0 0 0 1px white,
-		              0 0 5px 2px rgba(255, 87, 145, 0.82); }
-
-		div.timetable > div.board > div.rect > div {
-			position   : absolute;
-			top        : 2px;
-			right      : 2px;
-			bottom     : 0;
-			left       : 2px;
-			overflow   : hidden;
-			line-height: 1.3em;
-			white-space: normal;
-			word-break : break-all;
-			font-family: var(--chinachu-font-sans);
-			color      : #444; }
-
-			div.timetable > div.board > div.rect > div > h4 {
-				margin   : 0 0 2px 0;
-				font-size: 11px; }
-
-			div.timetable > div.board > div.rect > div > div {
-				display: block;
-				float: left;
-				width: 11px;
-				color    : #fff;
-				font-size: 10px; }
-
-				div.timetable > div.board > div.rect > div > div > span {
-					display: block;
-					background-color: rgba(0,0,0,0.4);
-					padding: 0 0 1px 0;
-					width: 11px;
-					text-align: center;
-					margin-bottom: 1px; }
-
-				div.timetable > div.board > div.rect > div > div > span.新 {
-					background-color: #4cc915; }
-
-				div.timetable > div.board > div.rect > div > div > span.再 {
-					background-color: #6198ff; }
-
-				div.timetable > div.board > div.rect > div > div > span.終 {
-					background-color: #ff6161; }
-
-			div.timetable > div.board > div.rect > div > span {
-				display: block;
-				margin-left: 12px;
-				color    : #5f5f5f;
-				font-weight: 500;
-				font-size: 11px; }
-
-			div.timetable > div.board > div.rect:hover > div > h4 {
-				color      : #000; }
-
-			div.timetable > div.board > div.rect.reserved:not(:hover) > div > span,
-			div.timetable > div.board > div.rect.recording:not(:hover) > div > span {
-				color      : rgba(255,255,255,0.8); }
-
-			div.timetable > div.board > div.rect.reserved:hover > div > h4,
-			div.timetable > div.board > div.rect.recording:hover > div > h4 {
-				color      : red; }
-
-		div.timetable > div.board > div.rect.reserved > div,
-		div.timetable > div.board > div.rect.recording > div {
-			color      : white; }
-
-		div.timetable > div.board > div.rect.recording > div {
-			font-weight: bold; }
-
-		div.timetable > div.board > div.rect.skip:hover > div {
-			color      : gray;
-			text-shadow: none; }
-
-	div.drawer > div.head {
-		padding   : 5px 10px;
-		background: rgba(255,255,255,0.9);
-		margin    : 0 0 10px 0;
-		text-align: center; }
-
-		div.drawer > div.head > div.date {
-			text-align : center;
-			font-family: var(--chinachu-font-sans);
-			font-size  : 18px;
-			line-height: 20px;
-			color      : #222; }
-
-			div.drawer > div.head > div.date > small {
-				font-size  : 12px;
-				color      : #777;
-				margin-left: 2px;
-				line-height: 15px; }
-
-		div.drawer > div.head > span.dynamic-time,
-		div.drawer > div.head > span.channel {
-			color    : #777;
-			font-size: 10px; }
-
-	div.drawer > div.body {
-		overflow   : auto;
-		word-break : break-all;
-		white-space: normal;
-		background : rgba(0,0,0,0.2);
-		text-align : left;
-		color      : #ccc;
-		font-family: var(--chinachu-font-sans); }
-
-		div.drawer > div.body > div.title {
-			font-size  : 14px;
-			font-weight: bold;
-			margin     : 0 0 5px 0;
-			color      : white; }
-
-			div.drawer > div.body > div.title > span[class*="bg-cat-"] {
-				font-family   : var(--chinachu-font-sans);
-				font-size     : 10px;
-				font-weight   : normal;
-				color         : rgba(0,0,0,0.7);
-				margin-right  : 2px;
-				vertical-align: middle;
-				border-radius : 1px;
-				padding       : 0 2px; }
-
-		div.drawer > div.body > div.detail {
-			margin     : 0 0 5px 0; }
-
-		div.drawer > div.body > div.id {
-			font-size  : 10px;
-			color      : #aaa;
-			font-family: var(--chinachu-font-sans); }
-
-	div.drawer > div.foot {
-		margin: 10px 0 0 0; }
-
-		div.drawer > div.foot > wa-button {
-			display: block;
-			width  : 100%; }
-
-/* Program card opened from the timetable. */
-.chinachu-popover.schedule-program-popover {
-	width: 460px;
-	max-width: calc(100vw - 16px);
-	max-height: calc(100dvh - 16px);
-	border: 1px solid #a4a4a4;
-	border-radius: 10px;
-	background: #fff;
-	box-shadow: 0 5px 16px rgba(0,0,0,.28);
-	color: #191d24;
-	font-family: var(--chinachu-font-sans);
-}
-.schedule-program-drawer {
-	padding: 14px 16px 10px;
-}
-div.schedule-program-drawer > div.head {
-	display: flex;
-	align-items: flex-start;
-	gap: 8px;
-	padding: 0;
-	margin: 0 0 8px;
-	background: transparent;
-	text-align: left;
-}
-div.schedule-program-drawer > div.head > div.date {
-	flex: 1;
-	min-width: 0;
-	color: #191d24;
-	font-size: 13px;
-	line-height: 1.6;
-	text-align: left;
-	white-space: normal;
-}
-.schedule-program-drawer .drawer-close {
-	flex: none;
-	display: grid;
-	place-items: center;
-	width: 32px;
-	height: 32px;
-	margin: -4px -8px 0 0;
-	padding: 0;
-	border: 0;
-	border-radius: 4px;
-	background: transparent;
-	color: #808080;
-	font-size: 24px;
-	line-height: 1;
-}
-.schedule-program-drawer .drawer-close:hover {
-	background: #fff0f6;
-	color: #c24186;
-}
-.schedule-program-drawer .drawer-close:focus-visible {
-	outline: 2px solid #c24186;
-	outline-offset: 2px;
-}
-div.schedule-program-drawer > div.body {
-	background: transparent;
-	color: #191d24;
-	white-space: normal;
-	word-break: normal;
-	overflow-wrap: anywhere;
-}
-div.schedule-program-drawer > div.body > div.title {
-	margin: 0 0 10px;
-	color: #191d24;
-	font-size: 20px;
-	font-weight: 700;
-	line-height: 1.4;
-}
-.schedule-program-drawer .program-meta {
-	display: flex;
-	align-items: center;
-	flex-wrap: wrap;
-	gap: 6px 12px;
-	margin-bottom: 10px;
-	color: #555;
-	font-size: 13px;
-	line-height: 1.5;
-}
-.schedule-program-drawer .program-category {
-	padding: 3px 10px;
-	border-radius: 5px;
-	background: var(--program-genre-color, #f0f0f0) !important;
-	color: #555 !important;
-	font-weight: 500;
-}
-.schedule-program-drawer .program-category.label-cat-drama {
-	background: #ffe4e8 !important;
-	color: #c63379 !important;
-}
-div.schedule-program-drawer > div.body > div.detail {
-	margin: 0 0 10px;
-	font-size: 14px;
-	line-height: 1.6;
-	white-space: pre-wrap;
-}
-div.schedule-program-drawer > div.foot {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	flex-wrap: wrap;
-	gap: 8px;
-	margin: 0;
-	padding-top: 8px;
-	border-top: 1px solid #ddd;
-}
-.schedule-program-drawer .reservation-status {
-	color: #777;
-	font-size: 12px;
-}
-.schedule-program-drawer .drawer-actions {
-	display: flex;
-	gap: 6px;
-	margin-left: auto;
-}
-.schedule-program-drawer .drawer-actions wa-button::part(base) {
-	min-height: 32px;
-	padding: 0 12px;
-	border-radius: 5px;
-	font-size: 13px;
-	font-weight: 700;
-}
-.schedule-program-drawer wa-button.program-details-button::part(base) {
-	border: 1px solid #909090;
-	background: #fff;
-	color: #444;
-}
-.schedule-program-drawer wa-button.program-reserve-button::part(base) {
-	border-color: #c63379;
-	background: #c63379;
-	color: #fff;
-}
-.schedule-program-drawer wa-button.program-reserve-button:hover:not([disabled])::part(base) {
-	border-color: #ab2466;
-	background: #ab2466;
-}
-@media (max-width: 479px) {
-	.schedule-program-drawer { padding: 12px; }
-	div.schedule-program-drawer > div.body > div.title { font-size: 18px; }
-}
-
-div.timetable > div.head {
-	z-index   : 98;
-	position  : fixed;
-	top       : 80px;
-	left      : 20px;
-	height    : 30px;
-	padding-right: 2px;
-	overflow  : visible; }
-
-	div.timetable > div.head > div {
-		position   : absolute;
-		color      : #bbb;
-		font-size  : 12px;
-		font-weight: normal;
-		text-align : center;
-		cursor     : pointer;
-		overflow   : hidden;
-		top        : 0;
-		bottom     : 0;
-		padding-top: 3px;
-		line-height: 2em;
-		background : rgba(25,25,25,0.8);
-		box-shadow : 5px 0 0 rgba(25,25,25,0.7); }
-
-	div.timetable > div.head > div:hover {
-		color      : #fff; }
-
-div.timetable > div.timescale {
-	z-index   : 99;
-	position  : relative;
-	width     : 20px;
-	height    : auto;
-	padding   : 0 10px;
-	overflow  : hidden;
-	background: #444;
-	box-shadow: inset 1px 0 0 #222, -2px 0 0 rgba(0,0,0,0.1), inset -2px 0 0 #333; }
-
-	div.timetable > div.timescale > wa-button {
-		position   : absolute;
-		left       : 0;
-		width      : 100%;
-		height     : 25px;
-		padding    : 0;
-		font-size  : 10px; }
-
-	div.timetable > div.timescale > wa-button.prev {
-		top: 0; }
-
-	div.timetable > div.timescale > wa-button.next {
-		bottom: 0; }
-
-	div.timetable > div.timescale > div {
-		position   : absolute;
-		margin-top : 97px;
-		left       : 1px;
-		font-size  : 10px;
-		font-family: monospace;
-		line-height: 10px; }
-
-	div.timetable > div.timescale > div.long {
-		width      : 15px;
-		padding    : 4px 2px 4px 2px;
-		color      : #fff;
-		box-shadow : inset 0 2px 0 #000; }
-
-	div.timetable > div.timescale > div.middle {
-		height     : 1px;
-		width      : 10px;
-		border-top : 1px solid #222;
-		background : white; }
-
-	div.timetable > div.timescale > div.short {
-		height     : 1px;
-		width      : 5px;
-		border-top : 1px solid #333;
-		background : white; }
-
-	div.timetable > div.timescale > div.h18,
-	div.timetable > div.timescale > div.h19,
-	div.timetable > div.timescale > div.h20,
-	div.timetable > div.timescale > div.h21,
-	div.timetable > div.timescale > div.h4,
-	div.timetable > div.timescale > div.h5 {
-		border-color: #06f;
-		background  : #06f; }
-
-	div.timetable > div.timescale > div.h6,
-	div.timetable > div.timescale > div.h7,
-	div.timetable > div.timescale > div.h8,
-	div.timetable > div.timescale > div.h9,
-	div.timetable > div.timescale > div.h10 {
-		border-color: #0cf;
-		background  : #0cf; }
-
-	div.timetable > div.timescale > div.h11,
-	div.timetable > div.timescale > div.h12,
-	div.timetable > div.timescale > div.h13,
-	div.timetable > div.timescale > div.h14 {
-		border-color: #f90;
-		background  : #f90; }
-
-	div.timetable > div.timescale > div.h15,
-	div.timetable > div.timescale > div.h16,
-	div.timetable > div.timescale > div.h17 {
-		border-color: #f30;
-		background  : #f30; }
-
-	div.timetable > div.timescale > div.h22,
-	div.timetable > div.timescale > div.h23,
-	div.timetable > div.timescale > div.h0,
-	div.timetable > div.timescale > div.h1,
-	div.timetable > div.timescale > div.h2,
-	div.timetable > div.timescale > div.h3 {
-		border-color: #63c;
-		background  : #63c; }
-
-.tabulator-row.disabled > .tabulator-cell {
-	opacity         : 0.4; }
-
-.tabulator-cell.id > div {
-	color      : #aaa;
-	font-size  : 11px; }
-
-.tabulator-cell.default > div {
-	color     : #aaa;
-	font-style: italic;
-	font-size : 11px; }
-
-.tabulator-cell.types > div > span {
-	padding      : 0 3px;
-	font-size    : 11px;
-	margin-right : 2px;
-	color        : #eee;
-	border-radius: 2px; }
-
-.tabulator-cell.categories > div > span {
-	padding      : 0 2px;
-	font-size    : 11px;
-	margin-right : 2px;
-	border-radius: 2px; }
-
-.tabulator-cell > div > div.dynamic-time {
-	line-height: inherit; }
-
-.tabulator-cell > div > span.flag,
-.tabulator-cell > div > div.reserve-title > span.flag {
-	margin-right: 2px;
-	padding     : 1px 2px 0;
-	color       : #fff;
-	font-size   : 11px;
-	background  : #999; }
-
-.tabulator-cell > div > span.flag.conflict,
-.tabulator-cell > div > div.reserve-title > span.flag.conflict {
-	background: #f00; }
-
-.tabulator-cell > div > span.flag.manual,
-.tabulator-cell > div > div.reserve-title > span.flag.manual {
-	background  : #000; }
-
-.tabulator-cell > div > span.flag.新,
-.tabulator-cell > div > div.reserve-title > span.flag.新 {
-	background  : #6ed02e; }
-
-.tabulator-cell > div > span.flag.終,
-.tabulator-cell > div > div.reserve-title > span.flag.終 {
-	background  : #d02e54; }
-
-.tabulator-cell > div > span.flag.再,
-.tabulator-cell > div > div.reserve-title > span.flag.再 {
-	background  : #2a45c0; }
-
-.tabulator-cell > div > span.subtitle,
-.tabulator-cell > div > div.reserve-title > span.subtitle {
-	margin-left : 4px;
-	padding     : 1px 2px 0;
-	color       : #e95295;
-	font-size   : 11px;
-	font-weight : bold; }
-
-.tabulator-cell > div > span.episode,
-.tabulator-cell > div > div.reserve-title > span.episode {
-	margin-left    : 2px;
-	padding        : 1px 2px 0;
-	color          : #d02e54;
-	font-size      : 11px; }
-
-.tabulator-cell > div > span.id,
-.tabulator-cell > div > div.reserve-title > span.id {
-	margin-left    : 4px;
-	color          : #aaa;
-	font-size      : 10px; }
-
 div.video-container {
 	position        : absolute;
 	top             : 0px;
@@ -919,7 +370,7 @@ div.middle > div.main > div.main-body > div.storage-page {
 	max-width: 720px;
 	padding: 28px;
 	border: 1px solid #e1e4e9;
-	border-radius: 14px;
+	border-radius: var(--chinachu-radius-panel);
 	background: #fff;
 }
 .storage-card-header, .storage-summary, .storage-card-footer {
@@ -969,7 +420,7 @@ div.middle > div.main > div.main-body > div.storage-page {
 .storage-card [hidden] { display: none; }
 @media screen and (max-width: 540px) {
 	div.middle > div.main > div.main-body > div.storage-page { padding: 14px; }
-	.storage-page .storage-card { padding: 20px; border-radius: 12px; }
+	.storage-page .storage-card { padding: 20px; }
 	.storage-free-value { font-size: 36px; }
 	.storage-summary { gap: 20px; }
 	.storage-total { text-align: left; }
@@ -984,9 +435,6 @@ div.middle > div.main > div.main-body > div.storage-page {
  .main-head-toolbar .description-switch { font-size: 11px; }
 }
 .preference-error, .config-error, .config-field-error { color: #a51d38; }
-div.chinachu-virtual-grid .tabulator-cell.reserve-description-cell { white-space: normal; }
-div.chinachu-virtual-grid .reserve-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #30343b; font-size: 14px; font-weight: 500; line-height: 1.3; }
-div.chinachu-virtual-grid .reserve-description { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; white-space: normal; overflow-wrap: anywhere; line-height: 1.2; max-height: 2.4em; margin-top: 3px; margin-left: 4px; border-left: 2px solid #c4cbd3; padding-left: 8px; color: #68707c; font-size: 12px; font-weight: normal; }
 .config-settings { display: flex; flex-direction: column; overflow: hidden !important; }
 .config-status { flex: none; padding: 12px 16px; background: #f4f4f4; border-bottom: 1px solid #ddd; white-space: pre-wrap; max-height: 150px; overflow: auto; }
 .config-form { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
@@ -996,7 +444,7 @@ div.chinachu-virtual-grid .reserve-description { display: -webkit-box; -webkit-b
 .config-field { margin: 0 0 18px; }
 .config-field > label { display: block; margin-bottom: 5px; font-weight: bold; }
 .config-restart { display: inline-block; margin-left: 10px; padding: 2px 5px; font-size: 11px; font-weight: normal; background: #fff1da; color: #765011; border-radius: 3px; }
-.config-field input:not([type="checkbox"]), .config-field select, .config-field textarea { box-sizing: border-box; width: 100%; max-width: 650px; padding: 7px 9px; border: 1px solid #aaa; border-radius: 3px; background: #fff; color: #222; }
+.config-field input:not([type="checkbox"]), .config-field select, .config-field textarea { box-sizing: border-box; width: 100%; max-width: 650px; padding: 7px 9px; border: 1px solid #aaa; border-radius: var(--chinachu-radius-control); background: #fff; color: #222; }
 .config-field textarea { min-height: 70px; }
 .config-field input[type="checkbox"], .description-switch input { width: 18px; height: 18px; accent-color: #b3005f; }
 .config-help { margin: 4px 0; color: #666; font-size: 12px; }
@@ -1014,37 +462,15 @@ div.chinachu-virtual-grid .reserve-description { display: -webkit-box; -webkit-b
 .config-field input[role="switch"]:focus-visible, .description-switch input[role="switch"]:focus-visible { outline: 2px solid #555; outline-offset: 2px; }
 .reservation-click-setting, .reservation-description-font-setting { display: block; margin: 16px 0 6px; }
 .reservation-click-setting select, .reservation-description-font-setting select { margin: 5px; padding: 6px; max-width: 100%; }
-.reserve-details { display: inline-block; padding: 1px 8px; border: 1px solid #aaa; border-radius: 3px; background: #fff; color: #333; text-decoration: none; }
-.reserve-details:hover { background: #eee; }
-div.chinachu-virtual-grid .tabulator-row.reserve-pending > .tabulator-cell { background: #fff7e8; cursor: progress; }
-.reserve-pending-spinner {
- display: inline-block;
- box-sizing: border-box;
- width: 12px;
- height: 12px;
- margin-right: 6px;
- vertical-align: -1px;
- border: 2px solid #d7b5c7;
- border-top-color: #b3005f;
- border-radius: 50%;
- animation: reserve-pending-spin .7s linear infinite;
-}
-@keyframes reserve-pending-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) {
- .reserve-pending-spinner { animation: none; }
-}
-.reserve-skip-notice { position: fixed; z-index: 2000; bottom: 45px; left: 50%; transform: translateX(-50%); box-sizing: border-box; width: max-content; max-width: calc(100% - 24px); padding: 12px 16px; border: 1px solid #aaa; border-radius: 5px; background: #fff; color: #333; box-shadow: 0 2px 12px #0003; }
-.reserve-skip-notice button { margin-left: 12px; padding: 5px 8px; cursor: pointer; }
-.reserve-skip-notice.reserve-skip-hint { pointer-events: none; }
 
 .channel-selector { box-sizing: border-box; max-width: 650px; color: #333; }
 .channel-selector-selected { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 32px; margin-bottom: 6px; }
 .channel-selector-empty { margin: 8px 0; color: #666; }
 .channel-selector-token { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 8px; border: 1px solid #d6becb; border-radius: 4px; background: #fff0f6; overflow-wrap: anywhere; }
 .channel-selector-token button { flex: none; border: 0; padding: 0 3px; background: transparent; color: #7b2453; font-size: 18px; cursor: pointer; }
-.channel-selector summary { display: list-item; list-style-position: inside; padding: 7px 10px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #f7f7f7; }
+.channel-selector summary { display: list-item; list-style-position: inside; padding: 7px 10px; cursor: pointer; border: 1px solid #ccc; border-radius: var(--chinachu-radius-control); background: #f7f7f7; }
 .channel-selector-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 0; }
-.channel-selector-filters input, .channel-selector-filters select, .channel-selector-filters button { box-sizing: border-box; padding: 6px 8px; border: 1px solid #aaa; border-radius: 3px; background: #fff; color: #333; }
+.channel-selector-filters input, .channel-selector-filters select, .channel-selector-filters button { box-sizing: border-box; padding: 6px 8px; border: 1px solid #aaa; border-radius: var(--chinachu-radius-control); background: #fff; color: #333; }
 .channel-selector-filters input { flex: 1; min-width: 120px; width: 0; }
 .channel-selector-filters button { cursor: pointer; }
 .channel-selector-list { max-height: 220px; overflow-y: auto; border: 1px solid #ddd; padding: 8px; background: #fff; }
@@ -1059,18 +485,40 @@ div.chinachu-virtual-grid .tabulator-row.reserve-pending > .tabulator-cell { bac
 .channel-selector [disabled] { cursor: default; opacity: .5; }
 .channel-selector summary:focus-visible, .channel-selector button:focus-visible { outline: 2px solid #b3005f; outline-offset: 2px; }
 
-/* Keep each reservation distinct when descriptions are shown. */
-div.chinachu-virtual-grid .tabulator-row.reserve-description-row > .tabulator-cell {
- padding-top: 3px;
- padding-bottom: 3px;
- border-bottom: 0;
+/* Program cards and program detail pages. */
+.program-panel { border: 1px solid #ddd; border-radius: var(--chinachu-radius-panel); background: white; margin: 14px 0; overflow: hidden; }
+.program-panel-heading { padding: 10px 14px; background: #f5f5f5; border-bottom: 1px solid #ddd; }
+.program-panel-heading h2, .program-panel-heading h3 { margin: 0; font-size: 15px; font-weight: 500; }
+.program-panel-recording > .program-panel-heading { background: #f2dede; color: #a94442; }
+.program-panel-reserves > .program-panel-heading { background: #d9edf7; color: #31708f; }
+.program-panel-recorded > .program-panel-heading { background: #dff0d8; color: #3c763d; }
+.program-panel-footer { padding: 10px; background: #f8f8f8; border-top: 1px solid #ddd; }
+.program-list { list-style: none; padding: 0; margin: 0; }
+.program-list-item { padding: 10px 14px; border-bottom: 1px solid #ddd; }
+.program-list-item:last-child { border-bottom: 0; }
+.program-pager { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; list-style: none; padding: 0; margin: 24px 0 12px; }
+.program-pager li { flex: 1; min-width: 0; }
+.program-pager .previous { text-align: left; }
+.program-pager .next { text-align: right; }
+.program-pager li a { display: inline-block; max-width: 100%; min-height: 40px; overflow-wrap: anywhere; padding: 9px 12px; border: 1px solid #d6ced3; background: #fff; border-radius: var(--chinachu-radius-control); }
+.program-pager li a:hover { background: #faf2f6; border-color: #c24186; text-decoration: none; }
+.program-pager li a:focus-visible { outline: 2px solid #c24186; outline-offset: 2px; }
+.program-pager .active a { color: #fff; background: #aa2c70; }
+.program-thumbnail, .program-preview { max-width: 100%; height: auto; margin-top: 10px; }
+.badge { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 11px; line-height: 1.4; }
+.program-meta { color: #777; font-size: 13px; margin: 10px 0 15px; }
+.program-meta .soon { color: green; }
+.program-meta .now { color: red; }
+.program-detail { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+.program-full-title { margin: 16px 0; }
+.program-full-title-label { color: #777; font-size: 12px; }
+.program-full-title-text { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+.channel-cards .channel-card wa-progress-bar { --height: 2px; }
+.channel-cards .channel-card wa-button.program { display: block; width: 100%; }
+.channel-cards .channel-card wa-button.program::part(base) { width: 100%; text-align: left; justify-content: flex-start; }
+.channel-cards .channel-card wa-button.live::part(base) { min-height: 24px; }
+.program-page > .page-layout { padding-inline: 12px; }
+.program-page .program-meta, .program-page .chinachu-callout { overflow-wrap: anywhere; }
+@media (max-width: 800px) {
+ .program-panel { margin: 6px 0; }
 }
-div.chinachu-virtual-grid .tabulator-row.reserve-description-row:not(.reserve-skipped):not(.reserve-pending) > .tabulator-cell { background-color: #fff; }
-div.chinachu-virtual-grid .tabulator-row.reserve-description-row.tabulator-row-even:not(.reserve-skipped):not(.reserve-pending) > .tabulator-cell { background-color: #f0f2f5; }
-div.chinachu-virtual-grid .tabulator-row.reserve-description-row:not(.reserve-skipped):not(.reserve-pending):hover > .tabulator-cell { background-color: #fff5fa; }
-div.chinachu-virtual-grid .tabulator-row.reserve-description-row.disabled > .tabulator-cell { opacity: 1; }
-div.chinachu-virtual-grid .tabulator-row.reserve-description-row.disabled > .tabulator-cell > div { opacity: 0.4; }
-div.chinachu-virtual-grid .tabulator-row.reserve-description-row.reserve-skipped:not(.reserve-pending) > .tabulator-cell { background-color: #fff0f3; }
-div.chinachu-virtual-grid .tabulator-row.reserve-description-row.reserve-skipped.tabulator-row-even:not(.reserve-pending) > .tabulator-cell { background-color: #f3e5ea; }
-div.chinachu-virtual-grid .tabulator-row.reserve-description-row.reserve-skipped:not(.reserve-pending):hover > .tabulator-cell { background-color: #ffe3eb; }
-div.chinachu-virtual-grid .tabulator-row.reserve-description-row.reserve-skipped.tabulator-row-even:not(.reserve-pending):hover > .tabulator-cell { background-color: #ead5de; }

@@ -263,10 +263,10 @@ async function run() {
 			async function openTable(targetPage) {
 				await targetPage.goto(origin + '/#!/schedule/table/');
 				await targetPage.waitForFunction(() => window.app?.pm?.p?.self.page === 'table' && app.pm.p.data.pieces?.length);
-				await targetPage.locator('.rect[rel]').first().waitFor();
+				await targetPage.locator('.rect[rel]:visible').first().waitFor();
 			}
 			await openTable(page);
-			await checkProgramPopup(page, page.locator('.rect[rel]').first(), 'desktop');
+			await checkProgramPopup(page, page.locator('.rect[rel]:visible').first(), 'desktop');
 			await openTable(page);
 			await checkProgramPopupEdges(page);
 			const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: browserName === 'chromium', hasTouch: true, locale: 'ja-JP' });
@@ -277,7 +277,7 @@ async function run() {
 			const mobilePage = await mobile.newPage();
 			mobilePage.on('pageerror', error => errors.push(error.stack || error.message));
 			await openTable(mobilePage);
-			await checkProgramPopup(mobilePage, mobilePage.locator('.rect[rel]').first(), 'native-touch-390');
+			await checkProgramPopup(mobilePage, mobilePage.locator('.rect[rel]:visible').first(), 'native-touch-390');
 			await mobile.close();
 			assert.equal(errors.length, 0, errors.join('\n'));
 			assert.equal(writes.length, 0, 'popup checks must not write to the fixture server');
@@ -725,7 +725,7 @@ async function run() {
 		for (const name of ['schedule/table', 'schedule/timeline']) {
 			await route(name);
 			assert.equal(await page.evaluate(() => fixtureEditor.destroyed && !fixtureEditor.session.$worker), true, 'leaving settings must destroy the editor and its Worker');
-			await page.waitForSelector('.rect[rel]');
+			await page.waitForSelector('.rect[rel]:visible');
 			if (name === 'schedule/table') {
 				const counts = await page.evaluate(async () => {
 					const owner = app.pm.p, before = owner._cleanups.length;
@@ -769,16 +769,17 @@ async function run() {
 				await route('schedule/table', 'day=7');
 				assert.equal(await page.locator('.schedule-day-navigation select').inputValue(), '0', 'invalid URL day must fall back to today');
 				await route('schedule/table');
-				await page.waitForSelector('.rect[rel]');
-				await checkProgramPopup(page, page.locator('.rect[rel]').first(), 'desktop');
+				await page.waitForSelector('.rect[rel]:visible');
+				await checkProgramPopup(page, page.locator('.rect[rel]:visible').first(), 'desktop');
 				await route('schedule/table');
-				await page.waitForSelector('.rect[rel]');
+				await page.waitForSelector('.rect[rel]:visible');
 				await checkProgramPopupEdges(page);
 				await page.setViewportSize({ width: 1280, height: 900 });
 				await route('schedule/table');
-				await page.waitForSelector('.rect[rel]');
+				await page.waitForSelector('.rect[rel]:visible');
 			}
-			const rect = page.locator('.rect[rel]').first();
+			// Scrolled program cards stay mounted while the renderer hides them.
+			const rect = page.locator('.rect[rel]:visible').first();
 			await rect.click();
 			assert.ok(await page.evaluate(() => app.pm.p.data.target), name + ' should select tapped program');
 			const box = await rect.boundingBox();
@@ -1131,7 +1132,7 @@ async function run() {
 				assert.equal(await navigation.isVisible(), false);
 				await touchPage.setViewportSize({ width: 390, height: 844 });
 			}
-			const card = touchPage.locator('.rect[rel]').first();
+			const card = touchPage.locator('.rect[rel]:visible').first();
 			await card.scrollIntoViewIfNeeded();
 			await touchPage.waitForTimeout(150);
 			await screenshot('mobile-schedule-' + name, touchPage);

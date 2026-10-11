@@ -40,13 +40,44 @@ CSS Gridを備えたブラウザーを対象とします。
   読み込み中のページを離れると、そのページのリクエストを中断します。
 - `web/page-manager.js`: ページの読み込みと破棄。古い画面の非同期処理やタイマーを片付けます。
 - `web/components.js`, `web/ui.js`, `web/ui.css`: Web Awesomeを読み込み、アプリ内で共通する操作を提供します。
-- `web/virtual-grid.js`: Tabulatorと番組データを接続します。表示中の行だけを描画し、
+- `web/virtual-grid.js`, `web/virtual-grid.css`: Tabulatorと番組データを接続します。表示中の行だけを描画し、
   更新後もソートとスクロール位置を保ちます。
-- `web/layout.css`, `web/timeline.css`: ナビゲーション、画面の配置、番組タイムライン。
-- `web/search-form.js`: 検索条件の入力と検証。
+- `web/layout.css`: ナビゲーション、ヘッダー、サイドバー、画面の配置。
+- `web/schedule.css`, `web/timeline.css`: 番組表の操作・表示と番組タイムライン。
+- `web/search-form.js`, `web/search.css`: 検索条件の入力・検証と検索結果の配置。
+- `web/responsive.js`: ヘッダー、検索、一覧、番組表で共用する画面幅の判定。
 
 番組説明はテキストとして描画し、HTTP(S) URLだけをリンク化します。番組情報のHTMLを実行しません。
 予約スキップのキューは画面を移動しても完了させ、処理中状態が残ることを防ぎます。
+
+## レスポンシブ対応
+
+通常表示と関連する `@media` は部品ごとのCSS内にまとめます。共通のボタン、
+フォーム、選択肢行は `ui.css`、全体の配置は `layout.css` に置きます。
+CSSの適用順は `index.html` に記載した順序を維持します。
+
+JavaScriptで画面幅を判定する場合は、各画面で `matchMedia` を作らず
+`ChinachuResponsive.media` の共有 `MediaQueryList` を使います。
+
+| 判定 | 条件 | 用途 |
+| --- | --- | --- |
+| `compact` | 800px以下 | ヘッダー・サイドバー、検索ダイアログ、番組一覧の簡略表示 |
+| `wide` | 801px以上 | 通常のヘッダーと番組表の余白 |
+| `scheduleCompact` | 451px以下 | 番組表の日付タブを前日・日付選択・翌日の操作へ切替 |
+
+これらの境界を変える場合は `responsive.js` と該当CSSの条件を合わせて変更し、
+境界の前後を実ブラウザーで確認します。部品固有のCSSの切替幅は、その部品内で管理します。
+ブラウザー起動時のビルドやCSS生成は必要ありません。
+
+一覧の `compactWhenOverflow` と番組表の日付行は、画面幅に加えて実際の利用可能幅を測ります。
+固定のブレークポイントだけに置き換えないでください。番組表の処理は
+`measureDayControls`（計測）、`getDayControlsLayout`（表示状態の決定）、
+`applyDayControlsLayout`（反映）に分けています。
+一覧の幅変更では選択、ソート、表示中の行とスクロール位置を引き継ぎます。
+
+番組表のポップオーバーは、タップ／クリックの完了後に開きます。
+`pointerup` の中で開くと、同じ操作の `click` によってブラウザーが即座に閉じる場合があります。
+開くタイマーはページに属する `timer` で管理し、画面を離れると解除します。
 
 ## 依存ファイルの再生成
 

@@ -1,4 +1,4 @@
-/* Application-specific layout for Web Awesome controls. */
+/* Design tokens and reusable application controls. */
 :root {
     --wa-font-family-body: var(--chinachu-font-sans);
     --wa-font-family-heading: var(--chinachu-font-sans);
@@ -27,10 +27,10 @@
 .chinachu-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--chinachu-space-small); min-width: 0; }
 .chinachu-toolbar-separator { align-self: stretch; border-inline-start: 1px solid #ccc; margin-inline: 4px; }
 .chinachu-button { vertical-align: middle; }
-.chinachu-button::part(base) { min-height: 32px; padding-inline: var(--chinachu-space-medium); font-size: 13px; font-family: var(--chinachu-font-sans); border-radius: var(--chinachu-radius-control); }
+.chinachu-button::part(base) { min-height: 32px; padding-inline: var(--chinachu-space-medium); font-size: 13px; font-family: var(--chinachu-font-sans); border-radius: var(--chinachu-radius-control); background: #fff; border-color: #d6ced3; color: #333; }
 .chinachu-button-icon { width: 16px; height: 16px; object-fit: contain; }
 .chinachu-dialog { --width: 760px; --spacing: var(--chinachu-space-large); }
-.chinachu-dialog::part(body) { overflow: auto; }
+.chinachu-dialog::part(body) { overflow: auto; font-size: 13px; line-height: 1.6; }
 .chinachu-dialog.without-close-button::part(close-button) { display: none; }
 .chinachu-dialog-content { min-width: 0; }
 .chinachu-dialog-text { white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -49,12 +49,12 @@
 #chinachu-notifications > * { pointer-events: auto; }
 .chinachu-context-menu { z-index: 10001; display: flex; flex-direction: column; min-width: 180px; max-width: calc(100vw - 8px); max-height: calc(100vh - 8px); overflow: auto; padding: 5px; background: #fff; border: 1px solid #aaa; border-radius: var(--chinachu-radius-panel); box-shadow: 0 5px 20px #0003; }
 .chinachu-context-menu .chinachu-button { display: block; width: 100%; }
-.chinachu-context-menu .chinachu-button::part(base) { width: 100%; justify-content: flex-start; border: 0; }
+.chinachu-context-menu .chinachu-button::part(base) { width: 100%; justify-content: flex-start; border: 0; background: #fff; color: #2b2b2b; }
 .chinachu-context-menu hr { border: 0; border-top: 1px solid #ddd; margin: 4px 0; width: 100%; }
 .chinachu-popover { position: fixed; inset: auto; margin: 0; padding: 0; border: 1px solid #aaa; border-radius: var(--chinachu-radius-panel); box-shadow: 0 5px 20px #0003; background: white; max-width: min(450px, calc(100vw - 8px)); max-height: calc(100vh - 8px); overflow: auto; }
 .chinachu-form { margin: 0; padding: 0; }
 .chinachu-form-field { display: grid; grid-template-columns: minmax(110px, 27%) minmax(0, 1fr); gap: 12px; align-items: start; padding: var(--chinachu-space-medium) 0; border-bottom: 1px solid #eee; }
-.chinachu-form-label { padding-top: 5px; font-size: 12px; overflow-wrap: anywhere; }
+.chinachu-form-label { padding-top: 5px; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
 .chinachu-form-input { min-width: 0; }
 .chinachu-form-input > wa-input, .chinachu-form-input > wa-select, .chinachu-form-input > wa-textarea { width: 100%; }
 .chinachu-form-error { color: #a11; font-size: 12px; }
@@ -71,7 +71,7 @@
 .chinachu-tabs wa-tab-panel { height: 100%; }
 .chinachu-tabs wa-tab-panel::part(base) { height: 100%; padding: 0; }
 .chinachu-slider wa-slider { display: block; width: 100%; }
-.video-control .chinachu-slider { width: 90px; min-width: 40px; }
+.video-control .chinachu-slider { width: 90px; min-width: 40px; margin: 0 6px; }
 .video-control .chinachu-slider.seek { flex: 1; }
 @media (max-width: 600px) {
     .chinachu-form-field { grid-template-columns: 1fr; gap: 5px; }
@@ -80,7 +80,6 @@
 }
 
 /* Neutral actions use the same white surfaces and pink accents as the shell. */
-.chinachu-button::part(base) { background: #fff; border-color: #d6ced3; color: #333; }
 .chinachu-button:hover:not([disabled])::part(base) { background: #fff0f6; border-color: #c24186; }
 .chinachu-button[data-color] { --button-fill: #388dd6; --button-hover: #287bc2; }
 .chinachu-button[data-color="@pink"], .chinachu-button[data-color="@accent"], .chinachu-button[data-color="@red"], .chinachu-button[data-color="@danger"] { --button-fill: var(--chinachu-accent-color, #c24186); --button-hover: #ab3373; }
@@ -94,7 +93,6 @@
 .chinachu-button[data-color="@transparent"]:hover:not([disabled])::part(base), .chinachu-button[appearance="plain"]:hover:not([disabled])::part(base) { background: #fff0f6; border-color: transparent; }
 .chinachu-button.selected::part(base) { background: #c24186; border-color: #b3005f; color: #fff; }
 .chinachu-button.selected:hover:not([disabled])::part(base) { background: #b3005f; border-color: #b3005f; color: #fff; }
-.chinachu-context-menu .chinachu-button::part(base) { background: #fff; color: #2b2b2b; }
 .chinachu-context-menu .chinachu-button:hover::part(base) { background: #f4f4f4; }
 
 .chinachu-icon { display: inline-flex; width: 16px; height: 16px; flex: none; vertical-align: -.15em; color: inherit; }
@@ -103,5 +101,24 @@
 .chinachu-icon[data-icon="offline"] { color: #777; }
 .chinachu-dialog::part(dialog) { border-radius: var(--chinachu-radius-panel); }
 .chinachu-dialog::part(title) { font-size: 16px; font-weight: 600; }
-.chinachu-dialog::part(body) { font-size: 13px; line-height: 1.6; }
-.chinachu-form-label { font-weight: 500; }
+
+/* Playback controls and console panels. */
+.video-control { display: flex; align-items: center; gap: 6px; background: #eee; }
+.video-control > span { padding-top: 0 !important; height: auto !important; }
+.chinachu-tabs .console { position: relative; height: 100%; }
+@media (max-width: 800px) {
+ .video-control { flex-wrap: wrap; }
+ .video-container { bottom: 84px !important; }
+ .video-control .chinachu-slider.seek { min-width: 100px; }
+}
+
+/* Shared full-row choices for search filters and the broadcast menu. */
+.schedule-type-options strong, .chinachu-search-popover > strong { display: block; padding: 14px 16px; font-size: 13px; }
+.schedule-type-options label, .chinachu-search-choices > label, .chinachu-search-channels .channel-selector-option { display: flex; justify-content: space-between; align-items: center; gap: 16px; min-height: 44px; padding: 0 16px; border-top: 1px solid #eee8eb; font-size: 14px; cursor: pointer; }
+.schedule-type-options label:has(input:checked), .chinachu-search-choices > label:has(input:checked), .chinachu-search-channels .channel-selector-option:has(input:checked) { background: #fbedf4; }
+.schedule-type-options label:hover, .chinachu-search-choices > label:hover, .chinachu-search-channels .channel-selector-option:hover { background: #f6f2f4; }
+.schedule-type-options label:has(input:checked):hover, .chinachu-search-choices > label:has(input:checked):hover, .chinachu-search-channels .channel-selector-option:has(input:checked):hover { background: #f6dfeb; }
+.schedule-type-options label:has(input:focus-visible), .chinachu-search-choices > label:has(input:focus-visible), .chinachu-search-channels .channel-selector-option:has(input:focus-visible) { outline: 2px solid #c24186; outline-offset: -3px; }
+.schedule-type-options input, .chinachu-search-choices input, .chinachu-search-channels .channel-selector-option input { appearance: none; flex: none; width: 20px; height: 20px; margin: 0; border: 0; border-radius: 0; background: transparent; cursor: pointer; }
+.schedule-type-options input:checked, .chinachu-search-choices input:checked, .chinachu-search-channels .channel-selector-option input:checked { background: center / 20px 20px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c24186' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12 4 4L19 6'/%3E%3C/svg%3E"); }
+.schedule-type-options input:focus-visible, .chinachu-search-choices input:focus-visible, .chinachu-search-channels .channel-selector-option input:focus-visible { outline: none; }

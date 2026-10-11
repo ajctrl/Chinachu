@@ -1,0 +1,530 @@
+/* Timetable, program drawer and responsive broadcast/date toolbar. */
+div.timetable { background: #555; }
+div.timetable,
+div.timetable * {
+ -webkit-box-sizing : border-box;
+ -moz-box-sizing    : border-box;
+ -ms-box-sizing     : border-box;
+ -o-box-sizing      : border-box;
+ box-sizing         : border-box;
+}
+div.timetable > div.board {
+ z-index    : 10;
+ position   : absolute;
+ top        : 0;
+ left       : 20px;
+ overflow   : visible;
+}
+div.timetable > div.board > div.handline {
+ z-index   : 2;
+ position  : absolute;
+ left      : 0;
+ height    : 2px;
+ background: var(--chinachu-accent-color);
+}
+div.timetable > div.board > div.cutline {
+ z-index     : 1;
+ position    : absolute;
+ top         : 0;
+ bottom      : 0;
+ width       : 0;
+ border-right: 1px dashed rgba(255,0,0,0.5);
+}
+div.timetable > div.board > div.rect {
+ z-index     : 0;
+ position    : absolute;
+ background  : #ccc;
+ cursor      : pointer;
+ box-shadow  : inset 0 1px 0 rgba(25,25,25,0.3);
+}
+div.timetable > div.board > div.rect:hover { box-shadow  : inset 0 0 0 2px rgba(194,65,134,0.4); }
+div.timetable > div.board > div.rect.reserved,
+div.timetable > div.board > div.rect.recording { background  : red !important; }
+div.timetable > div.board > div.rect.reserved:hover,
+div.timetable > div.board > div.rect.recording:hover { background  : white !important; }
+div.timetable > div.board > div.rect.skip { background: linear-gradient(to left, var(--program-genre-color, #ccc) 5px, gray 5px) !important; }
+div.timetable > div.board > div.rect.skip:hover { background: linear-gradient(to left, var(--program-genre-color, #ccc) 5px, white 5px) !important; }
+div.timetable > div.board > div.rect.conflict { background  : gray !important; }
+/* Reserve state and genre share the background without changing text bounds.
+* A hard stop keeps the 5px genre band visible even in very short programs. */
+div.timetable > div.board > div.rect.reserved:not(.recording):not(.skip):not(.conflict) { background: linear-gradient(to left, var(--program-genre-color, #ccc) 5px, var(--chinachu-reserved-color) 5px) !important; }
+div.timetable > div.board > div.rect.reserved:not(.recording):not(.skip):not(.conflict):hover { background: linear-gradient(to left, var(--program-genre-color, #ccc) 5px, var(--chinachu-reserved-hover-color) 5px) !important; }
+div.timetable > div.board > div.rect.reserved:not(.recording):not(.skip):not(.conflict) > div > h4,
+div.timetable > div.board > div.rect.reserved:not(.recording):not(.skip):not(.conflict) > div > span { color: var(--chinachu-reserved-text-color); }
+div.timetable > div.board > div.rect.muted { opacity     : 0.5 !important; }
+div.timetable > div.board > div.rect.spot {
+ z-index     : 1;
+ box-shadow  : inset 0 0 0 1px white,
+ 0 0 5px 2px rgba(255, 87, 145, 0.82);
+}
+div.timetable > div.board > div.rect > div {
+ position   : absolute;
+ top        : 2px;
+ right      : 2px;
+ bottom     : 0;
+ left       : 2px;
+ overflow   : hidden;
+ line-height: 1.3em;
+ white-space: normal;
+ word-break : break-all;
+ font-family: var(--chinachu-font-sans);
+ color      : #444;
+}
+div.timetable > div.board > div.rect > div > h4 {
+ margin   : 0 0 2px 0;
+ font-size: 11px;
+}
+div.timetable > div.board > div.rect > div > div {
+ display: block;
+ float: left;
+ width: 11px;
+ color    : #fff;
+ font-size: 10px;
+}
+div.timetable > div.board > div.rect > div > div > span {
+ display: block;
+ background-color: rgba(0,0,0,0.4);
+ padding: 0 0 1px 0;
+ width: 11px;
+ text-align: center;
+ margin-bottom: 1px;
+}
+div.timetable > div.board > div.rect > div > div > span.新 { background-color: #4cc915; }
+div.timetable > div.board > div.rect > div > div > span.再 { background-color: #6198ff; }
+div.timetable > div.board > div.rect > div > div > span.終 { background-color: #ff6161; }
+div.timetable > div.board > div.rect > div > span {
+ display: block;
+ margin-left: 12px;
+ color    : #5f5f5f;
+ font-weight: 500;
+ font-size: 11px;
+}
+div.timetable > div.board > div.rect:hover > div > h4 { color      : #000; }
+div.timetable > div.board > div.rect.reserved:not(:hover) > div > span,
+div.timetable > div.board > div.rect.recording:not(:hover) > div > span { color      : rgba(255,255,255,0.8); }
+div.timetable > div.board > div.rect.reserved:hover > div > h4,
+div.timetable > div.board > div.rect.recording:hover > div > h4 { color      : red; }
+div.timetable > div.board > div.rect.reserved > div,
+div.timetable > div.board > div.rect.recording > div { color      : white; }
+div.timetable > div.board > div.rect.recording > div { font-weight: bold; }
+div.timetable > div.board > div.rect.skip:hover > div {
+ color      : gray;
+ text-shadow: none;
+}
+div.drawer > div.head {
+ padding   : 5px 10px;
+ background: rgba(255,255,255,0.9);
+ margin    : 0 0 10px 0;
+ text-align: center;
+}
+div.drawer > div.head > div.date {
+ text-align : center;
+ font-family: var(--chinachu-font-sans);
+ font-size  : 18px;
+ line-height: 20px;
+ color      : #222;
+}
+div.drawer > div.head > div.date > small {
+ font-size  : 12px;
+ color      : #777;
+ margin-left: 2px;
+ line-height: 15px;
+}
+div.drawer > div.head > span.dynamic-time,
+div.drawer > div.head > span.channel {
+ color    : #777;
+ font-size: 10px;
+}
+div.drawer > div.body {
+ overflow   : auto;
+ word-break : break-all;
+ white-space: normal;
+ background : rgba(0,0,0,0.2);
+ text-align : left;
+ color      : #ccc;
+ font-family: var(--chinachu-font-sans);
+}
+div.drawer > div.body > div.title {
+ font-size  : 14px;
+ font-weight: bold;
+ margin     : 0 0 5px 0;
+ color      : white;
+}
+div.drawer > div.body > div.title > span[class*="bg-cat-"] {
+ font-family   : var(--chinachu-font-sans);
+ font-size     : 10px;
+ font-weight   : normal;
+ color         : rgba(0,0,0,0.7);
+ margin-right  : 2px;
+ vertical-align: middle;
+ border-radius : 1px;
+ padding       : 0 2px;
+}
+div.drawer > div.body > div.detail { margin     : 0 0 5px 0; }
+div.drawer > div.body > div.id {
+ font-size  : 10px;
+ color      : #aaa;
+ font-family: var(--chinachu-font-sans);
+}
+div.drawer > div.foot { margin: 10px 0 0 0; }
+div.drawer > div.foot > wa-button {
+ display: block;
+ width  : 100%;
+}
+/* Program card opened from the timetable. */
+.chinachu-popover.schedule-program-popover {
+ width: 460px;
+ max-width: calc(100vw - 16px);
+ max-height: calc(100dvh - 16px);
+ border: 1px solid #a4a4a4;
+ border-radius: 10px;
+ background: #fff;
+ box-shadow: 0 5px 16px rgba(0,0,0,.28);
+ color: #191d24;
+ font-family: var(--chinachu-font-sans);
+}
+.schedule-program-drawer { padding: 14px 16px 10px; }
+div.schedule-program-drawer > div.head {
+ display: flex;
+ align-items: flex-start;
+ gap: 8px;
+ padding: 0;
+ margin: 0 0 8px;
+ background: transparent;
+ text-align: left;
+}
+div.schedule-program-drawer > div.head > div.date {
+ flex: 1;
+ min-width: 0;
+ color: #191d24;
+ font-size: 13px;
+ line-height: 1.6;
+ text-align: left;
+ white-space: normal;
+}
+.schedule-program-drawer .drawer-close {
+ flex: none;
+ display: grid;
+ place-items: center;
+ width: 32px;
+ height: 32px;
+ margin: -4px -8px 0 0;
+ padding: 0;
+ border: 0;
+ border-radius: 4px;
+ background: transparent;
+ color: #808080;
+ font-size: 24px;
+ line-height: 1;
+}
+.schedule-program-drawer .drawer-close:hover {
+ background: #fff0f6;
+ color: #c24186;
+}
+.schedule-program-drawer .drawer-close:focus-visible {
+ outline: 2px solid #c24186;
+ outline-offset: 2px;
+}
+div.schedule-program-drawer > div.body {
+ background: transparent;
+ color: #191d24;
+ white-space: normal;
+ word-break: normal;
+ overflow-wrap: anywhere;
+}
+div.schedule-program-drawer > div.body > div.title {
+ margin: 0 0 10px;
+ color: #191d24;
+ font-size: 20px;
+ font-weight: 700;
+ line-height: 1.4;
+}
+.schedule-program-drawer .program-meta {
+ display: flex;
+ align-items: center;
+ flex-wrap: wrap;
+ gap: 6px 12px;
+ margin-bottom: 10px;
+ color: #555;
+ font-size: 13px;
+ line-height: 1.5;
+}
+.schedule-program-drawer .program-category {
+ padding: 3px 10px;
+ border-radius: 5px;
+ background: var(--program-genre-color, #f0f0f0) !important;
+ color: #555 !important;
+ font-weight: 500;
+}
+.schedule-program-drawer .program-category.label-cat-drama {
+ background: #ffe4e8 !important;
+ color: #c63379 !important;
+}
+div.schedule-program-drawer > div.body > div.detail {
+ margin: 0 0 10px;
+ font-size: 14px;
+ line-height: 1.6;
+ white-space: pre-wrap;
+}
+div.schedule-program-drawer > div.foot {
+ display: flex;
+ align-items: center;
+ justify-content: space-between;
+ flex-wrap: wrap;
+ gap: 8px;
+ margin: 0;
+ padding-top: 8px;
+ border-top: 1px solid #ddd;
+}
+.schedule-program-drawer .reservation-status {
+ color: #777;
+ font-size: 12px;
+}
+.schedule-program-drawer .drawer-actions {
+ display: flex;
+ gap: 6px;
+ margin-left: auto;
+}
+.schedule-program-drawer .drawer-actions wa-button::part(base) {
+ min-height: 32px;
+ padding: 0 12px;
+ border-radius: 5px;
+ font-size: 13px;
+ font-weight: 700;
+}
+.schedule-program-drawer wa-button.program-details-button::part(base) {
+ border: 1px solid #909090;
+ background: #fff;
+ color: #444;
+}
+.schedule-program-drawer wa-button.program-reserve-button::part(base) {
+ border-color: #c63379;
+ background: #c63379;
+ color: #fff;
+}
+.schedule-program-drawer wa-button.program-reserve-button:hover:not([disabled])::part(base) {
+ border-color: #ab2466;
+ background: #ab2466;
+}
+div.timetable > div.head {
+ z-index   : 98;
+ position  : fixed;
+ top       : 80px;
+ left      : 20px;
+ height    : 30px;
+ padding-right: 2px;
+ overflow  : visible;
+}
+div.timetable > div.head > div {
+ position   : absolute;
+ color      : #bbb;
+ font-size  : 12px;
+ font-weight: normal;
+ text-align : center;
+ cursor     : pointer;
+ overflow   : hidden;
+ top        : 0;
+ bottom     : 0;
+ padding-top: 3px;
+ line-height: 2em;
+ background : rgba(25,25,25,0.8);
+ box-shadow : 5px 0 0 rgba(25,25,25,0.7);
+}
+div.timetable > div.head > div:hover { color      : #fff; }
+div.timetable > div.timescale {
+ z-index   : 99;
+ position  : relative;
+ width     : 20px;
+ height    : auto;
+ padding   : 0 10px;
+ overflow  : hidden;
+ background: #444;
+ box-shadow: inset 1px 0 0 #222, -2px 0 0 rgba(0,0,0,0.1), inset -2px 0 0 #333;
+}
+div.timetable > div.timescale > wa-button {
+ position   : absolute;
+ left       : 0;
+ width      : 100%;
+ height     : 25px;
+ padding    : 0;
+ font-size  : 10px;
+}
+div.timetable > div.timescale > wa-button.prev { top: 0; }
+div.timetable > div.timescale > wa-button.next { bottom: 0; }
+div.timetable > div.timescale > div {
+ position   : absolute;
+ margin-top : 97px;
+ left       : 1px;
+ font-size  : 10px;
+ font-family: monospace;
+ line-height: 10px;
+}
+div.timetable > div.timescale > div.long {
+ width      : 15px;
+ padding    : 4px 2px 4px 2px;
+ color      : #fff;
+ box-shadow : inset 0 2px 0 #000;
+}
+div.timetable > div.timescale > div.middle {
+ height     : 1px;
+ width      : 10px;
+ border-top : 1px solid #222;
+ background : white;
+}
+div.timetable > div.timescale > div.short {
+ height     : 1px;
+ width      : 5px;
+ border-top : 1px solid #333;
+ background : white;
+}
+div.timetable > div.timescale > div.h18,
+div.timetable > div.timescale > div.h19,
+div.timetable > div.timescale > div.h20,
+div.timetable > div.timescale > div.h21,
+div.timetable > div.timescale > div.h4,
+div.timetable > div.timescale > div.h5 {
+ border-color: #06f;
+ background  : #06f;
+}
+div.timetable > div.timescale > div.h6,
+div.timetable > div.timescale > div.h7,
+div.timetable > div.timescale > div.h8,
+div.timetable > div.timescale > div.h9,
+div.timetable > div.timescale > div.h10 {
+ border-color: #0cf;
+ background  : #0cf;
+}
+div.timetable > div.timescale > div.h11,
+div.timetable > div.timescale > div.h12,
+div.timetable > div.timescale > div.h13,
+div.timetable > div.timescale > div.h14 {
+ border-color: #f90;
+ background  : #f90;
+}
+div.timetable > div.timescale > div.h15,
+div.timetable > div.timescale > div.h16,
+div.timetable > div.timescale > div.h17 {
+ border-color: #f30;
+ background  : #f30;
+}
+div.timetable > div.timescale > div.h22,
+div.timetable > div.timescale > div.h23,
+div.timetable > div.timescale > div.h0,
+div.timetable > div.timescale > div.h1,
+div.timetable > div.timescale > div.h2,
+div.timetable > div.timescale > div.h3 {
+ border-color: #63c;
+ background  : #63c;
+}
+.schedule-type-filter { min-width: 44px; min-height: 40px; padding: 0 8px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: rgba(255,255,255,.65); font-size: 13px; }
+.schedule-type-filter[aria-pressed="true"] { color: #fff; border-bottom-color: #fff; }
+.schedule-type-filter:hover:not(:disabled) { color: #fff; background: rgba(255,255,255,.08); }
+.schedule-type-filter:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.schedule-type-filter:disabled { opacity: .5; cursor: not-allowed; }
+.schedule-settings-button { margin-inline-start: auto; }
+.schedule-day-controls { min-width: 0; max-width: 100%; }
+.schedule-day-tabs { display: flex; flex-wrap: nowrap; gap: 8px; }
+.schedule-day-tabs > wa-button { flex: none; }
+.schedule-day-controls > [hidden] { display: none !important; }
+.schedule-day-navigation { display: flex; align-items: stretch; gap: 0; min-width: 0; border: 1px solid #f4d9e7; border-radius: 8px; overflow: hidden; }
+.schedule-day-navigation button, .schedule-day-navigation select { min-height: 38px; border: 0; border-radius: 0; background: transparent; color: #fff; background-repeat: no-repeat; background-position: center; background-size: 16px 16px; }
+.schedule-day-navigation button { flex: none; width: 40px; padding: 0; }
+.schedule-day-navigation .schedule-day-previous { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m15 6-6 6 6 6'/%3E%3C/svg%3E"); }
+.schedule-day-navigation .schedule-day-next { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E"); }
+.schedule-day-navigation select { flex: 1; min-width: 0; appearance: none; padding: 0 26px 0 8px; border-inline: 1px solid #ffffff40; background-position: right 8px center; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
+.schedule-day-navigation button:hover:not(:disabled) { background-color: #ffffff1f; }
+.schedule-day-navigation option { background: #fff; color: #333; }
+.schedule-day-navigation button:disabled { opacity: .5; cursor: not-allowed; }
+.schedule-day-navigation :is(button, select):focus-visible { outline: 2px solid #fff; outline-offset: -3px; }
+.drawer > .foot > wa-button::part(base) { width: 100%; }
+.timetable > .timescale > wa-button::part(base) { width: 100%; padding: 0; font-size: 10px; }
+.timetable > .head { top: var(--schedule-head-top, 92px); }
+/* Date tabs form the upper edge of the schedule sheet. */
+.main-head .schedule-day-tabs { gap: 0; }
+.main-head .schedule-day-tabs .chinachu-button::part(base) {
+ min-height: 40px;
+ border-radius: 8px 8px 0 0;
+ border: 0;
+ box-shadow: none;
+ padding-inline: 14px;
+}
+.main-head .schedule-day-tabs .chinachu-button:not(.selected)::part(base) { background: transparent; color: #fff; }
+.main-head .schedule-day-tabs .chinachu-button:not(.selected):hover::part(base) { background: #ffffff1f; }
+.main-head .schedule-day-tabs .chinachu-button.selected::part(base) { background: #fff; color: #8b235c; font-weight: 700; }
+.main-head .schedule-day-tabs .chinachu-button:focus-visible::part(base) { outline: 2px solid currentColor; outline-offset: -4px; }
+/* Move the whole date row into the bottom padding without changing header height. */
+.main-head .schedule-day-tabs .chinachu-button { transform: translateY(7px); }
+/* Bridge the 2px gap while preserving the raised tab and label positions. */
+.main-head .schedule-day-tabs .chinachu-button.selected { position: relative; }
+.main-head .schedule-day-tabs .chinachu-button.selected::after {
+ content: "";
+ position: absolute;
+ top: 100%;
+ inset-inline: 0;
+ height: 2px;
+ background: #fff;
+ pointer-events: none;
+}
+/* Keep the date row together when the settings label changes at the compact breakpoint. */
+.main-head-toolbar:has(.schedule-day-controls) { max-width: 100%; margin-inline-start: auto; }
+.main-head .schedule-toolbar-split .schedule-day-controls { order: 1; margin-inline-start: 0; }
+.main-head .chinachu-toolbar:not(.schedule-toolbar-split) .schedule-day-controls.schedule-today-short { margin-inline-start: -6px; }
+/* Collapse broadcast filters only when the compact date row needs the space. */
+.schedule-type-filter[hidden], .schedule-type-menu[hidden] { display: none !important; }
+.schedule-type-menu { flex: none; }
+.schedule-type-toggle { min-height: 40px; padding: 0 8px; border: 1px solid #f4d9e7; border-radius: 4px; background: transparent; color: white; font-size: 13px; white-space: nowrap; }
+.schedule-type-toggle:focus-visible { outline: 2px solid white; outline-offset: -3px; }
+/* Full-row choices keep the compact broadcast menu easy to scan and tap. */
+.schedule-type-options { position: fixed; inset: auto; box-sizing: border-box; margin: 0; width: 240px; max-width: calc(100vw - 8px); padding: 0; overflow: hidden; border: 1px solid #e5dce1; border-radius: 10px; background: white; color: #333; box-shadow: 0 6px 20px #0003; }
+.main-head .chinachu-toolbar:not(.schedule-toolbar-split) .schedule-type-menu:not([hidden]) + .schedule-day-controls.schedule-today-short { margin-inline-start: 0; }
+@media (max-width: 479px) {
+ .schedule-program-drawer { padding: 12px; }
+ div.schedule-program-drawer > div.body > div.title { font-size: 18px; }
+}
+@media (max-width: 800px) {
+ .main-head .schedule-day-tabs .chinachu-button { transform: translateY(6px); }
+ .main-head-toolbar:has(.schedule-day-controls) { width: auto; }
+ .main-head .chinachu-toolbar:has(.schedule-day-controls) { gap: 4px; }
+ .main-head .schedule-type-filter { flex: none; min-width: 40px; padding-inline: 4px; }
+ .main-head .schedule-settings-button { flex: none; }
+ .main-head .schedule-settings-button::part(label) { display: none; }
+ .main-head .schedule-settings-button .chinachu-button-icon { margin-inline-end: 0; }
+ .main-head .schedule-settings-button::part(base) { min-width: 40px; padding-inline: 8px; }
+ .main-head .schedule-day-controls { flex: none; margin-inline-start: 16px; }
+ .main-head .schedule-day-tabs { flex-wrap: wrap; }
+ .main-head .schedule-day-tabs .chinachu-button::part(base) { padding-inline: 8px; }
+ .main-head .chinachu-toolbar:has(.schedule-day-controls):not(.schedule-toolbar-split) .schedule-type-filter {
+  position: relative;
+  transform: translateY(6px);
+  border-bottom-color: transparent;
+ }
+ .main-head .chinachu-toolbar:has(.schedule-day-controls):not(.schedule-toolbar-split) .schedule-type-filter[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 1px;
+  height: 2px;
+  background: #fff;
+  pointer-events: none;
+ }
+ .main-head .chinachu-toolbar:has(.schedule-day-controls):not(.schedule-toolbar-split) .schedule-settings-button { transform: translateY(1px); }
+ .main-head .chinachu-toolbar:not(.schedule-toolbar-split) .schedule-day-controls.schedule-today-short { margin-inline-start: -2px; }
+}
+@media (min-width: 801px) {
+ .main-head .schedule-settings-button { transform: translateY(2px); }
+ .main-head .schedule-type-filter { position: relative; transform: translateY(7px); border-bottom-color: transparent; }
+ .main-head .schedule-type-filter[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 1px;
+  height: 2px;
+  background: #fff;
+  pointer-events: none;
+ }
+ .main-head .schedule-type-filter + .schedule-day-controls { margin-inline-start: 12px; }
+}
+@media (max-width: 451px) {
+ .main-head .chinachu-toolbar:has(.schedule-day-controls.is-compact):not(.schedule-toolbar-split) .schedule-type-filter,
+ .main-head .chinachu-toolbar:has(.schedule-day-controls.is-compact):not(.schedule-toolbar-split) .schedule-settings-button { transform: none; }
+}

@@ -101,8 +101,8 @@
 			if (options.responsiveLayout !== false) minimum += 40;
 			if (this.element.clientWidth < minimum) return true;
 		}
-		return this._opt.cols.some(function(column) { return column.key === 'title' || column.key === this._opt.compactColumn; }, this) &&
-			!!root.matchMedia && root.matchMedia('(max-width: 800px)').matches;
+		return options.cols.some(function(column) { return column.key === 'title' || column.key === options.compactColumn; }) &&
+			root.ChinachuResponsive.media.compact.matches;
 	};
 	Grid.prototype._updateCompactLayout = function(anchor) {
 		if (this._compact === this._isCompact()) return false;

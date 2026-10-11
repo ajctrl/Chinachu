@@ -182,7 +182,7 @@
 		menuSettings.className = 'app-menu-settings';
 		app.view.header.appendChild(menuSettings);
 		menuToggle.setAttribute('aria-controls', 'app-navigation app-menu-settings');
-		var compactHeader = window.matchMedia('(max-width: 800px)');
+		var compactHeader = ChinachuResponsive.media.compact;
 		var movedSwitch = null, switchPlaceholder = null;
 		function restoreDescriptionSwitch() {
 			if (!movedSwitch) return;

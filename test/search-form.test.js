@@ -36,7 +36,7 @@ function browser(query, recorded, data = {}) {
 	}
 	const document = { createElement: tag => new Element(tag), defaultView: { Event: class { constructor(type) { this.type = type; } } } };
 	let modal;
-	const window = { location: { hash: '' }, addEventListener() {}, removeEventListener() {} };
+	const window = { location: { hash: '' }, matchMedia: () => ({ matches: false }), addEventListener() {}, removeEventListener() {} };
 	const context = { window, document, global: { chinachu: data },
 		ChinachuChannelSelector: require('../web/channel-selector'),
 		Chinachu: { serializeQuery: object => new URLSearchParams(object).toString() },
@@ -45,6 +45,7 @@ function browser(query, recorded, data = {}) {
 			Object.assign(this, options, { content: new Element('div'), show() { return this; }, close() { this.closed = true; options.onClose(); } });
 		} }
 	};
+	vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../web/responsive.js'), 'utf8'), context);
 	vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../web/search-form.js'), 'utf8'), context);
 	const page = { self: { query }, drawMain() { this.redrawn = true; } };
 	window.ChinachuSearchForm.show(page, { recorded });

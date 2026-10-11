@@ -1,4 +1,4 @@
-/* Application layout. UI controls and tables keep their own component styles. */
+/* Application shell: navigation, sidebar, page header, footer and shared page grid. */
 *, *::before, *::after { box-sizing: border-box; }
 html { height: 100%; }
 body { height: 100%; height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; color: #333; font-size: 13px; line-height: 1.5; }
@@ -29,7 +29,7 @@ body > .middle.noside { grid-template-columns: minmax(0, 1fr); }
 .side-head:empty { display: none; }
 .side-body { display: flex; flex-direction: column; gap: 5px; align-items: stretch; }
 .side-body wa-button { width: 100%; }
-.side-body wa-button::part(base) { width: 100%; justify-content: flex-start; }
+.side-body wa-button::part(base) { width: 100%; justify-content: flex-start; background: transparent; border-color: transparent; color: #777; }
 .main { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); background: #fff; }
 .main.nohead { grid-template-rows: minmax(0, 1fr); }
 .main.nohead > .main-head { display: none; }
@@ -39,30 +39,6 @@ body > .middle.noside { grid-template-columns: minmax(0, 1fr); }
 .main-head h1 > .flag { font-size: 11px; margin-right: 3px; padding: 1px 3px; background: rgba(0,0,0,.1); }
 .main-head h1 > small { font-size: 12px; color: rgba(255,255,255,.8); }
 .main-head-toolbar { min-width: 0; }
-.main-head-toolbar:has(.recorded-list-toolbar) { margin-left: auto; }
-.main-head-toolbar .recorded-list-toolbar { justify-content: flex-end; }
-.scheduler-label-short { display: none; }
-.schedule-type-filter { min-width: 44px; min-height: 40px; padding: 0 8px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: rgba(255,255,255,.65); font-size: 13px; }
-.schedule-type-filter[aria-pressed="true"] { color: #fff; border-bottom-color: #fff; }
-.schedule-type-filter:hover:not(:disabled) { color: #fff; background: rgba(255,255,255,.08); }
-.schedule-type-filter:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-.schedule-type-filter:disabled { opacity: .5; cursor: not-allowed; }
-.schedule-settings-button { margin-inline-start: auto; }
-.schedule-day-controls { min-width: 0; max-width: 100%; }
-.schedule-day-tabs { display: flex; flex-wrap: nowrap; gap: 8px; }
-.schedule-day-tabs > wa-button { flex: none; }
-.schedule-day-controls > [hidden] { display: none !important; }
-.schedule-day-navigation { display: flex; align-items: stretch; gap: 0; min-width: 0; border: 1px solid #f4d9e7; border-radius: 8px; overflow: hidden; }
-.schedule-day-navigation button, .schedule-day-navigation select { min-height: 38px; border: 0; border-radius: 0; background: transparent; color: #fff; }
-.schedule-day-navigation button { flex: none; width: 40px; padding: 0; }
-.schedule-day-navigation button, .schedule-day-navigation select { background-repeat: no-repeat; background-position: center; background-size: 16px 16px; }
-.schedule-day-navigation .schedule-day-previous { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m15 6-6 6 6 6'/%3E%3C/svg%3E"); }
-.schedule-day-navigation .schedule-day-next { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E"); }
-.schedule-day-navigation select { flex: 1; min-width: 0; appearance: none; padding: 0 26px 0 8px; border-inline: 1px solid #ffffff40; background-position: right 8px center; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
-.schedule-day-navigation button:hover:not(:disabled) { background-color: #ffffff1f; }
-.schedule-day-navigation option { background: #fff; color: #333; }
-.schedule-day-navigation button:disabled { opacity: .5; cursor: not-allowed; }
-.schedule-day-navigation :is(button, select):focus-visible { outline: 2px solid #fff; outline-offset: -3px; }
 .main-head-toolbar wa-checkbox { --wa-form-control-value-color: #fff; }
 .main-head-toolbar .chinachu-button::part(base) { min-height: 40px; }
 .main-head-toolbar wa-checkbox::part(base) { min-height: 40px; padding-inline: 4px; }
@@ -99,12 +75,6 @@ body > .middle.noside { grid-template-columns: minmax(0, 1fr); }
 .main-body > div.fullscreen { position: absolute; padding: 0; }
 .main-body > div.loading { background: url(./loading-circular-2b2b2b-ffffff.gif) center no-repeat; }
 .main-body > div.failure { background: #fff1f4; }
-.main-head-title:has(.rule-kind-tabs) { min-width: max-content; }
-.rule-kind-tabs { display: flex; gap: 12px; font-size: 14px; }
-.rule-kind-tabs a { display: inline-flex; align-items: center; min-height: 40px; padding: 5px 8px; border-bottom: 2px solid transparent; color: rgba(255,255,255,.8); white-space: nowrap; }
-.rule-kind-tabs a:hover { color: #fff; border-bottom-color: rgba(255,255,255,.5); text-decoration: none; }
-.rule-kind-tabs a[aria-current="page"] { border-bottom-color: #fff; color: #fff; font-weight: 600; }
-.rule-kind-tabs a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .footer { display: flex; justify-content: flex-end; gap: 5px; padding: 3px 8px; background: #fff; min-height: 30px; }
 .footer wa-button::part(base) { min-height: 22px; font-size: 11px; border: 0; background: rgba(194,65,134,.4); color: #2b2b2b; }
 .page-layout { width: 100%; }
@@ -114,75 +84,10 @@ body > .middle.noside { grid-template-columns: minmax(0, 1fr); }
 .layout-main { grid-column: span 8; }
 .layout-third { grid-column: span 4; }
 .layout-quarter { grid-column: span 3; }
-.program-panel { border: 1px solid #ddd; border-radius: 4px; background: white; margin: 14px 0; overflow: hidden; }
-.program-panel-heading { padding: 10px 14px; background: #f5f5f5; border-bottom: 1px solid #ddd; }
-.program-panel-heading h2, .program-panel-heading h3 { margin: 0; font-size: 15px; font-weight: 500; }
-.program-panel-recording > .program-panel-heading { background: #f2dede; color: #a94442; }
-.program-panel-reserves > .program-panel-heading { background: #d9edf7; color: #31708f; }
-.program-panel-recorded > .program-panel-heading { background: #dff0d8; color: #3c763d; }
-.program-panel-footer { padding: 10px; background: #f8f8f8; border-top: 1px solid #ddd; }
-.program-list { list-style: none; padding: 0; margin: 0; }
-.program-list-item { padding: 10px 14px; border-bottom: 1px solid #ddd; }
-.program-list-item:last-child { border-bottom: 0; }
-.program-pager { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; list-style: none; padding: 0; margin: 24px 0 12px; }
-.program-pager li { flex: 1; min-width: 0; }
-.program-pager .previous { text-align: left; }
-.program-pager .next { text-align: right; }
-.program-pager li a { display: inline-block; max-width: 100%; min-height: 40px; overflow-wrap: anywhere; padding: 9px 12px; border: 1px solid #d6ced3; background: #fff; border-radius: 3px; }
-.program-pager li a:hover { background: #faf2f6; border-color: #c24186; text-decoration: none; }
-.program-pager li a:focus-visible { outline: 2px solid #c24186; outline-offset: 2px; }
-.program-pager .active a { color: #fff; background: #aa2c70; }
-.program-thumbnail, .program-preview { max-width: 100%; height: auto; margin-top: 10px; }
-.badge { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 11px; line-height: 1.4; }
-.program-meta { color: #777; font-size: 13px; margin: 10px 0 15px; }
-.program-meta .soon { color: green; }
-.program-meta .now { color: red; }
-.program-detail { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
-.program-full-title { margin: 16px 0; }
-.program-full-title-label { color: #777; font-size: 12px; }
-.program-full-title-text { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
-.channel-cards .channel-card wa-progress-bar { --height: 2px; }
-.channel-cards .channel-card wa-button.program { display: block; width: 100%; }
-.channel-cards .channel-card wa-button.program::part(base) { width: 100%; text-align: left; justify-content: flex-start; }
-.channel-cards .channel-card wa-button.live::part(base) { min-height: 24px; }
-.video-control { display: flex; align-items: center; gap: 6px; background: #eee; }
-.video-control > span { padding-top: 0 !important; height: auto !important; }
-.video-control .chinachu-slider { margin: 0 6px; }
-.chinachu-tabs .console { position: relative; height: 100%; }
-.drawer > .foot > wa-button::part(base) { width: 100%; }
-.timetable > .timescale > wa-button::part(base) { width: 100%; padding: 0; font-size: 10px; }
-.timetable > .head { top: var(--schedule-head-top, 92px); }
-.chinachu-virtual-grid { height: 100%; border: 0; font-size: 12px; background: #fff; }
-.chinachu-virtual-grid .tabulator-cell { padding: 7px 5px; border-right: 0; }
-.chinachu-virtual-grid .tabulator-header { background: #fff; border-bottom: 0; color: #777; font-weight: 400; }
-.chinachu-virtual-grid .tabulator-header .tabulator-col { background: transparent; border-right: 0; }
-.chinachu-virtual-grid .tabulator-row.tabulator-selected { background: rgba(179,0,95,.25); }
-.chinachu-virtual-grid .tabulator-row.tabulator-selected:hover { background: rgba(179,0,95,.35); }
-.chinachu-virtual-grid .tabulator-row { border-bottom: 0; background: #fff; }
-.chinachu-virtual-grid .tabulator-row.tabulator-row-even { background: #f0f2f5; }
-.chinachu-virtual-grid .tabulator-row:hover { background: #fff5fa; }
-.chinachu-virtual-grid .tabulator-cell[tabulator-field="title"] { font-size: 13px; font-weight: 500; }
-.tabulator.chinachu-virtual-grid .tabulator-header .tabulator-col:hover { background: #fafafa; }
-.tabulator.chinachu-virtual-grid .tabulator-header .tabulator-col[aria-sort="none"] .tabulator-col-sorter { opacity: 0; }
-.tabulator.chinachu-virtual-grid .tabulator-header .tabulator-col[aria-sort="none"]:hover .tabulator-col-sorter,
-.tabulator.chinachu-virtual-grid .tabulator-header .tabulator-col[aria-sort="none"]:focus-within .tabulator-col-sorter { opacity: .5; }
-.tabulator.chinachu-virtual-grid .tabulator-header .tabulator-col[aria-sort="ascending"],
-.tabulator.chinachu-virtual-grid .tabulator-header .tabulator-col[aria-sort="descending"] { color: #8b004a; }
-.chinachu-virtual-grid .tabulator-cell a { color: inherit; }
-.chinachu-grid-menu { border: 0; background: transparent; font-size: 18px; line-height: 1; width: 100%; }
-.chinachu-grid-details { display: grid; grid-template-columns: minmax(80px, 28%) minmax(0, 1fr); gap: 8px 12px; margin: 0; white-space: normal; }
-.chinachu-grid-details dt { color: #68707c; }
-.chinachu-grid-details dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
-.chinachu-grid-details .reserve-title { white-space: normal; }
-.chinachu-virtual-grid .tabulator-responsive-collapse { padding: 12px; border-top: 1px solid #ddd; white-space: normal; }
-.chinachu-virtual-grid .tabulator-responsive-collapse-toggle { width: 28px; height: 28px; border-radius: 4px; }
-.chinachu-virtual-grid .tabulator-responsive-collapse-toggle:focus-visible { outline: 2px solid #c24186; outline-offset: 2px; }
-.chinachu-search-form { display: grid; gap: 12px; }
-.chinachu-search-field { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: center; gap: 10px; }
-.chinachu-search-field > input, .chinachu-search-field > select { width: 100%; min-width: 0; border: 1px solid #aaa; background: #fff; padding: var(--chinachu-space-small); border-radius: var(--chinachu-radius-control); }
-.chinachu-search-channel-field { align-items: start; }
-.chinachu-search-channel-field > span { padding-top: 8px; }
-.chinachu-search-channel-field > .channel-selector { min-width: 0; }
+/* Preserve the original shell palette with the new components. */
+.side-body wa-button:hover::part(base) { color: #000; background: #eee; }
+.side-body wa-button.selected::part(base) { background: #fff; border-color: transparent; color: #2b2b2b; }
+.footer wa-button:hover::part(base) { background: #c24186; color: #fff; }
 @media (min-width: 801px) {
  .app-navigation > .category-pref { margin-left: auto; }
 }
@@ -217,260 +122,12 @@ body > .middle.noside { grid-template-columns: minmax(0, 1fr); }
  .main-head { padding: 7px; gap: 6px; }
  .main-head h1 { font-size: 16px; }
  .main-head-toolbar { width: 100%; }
-
  .main:has(.config-settings, .search-results-page) > .main-head .chinachu-toolbar { justify-content: flex-end; }
- .scheduler-label-full { display: none; }
- .scheduler-label-short { display: inline; }
  .layout-main, .layout-third { grid-column: span 12; }
  .layout-quarter { grid-column: span 6; }
  .layout-row { gap: 8px; }
- .program-panel { margin: 6px 0; }
- .video-control { flex-wrap: wrap; }
- .video-container { bottom: 84px !important; }
- .video-control .chinachu-slider.seek { min-width: 100px; }
- .chinachu-virtual-grid .tabulator-cell { padding-block: 10px; }
- .chinachu-virtual-grid .tabulator-cell:is([tabulator-field="title"], [tabulator-field="reserve_titles"]) { white-space: normal; overflow-wrap: anywhere; }
- div.chinachu-virtual-grid .reserve-title { white-space: normal; overflow-wrap: anywhere; }
- .chinachu-program-metadata { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 10px; margin-top: 5px; color: #68707c; font-size: 11px; font-weight: normal; line-height: 1.6; }
- .chinachu-program-metadata > * { min-width: 0; overflow-wrap: anywhere; }
- div.chinachu-virtual-grid .chinachu-program-summary .reserve-title { position: relative; }
- .chinachu-program-title-link { position: absolute; inset: 0; display: block; }
- .chinachu-program-title-link:focus-visible { outline: 2px solid #c24186; outline-offset: 2px; }
- .chinachu-program-keywords { margin-top: 4px; color: #68707c; font-size: 11px; font-weight: normal; line-height: 1.5; white-space: normal; overflow-wrap: anywhere; }
- .chinachu-program-genre { display: inline-block; }
- div.chinachu-virtual-grid .chinachu-program-summary .reserve-description { margin: 6px 0 0; padding: 0; border: 0; line-height: 1.5; max-height: 3em; }
- .chinachu-grid-menu, .reserve-details { min-height: 40px; }
- .chinachu-virtual-grid .tabulator-responsive-collapse-toggle { width: 30px; height: 30px; }
 }
 @media (max-width: 480px) {
  .app-navigation > li { flex-basis: 40%; }
  .layout-quarter { grid-column: span 12; }
- .chinachu-search-field { grid-template-columns: 90px minmax(0, 1fr); }
- .chinachu-grid-details { grid-template-columns: minmax(0, 1fr); gap: 3px; }
- .chinachu-grid-details dd { margin-bottom: 8px; }
-}
-@media (max-width: 360px) {
- .main-head-toolbar:has(.scheduler-label-short) .chinachu-button::part(base) { padding-inline: 6px; }
-}
-
-.program-page > .page-layout { padding-inline: 12px; }
-.program-page .program-meta, .program-page .chinachu-callout { overflow-wrap: anywhere; }
-
-/* Preserve the original shell palette with the new components. */
-.side-body wa-button::part(base) { background: transparent; border-color: transparent; color: #777; }
-.side-body wa-button:hover::part(base) { color: #000; background: #eee; }
-.side-body wa-button.selected::part(base) { background: #fff; border-color: transparent; color: #2b2b2b; }
-.footer wa-button:hover::part(base) { background: #c24186; color: #fff; }
-
-/* Use the same compact rhythm for native inputs and component controls. */
-.chinachu-search-field input, .chinachu-search-field select,
-.config-field input:not([type="checkbox"]), .config-field select, .config-field textarea,
-.channel-selector-filters input, .channel-selector-filters select, .channel-selector-filters button,
-.channel-selector summary, .reserve-details, .program-pager li a { border-radius: var(--chinachu-radius-control); }
-.program-panel, .storage-page .storage-card { border-radius: var(--chinachu-radius-panel); }
-.main-head h1 { font-weight: 500; }
-.tabulator-cell[tabulator-field="datetime"], .tabulator-cell[tabulator-field="duration"] { font-variant-numeric: tabular-nums; }
-
-.main-body > .search-results-page { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; padding: 0; background: #fff; }
-.search-results-page > .chinachu-virtual-grid { grid-row: 2; min-height: 0; }
-.search-results-page.search-awaiting-input > .chinachu-virtual-grid { display: none; }
-.chinachu-search-hint { grid-row: 2; margin: 0; padding: 40px 18px; text-align: center; color: #68707c; font-size: 14px; }
-/* Search controls share one compact header above the virtualized results. */
-.chinachu-search-header { min-width: 0; background: #fff; }
-.chinachu-search-inline { display: grid; grid-template-columns: minmax(140px, 1fr) auto auto auto 76px; gap: 6px; padding: 8px 12px 4px; align-items: center; }
-.chinachu-search-title { position: relative; min-width: 0; }
-.chinachu-search-title > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-.chinachu-search-title::before { content: ""; position: absolute; left: 11px; top: 9px; width: 11px; height: 11px; border: 2px solid #68707c; border-radius: 50%; pointer-events: none; }
-.chinachu-search-title::after { content: ""; position: absolute; left: 22px; top: 22px; width: 7px; height: 2px; background: #68707c; transform: rotate(45deg); pointer-events: none; }
-.chinachu-search-title input { width: 100%; min-width: 0; height: 34px; padding: 5px 10px 5px 34px; font-size: 13px; color: #333; border: 1px solid #c8ccd2; border-radius: 4px; background: #fff; }
-.chinachu-search-filter, .chinachu-search-submit { height: 46px; padding: 0 18px; border: 1px solid #c8ccd2; border-radius: 4px; background: #fff; color: #333; font-size: 14px; white-space: nowrap; }
-.chinachu-search-inline > .chinachu-search-filter, .chinachu-search-inline > .chinachu-search-submit { height: 34px; padding-inline: 12px; font-size: 13px; }
-.chinachu-search-filter::after { content: ""; display: inline-block; margin-left: 12px; border: 4px solid transparent; border-bottom: 0; border-top-color: currentColor; vertical-align: middle; }
-.chinachu-search-filter:has(+ .chinachu-search-advanced)::after { content: "+"; border: 0; font-size: 20px; line-height: 1; }
-.chinachu-search-filter:hover, .chinachu-search-filter[aria-expanded="true"] { background: #faf2f6; border-color: #c24186; }
-.chinachu-search-modal .chinachu-search-field > .chinachu-search-filter { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; width: 100%; height: auto; min-height: 40px; padding-inline: 10px; text-align: left; }
-.chinachu-search-modal .chinachu-search-filter > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chinachu-search-modal .chinachu-search-filter::after { flex: none; margin-left: 0; }
-.chinachu-search-submit { background: #c24186; color: #fff; border-color: #c24186; font-weight: 600; }
-.chinachu-search-submit:hover { background: #ab3373; }
-.chinachu-search-popover { position: fixed; inset: auto; margin: 0; width: 360px; max-width: calc(100vw - 24px); padding: 0; overflow-y: auto; border: 1px solid #e5dce1; border-radius: 10px; background: #fff; color: #333; box-shadow: 0 6px 20px #0003; }
-.chinachu-search-popover:popover-open { display: block; }
-.chinachu-search-popover > strong { position: sticky; top: 0; z-index: 1; background: #fff; }
-.chinachu-search-popover .chinachu-search-field[hidden] { display: none; }
-.chinachu-search-advanced > .chinachu-search-field { margin: 0 16px 12px; }
-.chinachu-search-advanced > .chinachu-search-field:last-child { margin-bottom: 16px; }
-.chinachu-search-genres { width: 240px; }
-.chinachu-search-genres .chinachu-search-category-field > span { display: none; }
-.chinachu-search-genres .chinachu-search-choices { max-height: none; overflow: visible; border: 0; border-radius: 0; }
-.chinachu-search-channels { width: 320px; }
-.chinachu-search-popover .chinachu-search-field { grid-template-columns: 1fr; gap: 6px; }
-.chinachu-search-popover .chinachu-search-field > input, .chinachu-search-popover .chinachu-search-field > select { min-height: 38px; }
-.chinachu-search-channels .chinachu-search-channel-field > span, .chinachu-search-channels .channel-selector-picker > summary { display: none; }
-.chinachu-search-channels .channel-selector { max-width: none; }
-.chinachu-search-channels .channel-selector-selected { padding: 0 16px; margin-bottom: 0; }
-.chinachu-search-channels .channel-selector-filters { padding: 10px 16px; }
-.chinachu-search-channels .channel-selector-list { max-height: none; padding: 0; border: 0; overflow: visible; }
-.chinachu-search-channels .channel-selector-list fieldset { margin: 0; }
-.chinachu-search-channels .channel-selector-list legend { width: 100%; margin: 0; padding: 8px 16px; border-top: 1px solid #eee8eb; font-size: 12px; color: #68707c; }
-.chinachu-search-channels .channel-selector-option { margin: 0; }
-.chinachu-search-channels .channel-selector-option > input { order: 2; }
-.chinachu-search-channels .channel-selector-option > span { min-width: 0; overflow-wrap: anywhere; }
-.chinachu-search-channels .channel-selector-list > .channel-selector-empty { margin: 0; padding: 12px 16px; }
-.chinachu-search-channels .channel-selector-manual { margin: 12px 16px; }
-.chinachu-search-channels .channel-selector-manual .channel-selector-filters { padding-inline: 0; }
-.chinachu-search-summary { background: #fff; display: flex; align-items: center; padding: 4px 12px 6px; min-width: 0; flex-wrap: wrap; gap: 6px 8px; font-size: 13px; line-height: 1.6; }
-.chinachu-search-chip { display: inline-flex; align-items: center; gap: 12px; max-width: 100%; min-height: 34px; padding: 5px 12px; border: 0; border-radius: 12px; background: #f6e4ed; color: #94275e; text-align: left; overflow-wrap: anywhere; }
-.chinachu-search-chip::after { content: "×"; flex: none; font-size: 19px; line-height: 1; color: #b53a7b; }
-.chinachu-search-chip:hover { background: #eed0df; }
-.chinachu-search-clear { border: 0; background: transparent; color: #505963; padding: 6px 12px; min-height: 34px; }
-.chinachu-search-clear:hover { text-decoration: underline; }
-.chinachu-search-count { margin-left: auto; padding-left: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.chinachu-search-summary[hidden] { display: none; }
-.chinachu-search-header :is(input, select, button):focus-visible { outline: 2px solid #c24186; outline-offset: 2px; }
-@media (min-width: 801px) {
- .chinachu-search-mobile-button { display: none; }
- .chinachu-search-chip { min-height: 26px; padding: 3px 8px; gap: 8px; border-radius: 8px; font-size: 12px; }
- .chinachu-search-chip::after { font-size: 16px; }
- .chinachu-search-clear { min-height: 26px; padding: 3px 8px; font-size: 12px; }
-}
-@media (max-width: 1000px) and (min-width: 801px) {
- .chinachu-search-inline { gap: 6px; padding-inline: 10px; grid-template-columns: minmax(100px, 1fr) auto auto auto 76px; }
- .chinachu-search-inline > .chinachu-search-filter, .chinachu-search-inline > .chinachu-search-submit { padding-inline: 10px; }
- .chinachu-search-filter::after { margin-left: 6px; }
-}
-@media (max-width: 800px) {
- .chinachu-search-inline { display: none; }
- .chinachu-search-summary { padding: 8px; gap: 6px; max-height: 25dvh; overflow-y: auto; }
- .chinachu-search-chip, .chinachu-search-clear { min-height: 40px; }
-}
-
-.chinachu-rule-summary { white-space: normal; overflow-wrap: anywhere; line-height: 1.6; color: #333; font-size: 12px; font-style: normal; }
-.chinachu-rule-heading { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
-.chinachu-rule-meta { display: block; color: #68707c; font-size: 11px; margin-bottom: 5px; }
-.chinachu-rule-condition { margin-top: 3px; }
-.chinachu-rule-exclusion { color: #92405b; }
-
-/* Date tabs form the upper edge of the schedule sheet. */
-.main-head .schedule-day-tabs { gap: 0; }
-.main-head .schedule-day-tabs .chinachu-button::part(base) {
- min-height: 40px;
- border-radius: 8px 8px 0 0;
- border: 0;
- box-shadow: none;
- padding-inline: 14px;
-}
-.main-head .schedule-day-tabs .chinachu-button:not(.selected)::part(base) { background: transparent; color: #fff; }
-.main-head .schedule-day-tabs .chinachu-button:not(.selected):hover::part(base) { background: #ffffff1f; }
-.main-head .schedule-day-tabs .chinachu-button.selected::part(base) { background: #fff; color: #8b235c; font-weight: 700; }
-.main-head .schedule-day-tabs .chinachu-button:focus-visible::part(base) { outline: 2px solid currentColor; outline-offset: -4px; }
-/* Move the whole date row into the bottom padding without changing header height. */
-.main-head .schedule-day-tabs .chinachu-button { transform: translateY(7px); }
-@media (max-width: 800px) {
- .main-head .schedule-day-tabs .chinachu-button { transform: translateY(6px); }
-}
-/* Bridge the 2px gap while preserving the raised tab and label positions. */
-.main-head .schedule-day-tabs .chinachu-button.selected { position: relative; }
-.main-head .schedule-day-tabs .chinachu-button.selected::after {
- content: "";
- position: absolute;
- top: 100%;
- inset-inline: 0;
- height: 2px;
- background: #fff;
- pointer-events: none;
-}
-@media (min-width: 801px) {
- .main-head .schedule-settings-button { transform: translateY(2px); }
- .main-head .schedule-type-filter { position: relative; transform: translateY(7px); border-bottom-color: transparent; }
- .main-head .schedule-type-filter[aria-pressed="true"]::after {
-  content: "";
-  position: absolute;
-  inset-inline: 0;
-  bottom: 1px;
-  height: 2px;
-  background: #fff;
-  pointer-events: none;
- }
- .main-head .schedule-type-filter + .schedule-day-controls { margin-inline-start: 12px; }
-}
-
-@media (max-width: 800px) {
- .main-head-toolbar:has(.schedule-day-controls) { width: auto; }
- .main-head .chinachu-toolbar:has(.schedule-day-controls) { gap: 4px; }
- .main-head .schedule-type-filter { flex: none; min-width: 40px; padding-inline: 4px; }
- .main-head .schedule-settings-button { flex: none; }
- .main-head .schedule-settings-button::part(label) { display: none; }
- .main-head .schedule-settings-button .chinachu-button-icon { margin-inline-end: 0; }
- .main-head .schedule-settings-button::part(base) { min-width: 40px; padding-inline: 8px; }
- .main-head .schedule-day-controls { flex: none; margin-inline-start: 16px; }
- .main-head .schedule-day-tabs { flex-wrap: wrap; }
- .main-head .schedule-day-tabs .chinachu-button::part(base) { padding-inline: 8px; }
- .main-head .schedule-toolbar-split .schedule-day-controls { order: 1; }
-}
-
-/* Keep the date row together when the settings label changes at the compact breakpoint. */
-.main-head-toolbar:has(.schedule-day-controls) { max-width: 100%; margin-inline-start: auto; }
-.main-head .schedule-toolbar-split .schedule-day-controls { order: 1; margin-inline-start: 0; }
-@media (max-width: 800px) {
- .main-head .chinachu-toolbar:has(.schedule-day-controls):not(.schedule-toolbar-split) .schedule-type-filter {
-  position: relative;
-  transform: translateY(6px);
-  border-bottom-color: transparent;
- }
- .main-head .chinachu-toolbar:has(.schedule-day-controls):not(.schedule-toolbar-split) .schedule-type-filter[aria-pressed="true"]::after {
-  content: "";
-  position: absolute;
-  inset-inline: 0;
-  bottom: 1px;
-  height: 2px;
-  background: #fff;
-  pointer-events: none;
- }
- .main-head .chinachu-toolbar:has(.schedule-day-controls):not(.schedule-toolbar-split) .schedule-settings-button { transform: translateY(1px); }
-}
-
-.main-head .chinachu-toolbar:not(.schedule-toolbar-split) .schedule-day-controls.schedule-today-short { margin-inline-start: -6px; }
-@media (max-width: 800px) {
- .main-head .chinachu-toolbar:not(.schedule-toolbar-split) .schedule-day-controls.schedule-today-short { margin-inline-start: -2px; }
-}
-/* The compact date control has no lowered tab edge; align the whole row. */
-@media (max-width: 451px) {
- .main-head .chinachu-toolbar:has(.schedule-day-controls.is-compact):not(.schedule-toolbar-split) .schedule-type-filter,
- .main-head .chinachu-toolbar:has(.schedule-day-controls.is-compact):not(.schedule-toolbar-split) .schedule-settings-button { transform: none; }
-}
-
-/* Collapse broadcast filters only when the compact date row needs the space. */
-.schedule-type-filter[hidden], .schedule-type-menu[hidden] { display: none !important; }
-.schedule-type-menu { flex: none; }
-.schedule-type-toggle { min-height: 40px; padding: 0 8px; border: 1px solid #f4d9e7; border-radius: 4px; background: transparent; color: white; font-size: 13px; white-space: nowrap; }
-.schedule-type-toggle:focus-visible { outline: 2px solid white; outline-offset: -3px; }
-/* Full-row choices keep the compact broadcast menu easy to scan and tap. */
-.schedule-type-options { position: fixed; inset: auto; box-sizing: border-box; margin: 0; width: 240px; max-width: calc(100vw - 8px); padding: 0; overflow: hidden; border: 1px solid #e5dce1; border-radius: 10px; background: white; color: #333; box-shadow: 0 6px 20px #0003; }
-.schedule-type-options strong, .chinachu-search-popover > strong { display: block; padding: 14px 16px; font-size: 13px; }
-.schedule-type-options label, .chinachu-search-choices > label, .chinachu-search-channels .channel-selector-option { display: flex; justify-content: space-between; align-items: center; gap: 16px; min-height: 44px; padding: 0 16px; border-top: 1px solid #eee8eb; font-size: 14px; cursor: pointer; }
-.schedule-type-options label:has(input:checked), .chinachu-search-choices > label:has(input:checked), .chinachu-search-channels .channel-selector-option:has(input:checked) { background: #fbedf4; }
-.schedule-type-options label:hover, .chinachu-search-choices > label:hover, .chinachu-search-channels .channel-selector-option:hover { background: #f6f2f4; }
-.schedule-type-options label:has(input:checked):hover, .chinachu-search-choices > label:has(input:checked):hover, .chinachu-search-channels .channel-selector-option:has(input:checked):hover { background: #f6dfeb; }
-.schedule-type-options label:has(input:focus-visible), .chinachu-search-choices > label:has(input:focus-visible), .chinachu-search-channels .channel-selector-option:has(input:focus-visible) { outline: 2px solid #c24186; outline-offset: -3px; }
-.schedule-type-options input, .chinachu-search-choices input, .chinachu-search-channels .channel-selector-option input { appearance: none; flex: none; width: 20px; height: 20px; margin: 0; border: 0; border-radius: 0; background: transparent; cursor: pointer; }
-.schedule-type-options input:checked, .chinachu-search-choices input:checked, .chinachu-search-channels .channel-selector-option input:checked { background: center / 20px 20px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c24186' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12 4 4L19 6'/%3E%3C/svg%3E"); }
-.schedule-type-options input:focus-visible, .chinachu-search-choices input:focus-visible, .chinachu-search-channels .channel-selector-option input:focus-visible { outline: none; }
-
-.main-head .chinachu-toolbar:not(.schedule-toolbar-split) .schedule-type-menu:not([hidden]) + .schedule-day-controls.schedule-today-short { margin-inline-start: 0; }
-
-@media (max-width: 800px) {
- .main-head-title:has(.rule-kind-tabs) { flex: none; }
- .main-head-toolbar:has(.scheduler-label-short) { width: auto; margin-inline-start: auto; }
- .main-head-toolbar:has(.scheduler-label-short) .chinachu-toolbar { flex-wrap: nowrap; gap: 4px; }
- .main-head-toolbar:has(.scheduler-label-short) .chinachu-button::part(base) { padding-inline: 6px; }
- .main-head-toolbar:has(.scheduler-label-short) hr { flex: none; width: 0; height: 24px; margin: 0 2px; border: 0; border-inline-start: 1px solid #ffffff60; }
-}
-
-@media (max-width: 520px) {
- .main-head-toolbar:has(.scheduler-label-short) { width: 100%; margin-inline-start: 0; }
- .main-head-toolbar:has(.scheduler-label-short) hr { margin-inline-start: auto; }
-}
-
-@media (max-width: 800px) and (orientation: portrait) {
- .main-head-toolbar:has(.scheduler-label-short) hr { border-inline-start: 0; padding-inline-start: 1px; }
 }

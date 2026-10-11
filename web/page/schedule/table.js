@@ -1,6 +1,9 @@
 (function () {
 	'use strict';
 
+	// Match the date control margins in schedule CSS, including the shorter today label.
+	var DAY_CONTROL_SPACING = { wide: 12, compact: 16, shortTodayGain: 18, groupedTypesMargin: 2 };
+
 	Chinachu.definePage({
 
 		init: function () {
@@ -126,74 +129,14 @@
 			Chinachu.on(this.view.daySelect, 'change', function() { this.selectDay(Number(this.view.daySelect.value)); }.bind(this));
 			this.view.toolbar.add({ key: 'days', ui: controls });
 			this.updateDayControls();
-			var todayButton = this.view.dayButtons[0];
-			var todayOption = this.view.daySelect.options[0];
-			// Measure off-layout, then display exactly one date control.
-			this.dayControlsObserver = new ResizeObserver(function() {
-				var compact = window.matchMedia('(max-width: 451px)').matches;
-				var fullToday = todayButton.getAttribute('title');
-				var shortLabel = fullToday.replace(/^\d+\//, '').replace(/ .*/, '');
-				todayButton.setLabel(fullToday);
-				todayOption.textContent = compact ? shortLabel : fullToday;
-				tabs.hidden = false;
-				tabs.style.cssText = 'position:absolute;visibility:hidden;width:max-content';
-				var requiredWidth = Math.ceil(tabs.getBoundingClientRect().width);
-				tabs.style.cssText = '';
-				var toolbar = controls.parentElement;
-				navigation.hidden = false;
-				navigation.style.cssText = 'position:absolute;visibility:hidden;width:max-content';
-				var navigationWidth = Math.ceil(navigation.getBoundingClientRect().width);
-				navigation.style.cssText = '';
-				var typeButtons = Array.from(toolbar.querySelectorAll('.schedule-type-filter'));
-				typeMenu.hidden = true;
-				typeButtons.forEach(function(button) { button.hidden = false; });
-				var siblings = Array.from(toolbar.children).filter(function(item) {
-					return item !== controls && item.getBoundingClientRect().width > 0;
-				});
-				var header = toolbar.closest('.main-head');
-				var headerStyle = getComputedStyle(header);
-				var rowWidth = header.clientWidth - parseFloat(headerStyle.paddingLeft) - parseFloat(headerStyle.paddingRight);
-				var available = rowWidth - siblings.reduce(function(total, item) {
-					return total + item.getBoundingClientRect().width;
-				}, 0) - parseFloat(getComputedStyle(toolbar).columnGap) * siblings.length;
-				available -= window.matchMedia('(min-width: 801px)').matches ? 12 : 16;
-				var shortToday = compact;
-				if (compact) available += 18;
-				// Try the shorter today label before moving dates onto another row.
-				if (!compact && available < requiredWidth) {
-					shortToday = true;
-					available += 18;
-					todayButton.setLabel(shortLabel);
-					tabs.style.cssText = 'position:absolute;visibility:hidden;width:max-content';
-					requiredWidth = Math.ceil(tabs.getBoundingClientRect().width);
-					tabs.style.cssText = '';
-				}
-				var groupedTypes = compact && available < navigationWidth;
-				if (groupedTypes) {
-					typeMenu.hidden = false;
-					available += typeButtons.reduce(function(total, button) { return total + button.getBoundingClientRect().width; }, 0)
-						+ parseFloat(getComputedStyle(toolbar).columnGap) * 3 - typeMenu.getBoundingClientRect().width - 2;
-					typeButtons.forEach(function(button) { button.hidden = true; });
-				} else if (typePanel.matches(':popover-open')) {
-					typePanel.hidePopover();
-				}
-				var split = available < (compact ? navigationWidth : requiredWidth);
-				toolbar.classList.toggle('schedule-toolbar-split', split);
-				controls.classList.toggle('schedule-today-short', shortToday);
-				controls.style.width = (compact ? Math.min(navigationWidth, rowWidth) : split ? rowWidth : requiredWidth) + 'px';
-				tabs.hidden = compact;
-				navigation.hidden = !compact;
-				controls.classList.toggle('is-compact', compact);
-				typeButtons.forEach(function(button) { button.style.translate = ''; });
-				if (!split && !groupedTypes && window.matchMedia('(max-width: 800px)').matches) {
-					// Center the visible text group between the page edge and date control.
-					var firstText = document.createRange(), lastText = document.createRange();
-					firstText.selectNodeContents(typeButtons[0]);
-					lastText.selectNodeContents(typeButtons[typeButtons.length - 1]);
-					var offset = (header.getBoundingClientRect().left + controls.getBoundingClientRect().left - firstText.getBoundingClientRect().left - lastText.getBoundingClientRect().right) / 2;
-					typeButtons.forEach(function(button) { button.style.translate = offset + 'px 0'; });
-				}
-			});
+			this.view.dayControls = {
+				controls: controls, tabs: tabs, navigation: navigation,
+				toolbar: controls.parentElement, header: controls.closest('.main-head'),
+				typeButtons: Array.from(controls.parentElement.querySelectorAll('.schedule-type-filter')),
+				typeMenu: typeMenu, typePanel: typePanel,
+				todayButton: this.view.dayButtons[0], todayOption: this.view.daySelect.options[0]
+			};
+			this.dayControlsObserver = new ResizeObserver(this.layoutDayControls.bind(this));
 			this.dayControlsObserver.observe(controls);
 			this.dayControlsObserver.observe(controls.parentElement);
 			this.dayControlsObserver.observe(controls.closest('.main-head'));
@@ -275,6 +218,110 @@
 			return this;
 		},
 
+		layoutDayControls: function () {
+			var measurements = this.measureDayControls();
+			var layout = this.getDayControlsLayout(measurements);
+			this.applyDayControlsLayout(layout);
+			this.alignTypeButtons(layout);
+		},
+
+		measureDayControlWidth: function (element) {
+			// Measure intrinsic width without contributing a second date control to the row.
+			element.hidden = false;
+			element.style.cssText = 'position:absolute;visibility:hidden;width:max-content';
+			var width = Math.ceil(element.getBoundingClientRect().width);
+			element.style.cssText = '';
+			return width;
+		},
+
+		measureDayControls: function () {
+			var elements = this.view.dayControls;
+			var compact = ChinachuResponsive.media.scheduleCompact.matches;
+			var fullToday = elements.todayButton.getAttribute('title');
+			var shortToday = fullToday.replace(/^\d+\//, '').replace(/ .*/, '');
+			elements.todayButton.setLabel(fullToday);
+			elements.todayOption.textContent = compact ? shortToday : fullToday;
+			var tabsWidth = this.measureDayControlWidth(elements.tabs);
+			var navigationWidth = this.measureDayControlWidth(elements.navigation);
+			elements.typeMenu.hidden = true;
+			elements.typeButtons.forEach(function(button) { button.hidden = false; });
+			var siblings = Array.from(elements.toolbar.children).filter(function(item) {
+				return item !== elements.controls && item.getBoundingClientRect().width > 0;
+			});
+			var headerStyle = getComputedStyle(elements.header);
+			var rowWidth = elements.header.clientWidth - parseFloat(headerStyle.paddingLeft) - parseFloat(headerStyle.paddingRight);
+			var siblingWidth = siblings.reduce(function(total, item) {
+				return total + item.getBoundingClientRect().width;
+			}, 0);
+			var gap = parseFloat(getComputedStyle(elements.toolbar).columnGap);
+			var shortTabsWidth = tabsWidth;
+			if (!compact) {
+				elements.todayButton.setLabel(shortToday);
+				shortTabsWidth = this.measureDayControlWidth(elements.tabs);
+				elements.todayButton.setLabel(fullToday);
+			}
+			var groupedTypesWidthGain = 0;
+			if (compact) {
+				// Measure the menu alongside the individual filters before choosing which to show.
+				elements.typeMenu.hidden = false;
+				groupedTypesWidthGain = elements.typeButtons.reduce(function(total, button) {
+					return total + button.getBoundingClientRect().width;
+				}, 0) + gap * (elements.typeButtons.length - 1) - elements.typeMenu.getBoundingClientRect().width - DAY_CONTROL_SPACING.groupedTypesMargin;
+				elements.typeMenu.hidden = true;
+			}
+			return {
+				compact: compact, wide: ChinachuResponsive.media.wide.matches,
+				fullToday: fullToday, shortToday: shortToday,
+				rowWidth: rowWidth, siblingWidth: siblingWidth, siblingCount: siblings.length, gap: gap,
+				tabsWidth: tabsWidth, shortTabsWidth: shortTabsWidth, navigationWidth: navigationWidth,
+				groupedTypesWidthGain: groupedTypesWidthGain
+			};
+		},
+
+		getDayControlsLayout: function (measurements) {
+			var available = measurements.rowWidth - measurements.siblingWidth - measurements.gap * measurements.siblingCount
+				- (measurements.wide ? DAY_CONTROL_SPACING.wide : DAY_CONTROL_SPACING.compact);
+			// Try the shorter today label before moving dates onto another row.
+			var shortToday = measurements.compact || available < measurements.tabsWidth;
+			if (shortToday) available += DAY_CONTROL_SPACING.shortTodayGain;
+			var requiredWidth = shortToday && !measurements.compact ? measurements.shortTabsWidth : measurements.tabsWidth;
+			var groupedTypes = measurements.compact && available < measurements.navigationWidth;
+			if (groupedTypes) available += measurements.groupedTypesWidthGain;
+			var split = available < (measurements.compact ? measurements.navigationWidth : requiredWidth);
+			return {
+				compact: measurements.compact, shortToday: shortToday, groupedTypes: groupedTypes, split: split,
+				todayLabel: shortToday && !measurements.compact ? measurements.shortToday : measurements.fullToday,
+				width: measurements.compact ? Math.min(measurements.navigationWidth, measurements.rowWidth) : split ? measurements.rowWidth : requiredWidth
+			};
+		},
+
+		applyDayControlsLayout: function (layout) {
+			var elements = this.view.dayControls;
+			elements.todayButton.setLabel(layout.todayLabel);
+			elements.typeMenu.hidden = !layout.groupedTypes;
+			elements.typeButtons.forEach(function(button) { button.hidden = layout.groupedTypes; });
+			if (!layout.groupedTypes && elements.typePanel.matches(':popover-open')) elements.typePanel.hidePopover();
+			elements.toolbar.classList.toggle('schedule-toolbar-split', layout.split);
+			elements.controls.classList.toggle('schedule-today-short', layout.shortToday);
+			elements.controls.classList.toggle('is-compact', layout.compact);
+			elements.controls.style.width = layout.width + 'px';
+			elements.tabs.hidden = layout.compact;
+			elements.navigation.hidden = !layout.compact;
+		},
+
+		alignTypeButtons: function (layout) {
+			var elements = this.view.dayControls;
+			elements.typeButtons.forEach(function(button) { button.style.translate = ''; });
+			if (layout.split || layout.groupedTypes || !ChinachuResponsive.media.compact.matches) return;
+			// Center the visible text group between the page edge and date control after layout.
+			var firstText = document.createRange(), lastText = document.createRange();
+			firstText.selectNodeContents(elements.typeButtons[0]);
+			lastText.selectNodeContents(elements.typeButtons[elements.typeButtons.length - 1]);
+			var offset = (elements.header.getBoundingClientRect().left + elements.controls.getBoundingClientRect().left
+				- firstText.getBoundingClientRect().left - lastText.getBoundingClientRect().right) / 2;
+			elements.typeButtons.forEach(function(button) { button.style.translate = offset + 'px 0'; });
+		},
+
 		getDay: function () {
 			var day = Number(this.self.query.day || 0);
 			return Number.isInteger(day) && day >= 0 && day <= 6 ? day : 0;
@@ -301,7 +348,7 @@
 					button.setAttribute('title', label);
 				}
 				button[day === selected ? 'select' : 'unselect']();
-				this.view.daySelect.options[day].textContent = day === 0 && window.matchMedia('(max-width: 451px)').matches ? label.replace(/^\d+\//, '').replace(/ .*/, '') : label;
+				this.view.daySelect.options[day].textContent = day === 0 && ChinachuResponsive.media.scheduleCompact.matches ? label.replace(/^\d+\//, '').replace(/ .*/, '') : label;
 			}, this);
 			this.view.daySelect.value = String(selected);
 			this.view.daySelect.title = this.view.dayButtons[selected].getAttribute('title') || this.view.daySelect.options[selected].textContent;
@@ -671,10 +718,14 @@
 				inertiaScroll();
 			}.bind(this);
 
-			this.bindPointerEvents(this.view.content, viewDrawer);
+			this.bindPointerEvents(this.view.content, function () {
+				// Open after the gesture's click so native light dismissal does not close it immediately.
+				this.timer.openDrawer = setTimeout(viewDrawer, 0);
+			}.bind(this));
 
 			Chinachu.on(window, 'keydown', onKeydown);
 			var removeListenersOnUnload = function () {
+				clearTimeout(this.timer.openDrawer);
 				if (this.pointerCleanup) this.pointerCleanup();
 
 				Chinachu.off(window, 'keydown', onKeydown);

@@ -9,11 +9,13 @@ function implementation() {
 	const storage = new Map();
 	const window = {
 		sessionStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) },
+		matchMedia: () => ({ matches: false }),
 		requestAnimationFrame() { return 1; }, cancelAnimationFrame() {}
 	};
 	const context = vm.createContext({ window, console, document: { createElement: () => ({
 		setAttribute() {}, children: [], appendChild(node) { this.children.push(node); }
 	}) } });
+	vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/responsive.js'), 'utf8'), context);
 	vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/virtual-grid.js'), 'utf8'), context);
 	return { Grid: window.ChinachuVirtualGrid, storage, window };
 }
@@ -170,7 +172,7 @@ describe('Tabulator list adapter', function() {
 
 	it('uses available grid width to wrap rules before their columns overflow', function() {
 		const { Grid, window } = implementation();
-		window.matchMedia = () => ({ matches: false });
+		window.ChinachuResponsive.media.compact.matches = false;
 		const view = new Grid({ compactWhenOverflow: true, responsiveLayout: false,
 			compactColumn: 'reserve_titles', cols: [{ key: 'channels', width: 700 }, { key: 'reserve_titles' }] });
 		// 828px of columns, 36px of selection, and 24px for the scrollbar.

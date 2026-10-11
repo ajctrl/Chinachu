@@ -4,7 +4,7 @@
 	var categories = { anime: 'アニメ', information: '情報・ワイドショー', news: 'ニュース・報道', sports: 'スポーツ', variety: 'バラエティ', documentary: 'ドキュメンタリー', drama: 'ドラマ', music: '音楽', cinema: '映画', theater: '劇場・公演', hobby: '趣味・教育', welfare: '福祉', etc: 'その他' };
 	var searchTargets = { all: 'タイトル＋説明', title: 'タイトルのみ', desc: '説明のみ' };
 	var filterKeys = ['keyword', 'title', 'desc', 'cat', 'type', 'start', 'end', 'pgid', 'channels'];
-	function isMobile() { return window.matchMedia('(max-width: 800px)').matches; }
+	function isMobile() { return root.ChinachuResponsive.media.compact.matches; }
 	function hasSearch(query) {
 		return !!query.skip || filterKeys.concat('chid').some(function(key) {
 			return query[key] !== undefined && query[key] !== null && query[key] !== '';

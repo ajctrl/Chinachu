@@ -21,8 +21,8 @@ async function run() {
 		page.on('pageerror', error => { errors.push(error.message); console.error(error.message); });
 		await page.route('**/*', route => route.fulfill({ contentType: 'text/html', body: '<html><body><div id="content" style="position:relative;width:1200px;height:700px"></div></body></html>' }));
 		await page.goto('http://chinachu.test/');
-		for (const file of ['web/lib/tabulator/dist/css/tabulator.min.css', 'web/chinachu.css', 'web/ui.css']) await page.addStyleTag({ content: read(file) });
-		for (const file of ['web/runtime.js', 'web/ui.js', 'web/lib/tabulator/dist/js/tabulator.min.js', 'web/virtual-grid.js', 'web/preferences.js', 'web/channel-selector.js', 'web/search-form.js']) await page.addScriptTag({ content: read(file) });
+		for (const file of ['web/lib/tabulator/dist/css/tabulator.min.css', 'web/chinachu.css', 'web/ui.css', 'web/virtual-grid.css', 'web/search.css']) await page.addStyleTag({ content: read(file) });
+		for (const file of ['web/runtime.js', 'web/responsive.js', 'web/ui.js', 'web/lib/tabulator/dist/js/tabulator.min.js', 'web/virtual-grid.js', 'web/preferences.js', 'web/channel-selector.js', 'web/search-form.js']) await page.addScriptTag({ content: read(file) });
 		await page.evaluate(() => {
 			Chinachu.definePage = methods => { window.PageDefinition = methods; };
 			window.liveTimes = 0;
