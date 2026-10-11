@@ -35,6 +35,7 @@
 .chinachu-dialog-content { min-width: 0; }
 .chinachu-dialog-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .chinachu-dialog-subtitle { color: #666; font-size: 12px; }
+.chinachu-rule-error { margin-bottom: 12px; padding: 10px 12px; border: 1px solid #b52b27; border-radius: 4px; color: #8b211d; background: #fff1f0; overflow-wrap: anywhere; }
 .chinachu-about-dialog { --width: 420px; }
 .chinachu-about-label { color: #777; font-size: 12px; }
 .chinachu-about-version { margin: 4px 0 20px; font-size: 20px; font-weight: 500; overflow-wrap: anywhere; }

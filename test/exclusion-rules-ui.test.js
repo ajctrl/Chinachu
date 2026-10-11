@@ -10,7 +10,7 @@ const common = require('chinachu-common');
 function browser() {
 	const context = vm.createContext({ console: { log() {} } });
 	vm.runInContext(`
-		var requests = [], events = [], modals = [], forms = [], handlers = {}, deferSave = false, pendingXHR;
+		var requests = [], events = [], modals = [], forms = [], handlers = {}, deferSave = false, pendingXHR, validationResult = true;
 		var result = { duration: {}, reserve_titles: ['再放送'], isEnabled: true };
 		var rules = [{ reserve_titles: ['再放送'], isDisabled: true, sid: 2 }];
 		var ui = {}, P = {}, window = { location: {} }, global = { chinachu: { rules: [] } };
@@ -52,12 +52,17 @@ function browser() {
 					tag: tag, attributes: attributes, children: [],
 					insertText: function(text) { this.text = text; return this; },
 					insertTo: function(parent) { this.parentNode = parent; (parent.children || (parent.children = [])).push(this); return this; },
-					remove: function() { this.parentNode.children = this.parentNode.children.filter(child => child !== this); }
+					remove: function() { this.parentNode.children = this.parentNode.children.filter(child => child !== this); },
+					focus: function() { this.focused = true; }
 				};
 			},
 			ActionButton: Button, ElementView: function() {},
 			Modal: Modal, createModal: function(options) { return new Modal(options); },
-			createForm: function(options) { forms.push(options); return { element: { addEventListener: function() {} }, getResult: function() { return JSON.parse(JSON.stringify(result)); } }; },
+			createForm: function(options) { forms.push(options); return {
+				element: { children: [], prepend: function(child) { this.children.unshift(child); }, addEventListener: function() {} },
+				validate: function() { return validationResult; },
+				getResult: function() { return JSON.parse(JSON.stringify(result)); }
+			}; },
 			Grid: function(options) {
 				this.options = options;
 				this.destroy = function() {};
@@ -87,7 +92,11 @@ function browser() {
 		};
 		function XMLHttpRequest() {
 			this.headers = {};
-			this.addEventListener = function(name, fn) { this.loaded = fn; };
+			this.listeners = {};
+			this.addEventListener = function(name, fn) { this.listeners[name] = fn; };
+			this.fire = function(name) { if (this.listeners[name]) this.listeners[name]({ type: name }); };
+			this.loaded = function() { this.fire('load'); };
+			this.abort = function() { this.aborted = true; this.fire('abort'); };
 			this.setRequestHeader = function(name, value) { this.headers[name.toLowerCase()] = value; };
 			this.open = function(method, url) { this.method = method; this.url = url; };
 			this.send = function(body) {
@@ -103,6 +112,140 @@ function browser() {
 	vm.runInContext('var ChinachuChannelSelector = window.ChinachuChannelSelector;', context);
 	return context;
 }
+
+describe('new rule creation recovery', function () {
+	function open(action) {
+		const ctx = browser();
+		const source = fs.readFileSync(path.join(__dirname, '../web/class.js'), 'utf8');
+		vm.runInContext(source.slice(source.indexOf('\tfunction createRuleDialog('), source.indexOf('\tui.copyStr =')), ctx);
+		vm.runInContext(`
+			Chinachu.scope = { _cleanups: [] };
+			var util = { getProgramById: function() { return { title: '番組', category: 'anime', channel: { type: 'GR', id: 'station' } }; } };
+			${action};
+			var editor = modals[0], saveButton = editor.buttons[0].button;
+			var message = editor.element.children[0];
+			function save() { editor.buttons[0].onSelect({ targetButton: saveButton }, editor); }
+		`, ctx);
+		return ctx;
+	}
+	for (const [action, resource] of [
+		['new ui.NewRule()', 'rules'],
+		['new ui.NewRule(true)', 'exclusion-rules'],
+		["new ui.CreateRuleByProgram('program')", 'rules']
+	]) {
+		for (const [event, status, expected] of [
+			['load', 400, /入力内容が受け付けられません/],
+			['load', 401, /ログイン/],
+			['load', 403, /ログイン/],
+			['load', 409, /更新/],
+			['load', 500, /500/],
+			['load', 0, /保存結果を確認できません/],
+			['error', 0, /保存結果を確認できません/],
+			['abort', 0, /保存結果を確認できません/],
+			['timeout', 0, /保存結果を確認できません/]
+		]) {
+			it('preserves input and retries ' + action + ' after ' + event + ' ' + status, function() {
+				const ctx = open(action);
+				vm.runInContext("deferSave = true; result.reserve_titles = ['入力したタイトル']; result.channels = ['station']; save(); save(); editor.close();", ctx);
+				assert.equal(ctx.requests.length, 1, 'saving ignores repeated activation');
+				assert.equal(ctx.requests[0].url, './api/' + resource + '.json');
+				assert.equal(ctx.pendingXHR.timeout, 30000);
+				assert.equal(ctx.editor.closed, undefined);
+				assert.equal(ctx.editor.element.inert, true);
+				const body = JSON.stringify(ctx.requests[0].body);
+				vm.runInContext(`pendingXHR.status = ${status}; pendingXHR.fire('${event}');`, ctx);
+				assert.equal(ctx.modals.length, 1, 'failure stays inside the creation form');
+				assert.equal(ctx.editor.closed, undefined);
+				assert.equal(ctx.editor.element.inert, false);
+				assert.equal(ctx.saveButton.disabled, false);
+				assert.equal(ctx.message.hidden, false);
+				assert.equal(ctx.message.attributes.role, 'alert');
+				assert.equal(ctx.message.focused, true);
+				assert.match(ctx.message.textContent, expected);
+				assert.match(ctx.message.textContent, /入力内容は保持/);
+				assert.deepEqual(Array.from(ctx.result.reserve_titles), ['入力したタイトル']);
+				assert.deepEqual(Array.from(ctx.result.channels), ['station']);
+				vm.runInContext("var failedXHR = pendingXHR; save(); failedXHR.status = 201; failedXHR.loaded();", ctx);
+				assert.equal(ctx.editor.closed, undefined, 'late results from a failed attempt cannot complete a retry');
+				assert.equal(ctx.requests.length, 2);
+				assert.equal(JSON.stringify(ctx.requests[1].body), body);
+				assert.equal(ctx.message.hidden, true);
+				vm.runInContext('pendingXHR.status = 201; pendingXHR.loaded(); pendingXHR.loaded();', ctx);
+				assert.equal(ctx.editor.closed, true);
+				assert.equal(ctx.modals.length, 2, 'success is handled only once');
+				assert.equal(ctx.modals[1].title, '成功');
+				assert.equal(ctx.Chinachu.scope._cleanups.length, 0);
+				assert.equal(ctx.events.length, resource === 'exclusion-rules' ? 1 : 0);
+			});
+		}
+		it('keeps invalid input editable without saving from ' + action, function() {
+			const ctx = open(action);
+			vm.runInContext('validationResult = false; save();', ctx);
+			assert.match(ctx.message.textContent, /数値/);
+			vm.runInContext('validationResult = true;', ctx);
+			for (const key of ['reserve_titles', 'ignore_titles', 'reserve_descriptions', 'ignore_descriptions']) {
+				vm.runInContext(`result.${key} = ['[']; save();`, ctx);
+				assert.match(ctx.message.textContent, /正規表現/);
+				assert.deepEqual(Array.from(ctx.result[key]), ['[']);
+				vm.runInContext(`result.${key} = [];`, ctx);
+			}
+			vm.runInContext('result.duration = { min: 1800, max: 900 }; save();', ctx);
+			assert.match(ctx.message.textContent, /最短長さ/);
+			assert.equal(ctx.requests.length, 0);
+			assert.equal(ctx.modals.length, 1);
+			assert.equal(ctx.saveButton.disabled, undefined);
+			assert.ok(!ctx.editor.element.inert);
+			vm.runInContext("result.duration = {}; result.reserve_titles = ['修正済み']; save();", ctx);
+			assert.equal(ctx.requests.length, 1);
+			assert.equal(ctx.editor.closed, true);
+		});
+		it('validates normalized keywords while preserving their original text from ' + action, function() {
+			const ctx = open(action);
+			const keys = ['reserve_titles', 'ignore_titles', 'reserve_descriptions', 'ignore_descriptions'];
+			vm.runInContext("global.chinachu.status = { feature: { normalizationForm: 'NFKC' } };", ctx);
+			for (const key of keys) ctx.result[key] = ['[A-Z］'];
+			vm.runInContext('save();', ctx);
+			assert.equal(ctx.requests.length, 1, 'normalization makes the mixed-width character class valid');
+			assert.equal(ctx.requests[0].url, './api/' + resource + '.json');
+			for (const key of keys) {
+				assert.deepEqual(Array.from(ctx.requests[0].body[key]), ['[A-Z］'], 'saving retains the original keyword');
+			}
+			assert.equal(ctx.editor.closed, true);
+		});
+		for (const normalizationForm of ['NFKC', 'NFC', undefined]) {
+			it('rejects keywords that are invalid after ' + normalizationForm + ' normalization from ' + action, function() {
+				const ctx = open(action);
+				ctx.global.chinachu.status = { feature: { normalizationForm } };
+				// NFKC turns the first pattern into an unclosed character class;
+				// the mixed-width class stays invalid under NFC or without normalization.
+				ctx.result.reserve_titles = [normalizationForm === 'NFKC' ? '［A-Z' : '[A-Z］'];
+				vm.runInContext('save();', ctx);
+				assert.equal(ctx.requests.length, 0);
+				assert.match(ctx.message.textContent, /正規表現/);
+				assert.equal(ctx.editor.closed, undefined);
+			});
+		}
+	}
+	it('allows cancellation after a failure and cleans up a departing page', function() {
+		const ctx = open('new ui.NewRule()');
+		vm.runInContext('deferSave = true; save(); pendingXHR.status = 500; pendingXHR.loaded(); editor.close();', ctx);
+		assert.equal(ctx.editor.closed, true);
+		assert.equal(ctx.Chinachu.scope._cleanups.length, 0);
+		const navigating = open('new ui.NewRule(true)');
+		vm.runInContext('deferSave = true; save(); Chinachu.scope._cleanups.splice(0).forEach(cleanup => cleanup()); pendingXHR.status = 201; pendingXHR.loaded();', navigating);
+		assert.equal(navigating.pendingXHR.aborted, true);
+		assert.equal(navigating.modals.length, 1, 'a departing page cannot open a result dialog');
+		assert.equal(navigating.events.length, 0);
+	});
+	it('recovers from a synchronous transport failure', function() {
+		const ctx = open('new ui.NewRule()');
+		vm.runInContext("XMLHttpRequest = function() { this.addEventListener = function() {}; this.open = function() { throw new Error('transport unavailable'); }; }; save();", ctx);
+		assert.equal(ctx.modals.length, 1);
+		assert.equal(ctx.saveButton.disabled, false);
+		assert.equal(ctx.editor.element.inert, false);
+		assert.match(ctx.message.textContent, /保存結果を確認できません/);
+	});
+});
 
 describe('common exclusion rule GUI', function () {
 	for (const exclusion of [false, true]) {

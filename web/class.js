@@ -1441,6 +1441,117 @@
 		}
 	});
 
+	function createRuleDialog(form, isExclusion) {
+		var saving = false, closed = false, activeRequest = null;
+		var scope = Chinachu.scope;
+		var message = ChinachuUI.createElement('div', {
+			'class': 'chinachu-rule-error', role: 'alert', tabindex: '-1', hidden: true
+		});
+		form.element.prepend(message);
+		function showError(text) {
+			message.textContent = text;
+			message.hidden = false;
+			message.focus();
+		}
+		function dispose() {
+			if (closed) return;
+			closed = true;
+			if (scope && scope._cleanups) {
+				var index = scope._cleanups.indexOf(dispose);
+				if (index !== -1) scope._cleanups.splice(index, 1);
+			}
+			var xhr = activeRequest;
+			activeRequest = null;
+			if (xhr) xhr.abort();
+		}
+		var modal = ChinachuUI.createModal({
+			title: isExclusion ? '共通除外ルールの新規作成' : '新規作成',
+			subtitle: isExclusion ? '一致した自動予約をスキップします。手動予約は対象外です。保存後、スケジューラー実行時に反映します。' : '',
+			element: form.element,
+			onBeforeClose: function() { return !saving; },
+			onClose: dispose,
+			buttons: [{
+				label: '作成', color: '@pink',
+				onSelect: function(e) {
+					if (saving || closed) return;
+					message.hidden = true;
+					if (!form.validate()) {
+						showError('入力内容を確認してください。数値は各項目の範囲内で指定してください。');
+						return;
+					}
+					var query = form.getResult();
+					var feature = global.chinachu.status && global.chinachu.status.feature;
+					var normalizationForm = feature && feature.normalizationForm;
+					var keywords = { reserve_titles: '対象タイトル', ignore_titles: '無視タイトル', reserve_descriptions: '対象説明文', ignore_descriptions: '無視説明文' };
+					for (var key in keywords) {
+						try {
+							(query[key] || []).forEach(function(value) {
+								new RegExp(normalizationForm ? value.normalize(normalizationForm) : value);
+							});
+						} catch (error) {
+							showError(keywords[key] + 'の正規表現が正しくありません。入力内容を修正してください。');
+							return;
+						}
+					}
+					var duration = query.duration || {};
+					if (duration.min != null && duration.max != null && duration.min > duration.max) {
+						showError('最短長さは最長長さ以下で指定してください。');
+						return;
+					}
+					if (!duration.min) delete duration.min;
+					if (!duration.max) delete duration.max;
+					if (!Object.keys(duration).length) delete query.duration;
+					Object.keys(query).forEach(function(key) {
+						if (Array.isArray(query[key]) && !query[key].length) delete query[key];
+					});
+					var button = e.targetButton;
+					var xhr = activeRequest = new XMLHttpRequest();
+					saving = true;
+					form.element.inert = true;
+					button.disable();
+					function finishSave(event) {
+						if (closed || activeRequest !== xhr) return;
+						activeRequest = null;
+						saving = false;
+						form.element.inert = false;
+						button.enable();
+						if (event.type === 'load' && xhr.status === 201) {
+							modal.close();
+							if (isExclusion) Chinachu.emit(document, 'chinachu:exclusion-rules');
+							ChinachuUI.createModal({ title: '成功', text: 'ルール作成に成功しました' }).show();
+							return;
+						}
+						var text;
+						if (!xhr.status || event.type !== 'load') {
+							text = '通信が完了せず、保存結果を確認できませんでした。接続を確認し、ルール一覧に作成済みか確認してから再試行してください。';
+						} else if (xhr.status === 400) {
+							text = '入力内容が受け付けられませんでした。条件' + (isExclusion ? '' : 'や録画ファイル名フォーマット') + 'を確認してください。';
+						} else if (xhr.status === 401 || xhr.status === 403) {
+							text = 'ルールを作成する権限を確認できませんでした。ログイン状態を確認してください。';
+						} else if (xhr.status === 409) {
+							text = 'ルールが更新されているため保存できませんでした。ルール一覧を確認してから再試行してください。';
+						} else {
+							text = 'ルール作成に失敗しました (' + xhr.status + ')。時間をおいて再試行してください。';
+						}
+						showError(text + ' 入力内容は保持されています。');
+					}
+					['load', 'error', 'abort', 'timeout'].forEach(function(type) { xhr.addEventListener(type, finishSave); });
+					try {
+						xhr.open('POST', './api/' + (isExclusion ? 'exclusion-rules' : 'rules') + '.json');
+						xhr.timeout = 30000;
+						xhr.setRequestHeader('Content-Type', 'application/json');
+						xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+						xhr.send(JSON.stringify(query));
+					} catch (error) { finishSave({ type: 'error' }); }
+				}
+			}, {
+				label: 'キャンセル', onSelect: function() { modal.close(); }
+			}]
+		}).show();
+		if (scope && scope._cleanups) scope._cleanups.push(dispose);
+		return modal;
+	}
+
 	ui.NewRule = Chinachu.createClass({
 		initialize: function _init(isExclusion) {
 			this.isExclusion = !!isExclusion;
@@ -1451,264 +1562,195 @@
 		},
 		create: function _create() {
 			var isExclusion = this.isExclusion;
-			var resource = isExclusion ? 'exclusion-rules' : 'rules';
-			if (false) { //のちにエラー処理を追加
-				var modal = new ChinachuUI.Modal({
-					title: 'エラー',
-					text : '不正なアクセスです。'
-				}).show();
-			} else {
-				var form = ChinachuUI.createForm({
-					fields: [
-						{
-							key  : 'types',
-							label: 'タイプ',
-							input: {
-								type : 'checkboxes',
-								items: ['GR', 'BS', 'CS', 'SKY']
-							}
-						},
-						{
-							key  : 'categories',
-							label: 'ジャンル',
-							input: {
-								type : 'checkboxes',
-								items: [
-									'anime', 'information', 'news', 'sports', 'variety', 'documentary',
-									'drama', 'music', 'cinema', 'theater', 'hobby', 'welfare', 'etc'
-								]
-							}
-						},
-						{
-							key  : 'channels',
-							label: '対象CH',
-							input: {
-								type : formInputTypeChannels,
-								style: { width: '100%' }
-							}
-						},
-						{
-							key  : 'ignore_channels',
-							label: '無視CH',
-							input: {
-								type : formInputTypeChannels,
-								emptyText: '除外なし',
-								style: { width: '100%' }
-							}
-						},
-						{
-							key  : 'reserve_flags',
-							label: '対象フラグ',
-							input: {
-								type : 'checkboxes',
-								items: ['新', '終', '再', '字', 'デ', '解', '無', '二', 'Ｓ']
-							}
-						},
-						{
-							key  : 'ignore_flags',
-							label: '無視フラグ',
-							input: {
-								type : 'checkboxes',
-								items: ['新', '終', '再', '字', 'デ', '解', '無', '二', 'Ｓ']
-							}
-						},
-						{
-							key  : 'start',
-							point: '/hour/start',
-							label: '何時から',
-							input: {
-								type     : 'number',
-								style    : { width: '60px' },
-								maxLength: 2,
-								max      : 24,
-								min      : 0,
-								val      : 0
-							}
-						},
-						{
-							key   : 'end',
-							point : '/hour/end',
-							label : '何時まで',
-							input : {
-								type     : 'number',
-								style    : { width: '60px' },
-								maxLength: 2,
-								max      : 24,
-								min      : 0,
-								val      : 24
-							}
-						},
-						{
-							key  : 'mini',
-							point: '/duration/min',
-							label: '最短長さ(秒)',
-							input: {
-								type : 'number',
-								style: { width: '80px' }
-							}
-						},
-						{
-							key   : 'maxi',
-							point: '/duration/max',
-							label : '最長長さ(秒)',
-							input : {
-								type : 'number',
-								style: { width: '80px' }
-							}
-						},
-						{
-							key: 'reserve_fields_operator',
-							label: 'タイトルと説明文の関係',
-							input: {
-								type: 'radios',
-								val: 'and',
-								items: [
-									{ label: '両方に一致 (AND)', value: 'and' },
-									{ label: 'どちらかに一致 (OR)', value: 'or' }
-								]
-							}
-						},
-						{
-							key: 'reserve_titles_operator',
-							label: '対象タイトル内のキーワード',
-							input: {
-								type: 'radios',
-								val: 'or',
-								items: [
-									{ label: 'すべてに一致 (AND)', value: 'and' },
-									{ label: 'いずれかに一致 (OR)', value: 'or' }
-								]
-							}
-						},
-						{
-							key: 'reserve_descriptions_operator',
-							label: '対象説明文内のキーワード',
-							input: {
-								type: 'radios',
-								val: 'or',
-								items: [
-									{ label: 'すべてに一致 (AND)', value: 'and' },
-									{ label: 'いずれかに一致 (OR)', value: 'or' }
-								]
-							}
-						},
-						{
-							key   : 'reserve_titles',
-							label : isExclusion ? '除外するタイトル' : '対象タイトル',
-							input : {
-								type : formInputTypeStrings,
-								style: { width: '100%' }
-							}
-						},
-						{
-							key   : 'ignore_titles',
-							label : '無視タイトル',
-							input : {
-								type : formInputTypeStrings,
-								style: { width: '100%' }
-							}
-						},
-						{
-							key   : 'reserve_descriptions',
-							label : isExclusion ? '除外する説明文' : '対象説明文',
-							input : {
-								type : formInputTypeStrings,
-								style: { width: '100%' }
-							}
-						},
-						{
-							key   : 'ignore_descriptions',
-							label : '無視説明文',
-							input : {
-								type : formInputTypeStrings,
-								style: { width: '100%' }
-							}
-						},
-						{
-							key	: 'recorded_format',
-							label	: '録画ファイル名フォーマット',
-							input	: {
-								type	: 'text',
-								style	: { width: '100%' },
-							}
-						},
-						{
-							key   : 'isEnabled',
-							label : 'ルールの状態',
-							input : {
-								type : 'checkbox',
-								label: '有効にする',
-								val  : true
-							}
+			var form = ChinachuUI.createForm({
+				fields: [
+					{
+						key  : 'types',
+						label: 'タイプ',
+						input: {
+							type : 'checkboxes',
+							items: ['GR', 'BS', 'CS', 'SKY']
 						}
-					].filter(function(field) { return !isExclusion || field.key !== 'recorded_format'; })
-				});
-
-				var modal = ChinachuUI.createModal({
-					title: isExclusion ? '共通除外ルールの新規作成' : '新規作成',
-					subtitle: isExclusion ? '一致した自動予約をスキップします。手動予約は対象外です。保存後、スケジューラー実行時に反映します。' : '',
-					element: form.element,
-					buttons: [
-						{
-							label  : '作成',
-							color  : '@pink',
-							onSelect: function(e, modal) {
-								e.targetButton.disable();
-
-								var query = form.getResult();
-
-								if (!query.duration.min) {
-									delete query.duration.min;
-								}
-								if (!query.duration.max) {
-									delete query.duration.max;
-								}
-								if (!query.duration.min && !query.duration.max) {
-									delete query.duration;
-								}
-
-								var i;
-								for (i in query) {
-									if (typeof query[i] === 'object' && query[i].length === 0) {
-										delete query[i];
-									}
-								}
-
-								console.log(query);
-
-								var xhr = new XMLHttpRequest();
-
-								xhr.addEventListener('load', function () {
-									if (xhr.status === 201) {
-										if (isExclusion) { Chinachu.emit(document, 'chinachu:exclusion-rules'); }
-										ChinachuUI.createModal({
-											title: '成功',
-											text : 'ルール作成に成功しました',
-										}).show();
-									} else {
-										ChinachuUI.createModal({
-											title: '失敗',
-											text : 'ルール作成に失敗しました (' + xhr.status + ')'
-										}).show();
-									}
-									modal.close();
-								});
-
-								xhr.open('POST', './api/' + resource + '.json');
-								xhr.setRequestHeader('Content-Type', 'application/json');
-								xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-								xhr.send(JSON.stringify(query));
-							}
-						},
-						{
-							label  : 'キャンセル',
-							onSelect: function(e, modal) {
-								modal.close();
-							}
+					},
+					{
+						key  : 'categories',
+						label: 'ジャンル',
+						input: {
+							type : 'checkboxes',
+							items: [
+								'anime', 'information', 'news', 'sports', 'variety', 'documentary',
+								'drama', 'music', 'cinema', 'theater', 'hobby', 'welfare', 'etc'
+							]
 						}
-					]
-				}).show();
-			}
+					},
+					{
+						key  : 'channels',
+						label: '対象CH',
+						input: {
+							type : formInputTypeChannels,
+							style: { width: '100%' }
+						}
+					},
+					{
+						key  : 'ignore_channels',
+						label: '無視CH',
+						input: {
+							type : formInputTypeChannels,
+							emptyText: '除外なし',
+							style: { width: '100%' }
+						}
+					},
+					{
+						key  : 'reserve_flags',
+						label: '対象フラグ',
+						input: {
+							type : 'checkboxes',
+							items: ['新', '終', '再', '字', 'デ', '解', '無', '二', 'Ｓ']
+						}
+					},
+					{
+						key  : 'ignore_flags',
+						label: '無視フラグ',
+						input: {
+							type : 'checkboxes',
+							items: ['新', '終', '再', '字', 'デ', '解', '無', '二', 'Ｓ']
+						}
+					},
+					{
+						key  : 'start',
+						point: '/hour/start',
+						label: '何時から',
+						input: {
+							type     : 'number',
+							style    : { width: '60px' },
+							maxLength: 2,
+							max      : 24,
+							min      : 0,
+							val      : 0
+						}
+					},
+					{
+						key   : 'end',
+						point : '/hour/end',
+						label : '何時まで',
+						input : {
+							type     : 'number',
+							style    : { width: '60px' },
+							maxLength: 2,
+							max      : 24,
+							min      : 0,
+							val      : 24
+						}
+					},
+					{
+						key  : 'mini',
+						point: '/duration/min',
+						label: '最短長さ(秒)',
+						input: {
+							type : 'number',
+							min  : 0,
+							style: { width: '80px' }
+						}
+					},
+					{
+						key   : 'maxi',
+						point: '/duration/max',
+						label : '最長長さ(秒)',
+						input : {
+							type : 'number',
+							min  : 0,
+							style: { width: '80px' }
+						}
+					},
+					{
+						key: 'reserve_fields_operator',
+						label: 'タイトルと説明文の関係',
+						input: {
+							type: 'radios',
+							val: 'and',
+							items: [
+								{ label: '両方に一致 (AND)', value: 'and' },
+								{ label: 'どちらかに一致 (OR)', value: 'or' }
+							]
+						}
+					},
+					{
+						key: 'reserve_titles_operator',
+						label: '対象タイトル内のキーワード',
+						input: {
+							type: 'radios',
+							val: 'or',
+							items: [
+								{ label: 'すべてに一致 (AND)', value: 'and' },
+								{ label: 'いずれかに一致 (OR)', value: 'or' }
+							]
+						}
+					},
+					{
+						key: 'reserve_descriptions_operator',
+						label: '対象説明文内のキーワード',
+						input: {
+							type: 'radios',
+							val: 'or',
+							items: [
+								{ label: 'すべてに一致 (AND)', value: 'and' },
+								{ label: 'いずれかに一致 (OR)', value: 'or' }
+							]
+						}
+					},
+					{
+						key   : 'reserve_titles',
+						label : isExclusion ? '除外するタイトル' : '対象タイトル',
+						input : {
+							type : formInputTypeStrings,
+							style: { width: '100%' }
+						}
+					},
+					{
+						key   : 'ignore_titles',
+						label : '無視タイトル',
+						input : {
+							type : formInputTypeStrings,
+							style: { width: '100%' }
+						}
+					},
+					{
+						key   : 'reserve_descriptions',
+						label : isExclusion ? '除外する説明文' : '対象説明文',
+						input : {
+							type : formInputTypeStrings,
+							style: { width: '100%' }
+						}
+					},
+					{
+						key   : 'ignore_descriptions',
+						label : '無視説明文',
+						input : {
+							type : formInputTypeStrings,
+							style: { width: '100%' }
+						}
+					},
+					{
+						key	: 'recorded_format',
+						label	: '録画ファイル名フォーマット',
+						input	: {
+							type	: 'text',
+							style	: { width: '100%' },
+						}
+					},
+					{
+						key   : 'isEnabled',
+						label : 'ルールの状態',
+						input : {
+							type : 'checkbox',
+							label: '有効にする',
+							val  : true
+						}
+					}
+				].filter(function(field) { return !isExclusion || field.key !== 'recorded_format'; })
+			});
+
+			createRuleDialog(form, isExclusion);
 
 			return this;
 		}
@@ -1820,6 +1862,7 @@
 							label: '最短長さ(秒)',
 							input: {
 								type : 'number',
+								min  : 0,
 								style: { width: '80px' }
 							}
 						},
@@ -1829,6 +1872,7 @@
 							label : '最長長さ(秒)',
 							input : {
 								type : 'number',
+								min  : 0,
 								style: { width: '80px' }
 							}
 						},
@@ -1921,68 +1965,7 @@
 					]
 				});
 
-				var modal = ChinachuUI.createModal({
-					title: '新規作成',
-					element: form.element,
-					buttons: [
-						{
-							label  : '作成',
-							color  : '@pink',
-							onSelect: function(e, modal) {
-								e.targetButton.disable();
-
-								var query = form.getResult();
-
-								if (!query.duration.min) {
-									delete query.duration.min;
-								}
-								if (!query.duration.max) {
-									delete query.duration.max;
-								}
-								if (!query.duration.min && !query.duration.max) {
-									delete query.duration;
-								}
-
-								var i;
-								for (i in query) {
-									if (typeof query[i] === 'object' && query[i].length === 0) {
-										delete query[i];
-									}
-								}
-
-								console.log(query);
-
-								var xhr = new XMLHttpRequest();
-
-								xhr.addEventListener('load', function () {
-									if (xhr.status === 201) {
-										ChinachuUI.createModal({
-											title: '成功',
-											text : 'ルール作成に成功しました',
-										}).show();
-									} else {
-										ChinachuUI.createModal({
-											title: '失敗',
-											text : 'ルール作成に失敗しました (' + xhr.status + ')'
-										}).show();
-									}
-									modal.close();
-								});
-
-								xhr.open('POST', './api/rules.json');
-								xhr.setRequestHeader('Content-Type', 'application/json');
-								xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-								xhr.send(JSON.stringify(query));
-							}
-						},
-						{
-							label  : 'キャンセル',
-							onSelect: function(e, modal) {
-								modal.close();
-							}
-						}
-					]
-				}).show();
+				createRuleDialog(form, false);
 			}
 
 			return this;
