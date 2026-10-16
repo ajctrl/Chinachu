@@ -39,18 +39,18 @@ div.timetable > div.board > div.rect {
 }
 div.timetable > div.board > div.rect:hover { box-shadow  : inset 0 0 0 2px rgba(194,65,134,0.4); }
 div.timetable > div.board > div.rect.reserved,
-div.timetable > div.board > div.rect.recording { background  : red !important; }
+div.timetable > div.board > div.rect.recording { background  : var(--chinachu-reserved-color) !important; }
 div.timetable > div.board > div.rect.reserved:hover,
 div.timetable > div.board > div.rect.recording:hover { background  : white !important; }
 div.timetable > div.board > div.rect.skip { background: linear-gradient(to left, var(--program-genre-color, #ccc) 5px, gray 5px) !important; }
 div.timetable > div.board > div.rect.skip:hover { background: linear-gradient(to left, var(--program-genre-color, #ccc) 5px, white 5px) !important; }
 div.timetable > div.board > div.rect.conflict { background  : gray !important; }
-/* Reserve state and genre share the background without changing text bounds.
+/* Reservation/recording state and genre share the background without changing text bounds.
 * A hard stop keeps the 5px genre band visible even in very short programs. */
-div.timetable > div.board > div.rect.reserved:not(.recording):not(.skip):not(.conflict) { background: linear-gradient(to left, var(--program-genre-color, #ccc) 5px, var(--chinachu-reserved-color) 5px) !important; }
-div.timetable > div.board > div.rect.reserved:not(.recording):not(.skip):not(.conflict):hover { background: linear-gradient(to left, var(--program-genre-color, #ccc) 5px, var(--chinachu-reserved-hover-color) 5px) !important; }
-div.timetable > div.board > div.rect.reserved:not(.recording):not(.skip):not(.conflict) > div > h4,
-div.timetable > div.board > div.rect.reserved:not(.recording):not(.skip):not(.conflict) > div > span { color: var(--chinachu-reserved-text-color); }
+div.timetable > div.board > div.rect:is(.reserved, .recording):not(.skip):not(.conflict) { background: linear-gradient(to left, var(--program-genre-color, #ccc) 5px, var(--chinachu-reserved-color) 5px) !important; }
+div.timetable > div.board > div.rect:is(.reserved, .recording):not(.skip):not(.conflict):hover { background: linear-gradient(to left, var(--program-genre-color, #ccc) 5px, var(--chinachu-reserved-hover-color) 5px) !important; }
+div.timetable > div.board > div.rect:is(.reserved, .recording):not(.skip):not(.conflict) > div > h4,
+div.timetable > div.board > div.rect:is(.reserved, .recording):not(.skip):not(.conflict) > div > span { color: var(--chinachu-reserved-text-color); }
 div.timetable > div.board > div.rect.muted { opacity     : 0.5 !important; }
 div.timetable > div.board > div.rect.spot {
  z-index     : 1;
@@ -103,7 +103,7 @@ div.timetable > div.board > div.rect:hover > div > h4 { color      : #000; }
 div.timetable > div.board > div.rect.reserved:not(:hover) > div > span,
 div.timetable > div.board > div.rect.recording:not(:hover) > div > span { color      : rgba(255,255,255,0.8); }
 div.timetable > div.board > div.rect.reserved:hover > div > h4,
-div.timetable > div.board > div.rect.recording:hover > div > h4 { color      : red; }
+div.timetable > div.board > div.rect.recording:hover > div > h4 { color      : var(--chinachu-reserved-color); }
 div.timetable > div.board > div.rect.reserved > div,
 div.timetable > div.board > div.rect.recording > div { color      : white; }
 div.timetable > div.board > div.rect.recording > div { font-weight: bold; }

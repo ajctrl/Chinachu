@@ -16,8 +16,9 @@ div.timeline { background: #343434; color: #333; isolation: isolate; }
 .timeline > .board > .rect { position: absolute; box-sizing: border-box; overflow: hidden; cursor: pointer; border: 1px solid #5555; border-radius: 2px; }
 .timeline > .board > .rect > div { overflow: hidden; padding: 3px; font-size: 12px; line-height: 17px; white-space: nowrap; text-overflow: ellipsis; }
 .timeline > .board > .rect:hover, .timeline > .board > .rect.spot { outline: 2px solid #e05f97; outline-offset: -2px; }
-.timeline > .board > .rect.reserved { border-bottom: 3px solid #c24186; }
-.timeline > .board > .rect.recording { border-bottom: 3px solid #c22; font-weight: bold; }
+.timeline > .board > .rect.reserved,
+.timeline > .board > .rect.recording { border-bottom: 3px solid var(--chinachu-accent-color); }
+.timeline > .board > .rect.recording { font-weight: bold; }
 .timeline > .board > .rect.skip { opacity: .55; text-decoration: line-through; }
 .timeline > .drawer { position: absolute; z-index: 5; right: 12px; bottom: 12px; box-sizing: border-box; width: min(380px, calc(100% - 24px)); max-height: calc(100% - 54px); overflow: auto; border: 1px solid #ccc; border-radius: 6px; background: #fff; box-shadow: 0 4px 18px #0005; }
 .timeline > .drawer.hide { display: none; }
