@@ -510,9 +510,9 @@ div.middle > div.main > div.main-body > div.storage-page {
 .program-meta .soon { color: green; }
 .program-meta .now { color: red; }
 .program-detail { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
-.program-full-title { margin: 16px 0; }
-.program-full-title-label { color: #777; font-size: 12px; }
-.program-full-title-text { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+.program-info { margin: 16px 0; }
+.program-info-label { color: #777; font-size: 12px; }
+.program-info-text { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
 .channel-cards .channel-card wa-progress-bar { --height: 2px; }
 .channel-cards .channel-card wa-button.program { display: block; width: 100%; }
 .channel-cards .channel-card wa-button.program::part(base) { width: 100%; text-align: left; justify-content: flex-start; }

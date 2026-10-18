@@ -286,17 +286,15 @@ Chinachu.definePage({
 		var detail = ChinachuUI.createElement('p', { 'class': 'program-detail' }).insertTo(r1L);
 		this.appendDescription(detail, program.detail);
 
-		var fullTitle = ChinachuUI.createElement('div', { 'class': 'program-full-title' }).insertTo(r1L);
-		ChinachuUI.createElement('div', { 'class': 'program-full-title-label' }).insertText('完全なタイトル').insertTo(fullTitle);
-		ChinachuUI.createElement('p', { 'class': 'program-full-title-text' }).insertText(program.fullTitle || '').insertTo(fullTitle);
+		function appendInfo(label, value) {
+			var info = ChinachuUI.createElement('div', { 'class': 'program-info' }).insertTo(r1L);
+			ChinachuUI.createElement('div', { 'class': 'program-info-label' }).insertText(label).insertTo(info);
+			ChinachuUI.createElement('p', { 'class': 'program-info-text' }).insertText(value).insertTo(info);
+		}
+		appendInfo('完全なタイトル', program.fullTitle || '');
 
 		if (program.command) {
-			new ChinachuUI.Alert({
-				title       : '録画パラメーター',
-				type        : 'white',
-				body        : program.command,
-				disableClose: true
-			}).render(r1L);
+			appendInfo('録画パラメーター', program.command);
 		}
 
 		if (program._isRecorded) {
@@ -314,12 +312,7 @@ Chinachu.definePage({
 
 					if (this.app.pm.p.id !== this.id) return;
 
-					new ChinachuUI.Alert({
-						title       : 'ファイルサイズ',
-						type        : 'white',
-						body        : (t.responseJSON.size / 1024 / 1024 / 1024 / 1).toFixed(2) + 'GB',
-						disableClose: true
-					}).render(r1L);
+					appendInfo('ファイルサイズ', (t.responseJSON.size / 1024 / 1024 / 1024 / 1).toFixed(2) + 'GB');
 
 					// 録画済みサムネイル
 					var imgurl = "./api/recorded/" + program.id + "/preview.jpg?width=480&height=270";
