@@ -46,7 +46,8 @@ GUIでの更新は一時ファイルからのアトミックな置き換えで�
 `normalizationForm` も適用します。タイトル・説明文それぞれの配列内は
 `reserve_titles_operator`・`reserve_descriptions_operator` で AND／OR を選択でき、
 省略時は OR です。タイトルと説明文の間は `reserve_fields_operator` で選択し、
-省略時は AND です。放送波・時間帯などの条件は引き続き AND、ルール同士は OR です。
+省略時は AND です。GUIで片方の対象キーワード欄を空欄にすると、
+AND／ORのどちらを選んでも入力した側だけで判定します。放送波・時間帯などの条件は引き続き AND、ルール同士は OR です。
 `rules.sample.json` にも演算子の例があります。最後の無効なルールは、
 タイトルに「映画」または「劇場版」が含まれるか、説明文に「日本語」と「吹替」の
 両方が含まれる番組を予約する例です。

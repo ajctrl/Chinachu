@@ -418,6 +418,7 @@ describe('common exclusion rule GUI', function () {
 		for (const [i, key] of keys.entries()) {
 			assert.equal(ctx.forms[0].fields.find(f => f.key === key).input.val, i === 0 ? 'and' : 'or');
 		}
+		assert.deepEqual(Array.from(ctx.forms[0].fields.find(f => f.key === 'reserve_fields_operator').input.items, item => item.value), ['and', 'or']);
 		vm.runInContext("Object.assign(rules[0], { reserve_fields_operator: 'or', reserve_titles_operator: 'and', reserve_descriptions_operator: 'and' }); new ui.EditRule(0);", ctx);
 		for (const [i, key] of keys.entries()) {
 			assert.equal(ctx.forms[1].fields.find(f => f.key === key).input.val, i === 0 ? 'or' : 'and');

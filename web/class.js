@@ -1184,15 +1184,16 @@
         }
       }, {
         key: 'reserve_fields_operator',
-        label: 'タイトルと説明文の関係',
+        label: 'キーワードの判定対象',
+        description: '片方が空欄の場合は、入力した側だけで判定します。',
         input: {
           type: 'radios',
           val: rule.reserve_fields_operator || 'and',
           items: [{
-            label: '両方に一致 (AND)',
+            label: 'タイトルと説明文の両方に一致 (AND)',
             value: 'and'
           }, {
-            label: 'どちらかに一致 (OR)',
+            label: 'タイトルか説明文のどちらかに一致 (OR)',
             value: 'or'
           }]
         }
@@ -1634,13 +1635,14 @@
 					},
 					{
 						key: 'reserve_fields_operator',
-						label: 'タイトルと説明文の関係',
+						label: 'キーワードの判定対象',
+						description: '片方が空欄の場合は、入力した側だけで判定します。',
 						input: {
 							type: 'radios',
 							val: 'and',
 							items: [
-								{ label: '両方に一致 (AND)', value: 'and' },
-								{ label: 'どちらかに一致 (OR)', value: 'or' }
+								{ label: 'タイトルと説明文の両方に一致 (AND)', value: 'and' },
+								{ label: 'タイトルか説明文のどちらかに一致 (OR)', value: 'or' }
 							]
 						}
 					},
@@ -1848,13 +1850,14 @@
 						},
 						{
 							key: 'reserve_fields_operator',
-							label: 'タイトルと説明文の関係',
+							label: 'キーワードの判定対象',
+							description: '片方が空欄の場合は、入力した側だけで判定します。',
 							input: {
 								type: 'radios',
 								val: 'and',
 								items: [
-									{ label: '両方に一致 (AND)', value: 'and' },
-									{ label: 'どちらかに一致 (OR)', value: 'or' }
+									{ label: 'タイトルと説明文の両方に一致 (AND)', value: 'and' },
+									{ label: 'タイトルか説明文のどちらかに一致 (OR)', value: 'or' }
 								]
 							}
 						},

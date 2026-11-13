@@ -58,6 +58,8 @@
 .chinachu-form-input { min-width: 0; }
 .chinachu-form-input > wa-input, .chinachu-form-input > wa-select, .chinachu-form-input > wa-textarea { width: 100%; }
 .chinachu-form-error { color: #a11; font-size: 12px; }
+.chinachu-form-description { margin-top: 6px; color: #666; font-size: 11px; font-weight: normal; line-height: 1.6; text-align: left; }
+.chinachu-choice-group ~ .chinachu-form-description { margin-left: 17px; }
 .chinachu-choice-group { display: flex; gap: 7px 14px; flex-wrap: wrap; }
 .chinachu-radio { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 4px 0; cursor: pointer; }
 .chinachu-radio input { margin: 0; accent-color: #b3005f; }

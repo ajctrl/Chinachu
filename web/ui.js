@@ -652,6 +652,12 @@
         if (input.style) Object.assign(control.style, input.style);
         set(initial);
         body.append(control, error);
+        if (specification.description) {
+            var description = element('div', { id: id + '-description', 'class': 'chinachu-form-description' });
+            description.textContent = specification.description;
+            control.setAttribute('aria-describedby', description.id);
+            body.appendChild(description);
+        }
         wrapper.append(label, body);
         this.element.appendChild(wrapper);
         this.fields.push({ specification: specification, input: input, type: type, element: wrapper, control: control, get: get, set: set, error: error, active: true });
