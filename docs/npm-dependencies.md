@@ -9,12 +9,13 @@
 | パッケージ | 更新前 | 更新後 | 使用箇所 |
 | --- | --- | --- | --- |
 | socket.io / socket.io-client | 4.8.3 | 4.8.4 | 更新通知、認証、ブラウザー・接続テスト |
-| mirakurun | 4.1.3 | 4.1.5 | 番組情報・録画ストリームのクライアント |
-| nodemailer | 9.0.5 | 10.0.15 | 空き容量不足時のsendmail通知 |
+| mirakurun | 4.1.3 | 4.3.0 | 番組情報・録画ストリームのクライアント |
+| nodemailer | 9.0.5 | 10.5.0 | 空き容量不足時のsendmail通知 |
 | mocha | 11.8.0 | 12.0.3 | テスト実行 |
 | http-auth | 2.4.11 | 4.2.1 | WebのBasic認証 |
 | easy-table | 0.2.0 | 1.2.0 | CLIの番組・ルール一覧 |
 | opts | 1.2.7 | 2.0.2 | CLIとスケジューラーの引数 |
+| dateformat | 5.0.3 | 5.0.5 | 録画ファイル名の日付書式 |
 
 間接依存もロックファイルで修正版に更新しています。Socket.IOのEngine.IOは6.6.11です。
 `http-auth`の旧版によるHTTPモジュールの変更に依存せず、HTTP/HTTPSサーバーへ
@@ -41,12 +42,23 @@
 
 ## uuidの限定的な指定
 
-Mirakurun 4.1.5の `jsonrpc2-ws` が古いuuidを要求するため、ルートの `overrides` で
+Mirakurun 4.3.0の `jsonrpc2-ws` が古いuuidを要求するため、ルートの `overrides` で
 この依存経路だけをuuid 11.1.1に固定しています。その他の依存経路への一律指定は行いません。
 
 uuid 11.1.1は[出力バッファの境界検査に関する脆弱性の修正版](https://github.com/uuidjs/uuid/security/advisories/GHSA-w5hq-g745-h8pq)です。
 `jsonrpc2-ws`で使用する `v4()` の互換性は、実際にJSON-RPC接続を作成し、接続IDを応答するテストで確認します。
 上流の依存指定が修正版へ更新されたら、この `overrides` の削除を検討します。
+
+## Mochaの依存の限定的な指定
+
+Mocha 12.0.3が要求するglob 13系とminimatch 10系には、処理量やキャンセルに関する
+脆弱性があるため、`overrides.mocha` でglob 14.0.6・minimatch 11.0.8を指定しています。
+Mochaのファイル探索・除外と、全テストの実行を確認しています。
+Mirakurun側がバージョンを限定せず要求するglobも、ロックファイルでは14.0.6を共有します。
+上流が修正版を要求するようになったら、この指定の削除を検討します。
+
+修正内容は[globの変更履歴](https://github.com/isaacs/node-glob/blob/main/changelog.md)と
+[minimatchのセキュリティ情報](https://github.com/advisories/GHSA-g3hv-75wg-m249)を参照してください。
 
 ## 検証
 

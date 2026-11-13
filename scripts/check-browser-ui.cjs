@@ -175,6 +175,7 @@ async function checkRuleDismissal(page, touch = false) {
             await editor.getByRole('dialog').waitFor();
             // An uncommitted keyword must also be checked when Escape is pressed.
             const keywords = editor.locator('.chinachu-tokenizer wa-input').first().getByRole('textbox');
+            const originalKeywords = await page.evaluate(() => latestForm.getResult({ commit: false }).reserve_titles);
             const saveButton = editor.locator('.chinachu-dialog-actions > wa-button').first();
             assert.equal(await saveButton.getAttribute('data-color'), null, 'unchanged rules use a neutral save button');
             const start = editor.locator('wa-input[aria-label="何時から"]').getByRole('spinbutton');
@@ -191,8 +192,23 @@ async function checkRuleDismissal(page, touch = false) {
             await keywords.fill('');
             assert.equal(await saveButton.getAttribute('data-color'), null);
             await keywords.fill('未保存のキーワード');
+            const nativeEditor = await editor.getByRole('dialog').elementHandle();
             await dismiss();
             const confirmation = page.locator('wa-dialog[label="未保存の変更"]');
+            if (action === 'cancel') {
+                await editor.waitFor({ state: 'detached' });
+                assert.equal(await confirmation.count(), 0, 'Cancel discards edits without confirmation');
+                assert.equal(await nativeEditor.evaluate(dialog => dialog.open), false, 'Cancel releases the native dialog focus trap');
+                assert.equal(await page.evaluate(() => document.documentElement.classList.contains('wa-scroll-lock')), false);
+
+                await page.evaluate(exclusion => { new chinachu.ui.EditRule(0, exclusion); }, exclusion);
+                await editor.getByRole('dialog').waitFor();
+                assert.deepEqual(await page.evaluate(() => latestForm.getResult({ commit: false }).reserve_titles), originalKeywords, 'reopening after Cancel restores the saved keywords');
+                assert.equal(await keywords.inputValue(), '', 'Cancel discards the uncommitted keyword draft');
+                await dismiss();
+                await editor.waitFor({ state: 'detached' });
+                continue;
+            }
             await confirmation.getByRole('dialog').waitFor();
             await page.evaluate(() => {
                 window.ruleNativeDialogs = ['未保存の変更', document.querySelector('wa-dialog[label$="ルール編集"]').label]
@@ -222,7 +238,7 @@ async function checkRuleDismissal(page, touch = false) {
             await confirmation.waitFor({ state: 'detached' });
         }
     }
-    console.log('Rule dismissal passed (' + (touch ? '360x720 touch' : 'desktop') + '): outside click, close button, Escape and Cancel check unsaved keywords for normal/exclusion rules.');
+    console.log('Rule dismissal passed (' + (touch ? '360x720 touch' : 'desktop') + '): outside click, close button and Escape confirm unsaved keywords; Cancel discards edits immediately for normal/exclusion rules.');
 }
 
 async function closeSuccess(page) {
