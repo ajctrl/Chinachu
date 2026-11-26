@@ -1,0 +1,28 @@
+name: Verify Ace
+
+on:
+  push:
+    paths: &ace_paths
+      - web/lib/ace
+      - .gitmodules
+      - .github/workflows/ace.yml
+  pull_request:
+    paths: *ace_paths
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out the pinned Ace commit
+        run: git submodule update --init --depth 1 -- web/lib/ace
+      - name: Check the settings editor assets
+        working-directory: web/lib/ace/src-min-noconflict
+        run: |
+          for file in ace.js mode-json.js theme-github.js worker-json.js; do
+            test -s "$file" || { echo "Missing or empty Ace asset: $file"; exit 1; }
+            node --check "$file"
+          done

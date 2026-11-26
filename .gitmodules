@@ -1,3 +1,4 @@
 [submodule "web/lib/ace"]
 	path = web/lib/ace
 	url = https://github.com/ajaxorg/ace-builds
+	branch = v1.45.2

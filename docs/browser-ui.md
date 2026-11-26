@@ -6,9 +6,9 @@ Tabulator を使用します。npm のサーバー依存とは別に、ブラウ
 
 | 用途 | 同梱ライブラリ |
 | --- | --- |
-| ボタン、ダイアログ、フォーム、タブ、スライダー | Web Awesome 3.14.0 (MIT) |
-| 一覧表の仮想スクロール、ソート、選択 | Tabulator 6.7.1 (MIT) |
-| 設定のJSON編集 | Ace 1.45.2 (BSD-3-Clause)、固定したサブモジュール |
+| ボタン、ダイアログ、フォーム、タブ、スライダー | Web Awesome (MIT) |
+| 一覧表の仮想スクロール、ソート、選択 | Tabulator (MIT) |
+| 設定のJSON編集 | Ace (BSD-3-Clause)、固定したサブモジュール |
 | サーバーからの更新通知 | サーバーが配信するSocket.IOクライアント |
 | 日本語フォント | Noto Sans JP variable WOFF2 (SIL OFL 1.1) |
 
@@ -83,7 +83,11 @@ JavaScriptで画面幅を判定する場合は、各画面で `matchMedia` を�
 
 各ディレクトリの `vendor.json` にバージョン、配布元、SHA-512 integrityを記録し、
 ライセンスも同梱しています。Web Awesomeは使用中の部品、その依存モジュール、
-日本語訳とテーマのみを保存します。アップデート時はメタデータを確認して変更し、次を実行します。
+日本語訳とテーマのみを保存します。RenovateはWeb AwesomeとTabulatorの新版を検出し、
+配布URL・ハッシュ・ライセンスと同梱ファイルを同じPRで更新します。手動で同じ更新を行うには、
+対象の `vendor.json` の `version` を変更し、例えばTabulatorなら
+`python3 scripts/vendor-browser-libraries.py --refresh-npm tabulator` を実行します。
+記録済みの配布物からすべてを再生成するには、次を実行します。
 
 ```sh
 python3 scripts/vendor-browser-libraries.py
@@ -92,8 +96,8 @@ python3 scripts/vendor-browser-libraries.py
 配布物の整合性を検証してから同梱ファイルを更新します。この操作にはネットワークが必要です。
 `components.js` に部品を追加した場合も再実行してください。
 
-Aceは公式の `ajaxorg/ace-builds` サブモジュールをタグ `v1.45.2`
-（コミット `c9ea63c0a0a436fbb477c918d6736644f77cab9f`）に固定しています。
+Aceは公式の `ajaxorg/ace-builds` サブモジュールをリリースコミットに固定し、
+Renovateが[対象タグ](../.gitmodules)とコミットを更新します。
 本体、JSONモード、GitHubテーマ、JSON構文チェック用Workerはすべてローカルから読み込みます。
 上記の配布物再生成スクリプトには含めません。取得・更新後の復元には次を実行します。
 

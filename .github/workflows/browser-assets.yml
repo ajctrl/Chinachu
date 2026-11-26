@@ -1,0 +1,26 @@
+name: Verify browser assets
+
+on:
+  push:
+    paths: &asset_paths
+      - 'web/lib/webawesome/**'
+      - 'web/lib/tabulator/**'
+      - web/components.js
+      - scripts/vendor-browser-libraries.py
+      - .github/workflows/browser-assets.yml
+  pull_request:
+    paths: *asset_paths
+
+permissions:
+  contents: read
+
+jobs:
+  verify-browser-assets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Regenerate and compare bundled libraries
+        run: |
+          python3 scripts/vendor-browser-libraries.py --refresh-npm webawesome tabulator
+          git diff --exit-code -- web/lib/webawesome web/lib/tabulator
+          test -z "$(git ls-files --others --exclude-standard -- web/lib/webawesome web/lib/tabulator)"

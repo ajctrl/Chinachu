@@ -15,6 +15,7 @@ from pathlib import Path, PurePosixPath
 import re
 import shutil
 import tarfile
+from urllib.parse import quote, urlsplit
 from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -110,10 +111,27 @@ def module_files(files, roots):
     return kept
 
 
-def download(name):
+def refresh_npm_metadata(metadata):
+    package = metadata['package']
+    version = metadata['version']
+    url = f'https://registry.npmjs.org/{quote(package, safe="")}/{quote(version, safe="")}'
+    with urlopen(url, timeout=60) as response:
+        release = json.load(response)
+    if release['name'] != package or release['version'] != version:
+        raise ValueError(f'Unexpected release for {package}@{version}')
+    dist = release['dist']
+    source = urlsplit(dist['tarball'])
+    if source.scheme != 'https' or source.netloc != 'registry.npmjs.org':
+        raise ValueError(f'Unexpected tarball URL for {package}@{version}')
+    metadata.update(source=dist['tarball'], integrity=dist['integrity'], license=release['license'])
+
+
+def download(name, refresh_npm=False):
     if name == 'notosansjp':
         return download_fonts()
     metadata = json.loads((LIB / name / 'vendor.json').read_text())
+    if refresh_npm:
+        refresh_npm_metadata(metadata)
     with urlopen(metadata['source'], timeout=60) as response:
         archive = response.read()
     verify_integrity(archive, metadata['integrity'], name)
@@ -131,13 +149,17 @@ def download(name):
         keep['LICENSE.md'] = files['LICENSE.md']
     else:
         keep = {path: files[path] for path in ['LICENSE', 'dist/css/tabulator.min.css', 'dist/js/tabulator.min.js']}
+    if refresh_npm:
+        keep['vendor.json'] = (json.dumps(metadata, indent=2, ensure_ascii=False) + '\n').encode()
     return keep
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('packages', nargs='*', metavar='PACKAGE', help='webawesome, tabulator, or notosansjp; default: all')
-    parser.add_argument('--verify-fonts', action='store_true', help='verify bundled font files offline without changing them')
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument('--verify-fonts', action='store_true', help='verify bundled font files offline without changing them')
+    modes.add_argument('--refresh-npm', action='store_true', help='refresh registry metadata and assets for the specified npm packages')
     args = parser.parse_args()
     if args.verify_fonts:
         if args.packages:
@@ -147,8 +169,10 @@ def main():
     names = args.packages or PACKAGES
     if any(name not in PACKAGES for name in names):
         parser.error('Unknown package; choose from ' + ', '.join(PACKAGES))
+    if args.refresh_npm and 'notosansjp' in names:
+        parser.error('--refresh-npm requires webawesome or tabulator')
     # Download and validate every selected package before touching existing assets.
-    packages = {name: download(name) for name in names}
+    packages = {name: download(name, args.refresh_npm) for name in names}
     for name, files in packages.items():
         directory = LIB / name
         for child in directory.iterdir():

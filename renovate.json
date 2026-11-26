@@ -1,0 +1,40 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "automerge": false,
+  "platformAutomerge": false,
+  "reviewers": ["ajctrl"],
+  "assignAutomerge": false,
+  "git-submodules": { "enabled": true },
+  "lockFileMaintenance": { "enabled": true, "schedule": ["* * * * *"] },
+  "customManagers": [
+    {
+      "customType": "jsonata",
+      "fileFormat": "json",
+      "managerFilePatterns": ["/^web\\/lib\\/(webawesome|tabulator)\\/vendor\\.json$/"],
+      "matchStrings": ["{\"depName\": package, \"currentValue\": version}"],
+      "datasourceTemplate": "npm",
+      "versioningTemplate": "npm"
+    }
+  ],
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchPackageNames": ["!mirakurun"],
+      "automerge": true
+    },
+    {
+      "matchDepNames": ["node"],
+      "allowedVersions": "24.x"
+    },
+    {
+      "matchManagers": ["custom.jsonata"],
+      "matchFileNames": ["web/lib/{webawesome,tabulator}/vendor.json"],
+      "postUpgradeTasks": {
+        "installTools": { "python": {} },
+        "commands": ["python3 scripts/vendor-browser-libraries.py --refresh-npm {{parentDir}}"],
+        "fileFilters": ["web/lib/webawesome/**", "web/lib/tabulator/**"]
+      }
+    }
+  ]
+}
