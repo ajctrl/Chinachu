@@ -206,28 +206,29 @@ div.channel-cards {
 		border-radius: 3px; }
 
 		div.channel-cards div.channel-card > div.channel {
-			position: relative;
-			overflow: hidden;
-			line-height: 28px;
-			white-space: nowrap;
-			text-overflow: ellipsis;
-			padding: 0 80px 0 10px; }
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) auto;
+			align-items: center;
+			column-gap: 4px;
+			padding-left: 10px; }
+
+			div.channel-cards div.channel-card > div.channel > a {
+				overflow: hidden;
+				white-space: nowrap;
+				text-overflow: ellipsis; }
 
 		div.channel-cards div.channel-card > div.channel.has-logo {
 			background-position: left center;
-			background-size: contain;
+			background-size: auto 28px;
 			background-repeat: no-repeat;
 			padding-left: 55px; }
 
 			div.channel-cards div.channel-card > div.channel > wa-button.live {
-				position: absolute;
-				top: 0;
-				right: 0;
 				font-size: 11px;
 				background: rgba(255,255,255,0.25); }
 
 		div.channel-cards div.channel-card > wa-progress-bar {
-			height: 2px; }
+			--track-height: 2px; }
 
 		div.channel-cards div.channel-card > wa-button.program {
 			width: 100%;
@@ -513,7 +514,6 @@ div.middle > div.main > div.main-body > div.storage-page {
 .program-info { margin: 16px 0; }
 .program-info-label { color: #777; font-size: 12px; }
 .program-info-text { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
-.channel-cards .channel-card wa-progress-bar { --height: 2px; }
 .channel-cards .channel-card wa-button.program { display: block; width: 100%; }
 .channel-cards .channel-card wa-button.program::part(base) { width: 100%; text-align: left; justify-content: flex-start; }
 .channel-cards .channel-card wa-button.live::part(base) { min-height: 24px; }
