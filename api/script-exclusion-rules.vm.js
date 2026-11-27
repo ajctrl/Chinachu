@@ -1,27 +1,16 @@
 (function () {
-	// Read fresh files for every request, including legacy rules before migration.
-	var settings, snapshot;
-	try {
-		var originalText = fs.readFileSync(define.CONFIG_FILE, 'utf8');
-		settings = JSON.parse(originalText);
-		snapshot = excludesStore.read(define.EXCLUDES_FILE, settings, fs);
-	} catch (error) {
-		return response.error(500);
-	}
-	var rules = snapshot.rules;
-	var hasNum = typeof request.param.num !== 'undefined';
-	var num = Number(request.param.num);
-	if (hasNum && (!/^\d+$/.test(request.param.num) || !Number.isSafeInteger(num) || !rules[num])) {
-		return response.error(404);
-	}
+	var num = request.param.num;
+	var rules = store.read('excludes');
+	if (num !== undefined && (!/^\d+$/.test(num) || !rules[Number(num)])) return response.error(404);
 	if (request.method === 'GET') {
 		response.head(200);
-		return response.end(JSON.stringify(hasNum ? rules[num] : rules, null, '  '));
+		return response.end(JSON.stringify(num === undefined ? rules : rules[Number(num)], null, '  '));
 	}
 
 	var rule;
 	if (request.method === 'POST' || request.method === 'PUT') {
 		if (!/^application\/json(?:;|$)/i.test(request.headers['content-type'] || '')) return response.error(400);
+		var settings = JSON.parse(fs.readFileSync(define.CONFIG_FILE, 'utf8'));
 		rule = request.query;
 		if (!rule || typeof rule !== 'object' || Array.isArray(rule) || Object.keys(rule).length === 0) return response.error(400);
 		if (['reserve_fields_operator', 'reserve_titles_operator', 'reserve_descriptions_operator'].some(function (key) {
@@ -52,18 +41,8 @@
 		}
 		if (typeof rule.isEnabled === 'boolean') rule.isDisabled = !rule.isEnabled;
 		delete rule.isEnabled;
-		if (request.method === 'POST') rules.push(rule);
-		else rules[num] = rule;
-	} else if (request.method === 'DELETE') {
-		rules.splice(num, 1);
-	} else {
-		return response.error(405);
 	}
-	try {
-		excludesStore.save(define.EXCLUDES_FILE, rules, snapshot.revision, define.CONFIG_FILE);
-	} catch (error) {
-		return response.error(error.status || 500);
-	}
+	editRule(store, 'excludes', request.method, num, rule);
 	response.head(request.method === 'POST' ? 201 : 200);
 	response.end(JSON.stringify(rule || {}));
 })();

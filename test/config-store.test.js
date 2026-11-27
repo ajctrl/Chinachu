@@ -140,3 +140,39 @@ describe('configuration validation and atomic storage', function() {
 		assert.deepEqual(schema.changes({ extra: true }, { extra: true, operGotify: false }), ['operGotify']);
 	});
 });
+
+describe('exclusive JSON configuration creation', function () {
+	let dir, file, configFile;
+	beforeEach(function () {
+		dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chinachu-excludes-'));
+		file = path.join(dir, 'excludes.json');
+		configFile = path.join(dir, 'config.json');
+		fs.writeFileSync(configFile, '{}', { mode: 0o640 });
+	});
+	afterEach(function () { fs.rmSync(dir, { recursive: true }); });
+
+	it('does not overwrite a file created by another writer during the first save', function () {
+		const other = '[{"reserve_titles":["other"]}]';
+		const io = new Proxy(fs, { get(target, property) {
+			if (property === 'linkSync') return function (from, to) {
+				fs.writeFileSync(file, other);
+				return fs.linkSync(from, to);
+			};
+			return target[property];
+		} });
+		assert.throws(() => store.create(file, '[]', configFile, io), error => error.status === 409);
+		assert.equal(fs.readFileSync(file, 'utf8'), other);
+		assert.ok(!fs.readdirSync(dir).some(name => name.endsWith('.tmp')));
+	});
+
+	for (const operation of ['writeFileSync', 'fsyncSync', 'fchmodSync', 'linkSync']) {
+		it('leaves no partially created file when ' + operation + ' fails', function () {
+			const io = new Proxy(fs, { get(target, property) {
+				if (property === operation) return function () { throw Object.assign(new Error('failure'), { code: 'ENOSPC' }); };
+				return target[property];
+			} });
+			assert.throws(() => store.create(file, '[]', configFile, io), error => error.status === 500);
+			assert.deepEqual(fs.readdirSync(dir), ['config.json']);
+		});
+	}
+});

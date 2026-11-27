@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const common = require('chinachu-common');
-const vm = require('node:vm');
+const { runRuleApi } = require('./helpers/state');
 
 describe('recording path security', function() {
 	let directory;
@@ -51,12 +51,11 @@ describe('rule API recording format validation', function() {
 		function saveRule(query) {
 			let status, saved, reply;
 			const rules = [{ reserve_titles: ['original'], recorded_format: 'original/<title>.ts' }];
-			vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../api/', script), 'utf8'), {
-				chinachu: common, data: { rules }, define: { RULES_FILE: 'mock-rules.json' },
+			saved = runRuleApi(fs.readFileSync(path.join(__dirname, '../api/', script), 'utf8'), {
+				chinachu: common,
 				request: { method, query, param: { num: '0' }, headers: { 'content-type': 'application/json' } },
 				response: { error(code) { status = code; }, head(code) { status = code; }, end(body) { reply = JSON.parse(body); } },
-				fs: { writeFileSync(file, body) { assert.equal(file, 'mock-rules.json'); saved = JSON.parse(body); } }
-			});
+			}, rules);
 			return { status, saved, reply };
 		}
 		it('uses the global format for blank, null or omitted ' + method + ' overrides', function() {
@@ -84,16 +83,9 @@ describe('rule API recording format validation', function() {
 		});
 		it('rejects unsafe ' + method + ' formats before changing rules or files', function() {
 			for (const format of ['../outside.ts', '/tmp/outside.ts', 'name.' + 'x'.repeat(255), '<episode:1000000000>.ts']) {
-				let status;
-				const rules = [{ reserve_titles: ['original'] }];
-				vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../api/', script), 'utf8'), {
-					chinachu: common, data: { rules },
-					request: { method, query: { recorded_format: format }, param: { num: '0' }, headers: { 'content-type': 'application/json' } },
-					response: { error(code) { status = code; }, head() { assert.fail('unsafe rule was accepted'); } },
-					fs: { writeFileSync() { assert.fail('unsafe rule was written'); } }
-				});
+				const { status, saved } = saveRule({ recorded_format: format });
 				assert.equal(status, 400, format);
-				assert.deepEqual(rules, [{ reserve_titles: ['original'] }]);
+				assert.equal(saved, undefined, format);
 			}
 		});
 	}

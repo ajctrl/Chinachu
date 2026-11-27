@@ -7,14 +7,13 @@
 'use strict';
 
 const CONFIG_FILE = __dirname + '/config.json';
-const RESERVES_DATA_FILE  = __dirname + '/data/reserves.json';
-const RECORDING_DATA_FILE = __dirname + '/data/recording.json';
-const RECORDED_DATA_FILE  = __dirname + '/data/recorded.json';
-
 // 標準モジュールのロード
 const fs = require('fs');
 const child_process = require('child_process');
 const { log } = require('./lib/logger');
+const { StateStore } = require('./lib/state-store');
+const { RecordingJournal } = require('./lib/recording-journal');
+const { saveRecording, finishRecording, sameAiring } = require('./lib/program-state');
 const { createGotifyNotifier } = require('./lib/gotify-notifier');
 const { configureMirakurunClient } = require('./lib/mirakurun-client');
 
@@ -24,18 +23,6 @@ if (!fs.existsSync('./data/') || !fs.existsSync('./log/') || !fs.existsSync('./w
 	process.exit(1);
 }
 
-// 終了処理
-process.on('SIGQUIT', () => {
-	setTimeout(() => {
-		process.exit(0);
-	}, 0);
-});
-
-// 例外処理
-process.on('uncaughtException', (err) => {
-	console.error('uncaughtException: ' + err.stack);
-});
-
 // 追加モジュールのロード
 const { default: dateFormat } = require('dateformat');
 const nodemailer = require("nodemailer");
@@ -44,8 +31,13 @@ const mirakurun = new (require("mirakurun").default)();
 
 //
 let reserves = [];
-let recorded = [];
 let recording = [];
+let recordingSaveRetry = null;
+let recordingPublished = false;
+let startupRecordingRevision;
+let journal;
+let recovering = [];
+let shuttingDown = false;
 
 // 設定の読み込み
 const pkg = require("./package.json");
@@ -91,8 +83,12 @@ console.info(mirakurun);
 // sendmail
 const transporter = nodemailer.createTransport({ sendmail: true });
 
-// 録画中リストをクリア
-fs.writeFileSync(RECORDING_DATA_FILE, '[]');
+let store;
+
+// 例外処理
+process.on('uncaughtException', (err) => {
+	console.error('uncaughtException: ' + err.stack);
+});
 
 // 保存先ディレクトリが存在しない場合には作成
 if (!fs.existsSync(config.recordedDir)) {
@@ -125,17 +121,19 @@ let stChecked = 0;
 let stNotified = 0;
 
 // メインループ
-setInterval(() => {
+function checkReserves() {
+	if (shuttingDown) return;
 
 	clock = Date.now();
 
 	for (let i = 0, l = reserves.length; i < l; i++) {
 		reservesChecker(reserves[i]);
 	}
-}, 1000 * 3);
+}
 
 // 裏ループ
-setInterval(() => {
+function checkServices() {
+	if (shuttingDown) return;
 
 	if ((scheduler === null) && (clock - scheduled > schedulerIntervalTime)) {
 		startScheduler();
@@ -146,7 +144,7 @@ setInterval(() => {
 		storageChecker();
 		stChecked = clock;
 	}
-}, 1000 * 6);
+}
 
 // 予約時間チェック
 function reservesChecker(program) {
@@ -163,7 +161,7 @@ function reservesChecker(program) {
 
 	// 予約準備時間内
 	if (program.start - clock < prepTime) {
-		if (isRecording(program) === false) {
+		if (!isRecording(program) && !recovering.some(entry => sameAiring(entry.program, program))) {
 			prepRecord(program);
 		}
 	}
@@ -181,23 +179,11 @@ function isRecording(program) {
 	return false;
 }
 
-// 録画したか
-function isRecorded(program) {
-
-	for (let i = 0, l = recorded.length; i < l; i++) {
-		if (recorded[i].id === program.id && clock < recorded[i].end) {
-			return true;
-		}
-	}
-
-	return false;
-}
-
 // 録画中の番組を更新
 function recordingUpdater(program) {
 
 	for (let i = 0, l = recording.length; i < l; i++) {
-		if (recording[i].id === program.id) {
+		if (recording[i]._abortController && recording[i].id === program.id) {
 			for (let k in program) {
 				if (program.hasOwnProperty(k)) {
 					recording[i][k] = program[k];
@@ -208,17 +194,35 @@ function recordingUpdater(program) {
 	}
 }
 
-// スケジューラーを停止
-function stopScheduler() {
-	process.removeListener('SIGINT',  stopScheduler);
-	process.removeListener('SIGQUIT', stopScheduler);
-	process.removeListener('SIGTERM', stopScheduler);
-
-	if (scheduler === null) { return; }
-
-	scheduler.kill('SIGQUIT');
-	log('KILL: SIGQUIT -> Scheduler (pid=' + scheduler.pid + ')');
+function exitWhenDrained() {
+	if (shuttingDown && recording.length === 0 && recovering.length === 0 && recordingSaveRetry === null) process.exit(0);
 }
+
+function shutdown() {
+	if (shuttingDown) return;
+	shuttingDown = true;
+	if (scheduler) {
+		scheduler.kill('SIGQUIT');
+		log('KILL: SIGQUIT -> Scheduler (pid=' + scheduler.pid + ')');
+	}
+
+	let cancelledPreparation = false;
+	for (let i = recording.length - 1; i >= 0; i--) {
+		const { _abortController, _stream } = recording[i];
+		if (!_abortController) continue; // Already closing its file or retrying its commit.
+		_abortController.abort();
+		if (_stream) {
+			_stream.destroy();
+		} else {
+			recording.splice(i, 1);
+			cancelledPreparation = true;
+		}
+	}
+	if (cancelledPreparation) persistRecording();
+	else exitWhenDrained();
+}
+
+for (const signal of ['SIGQUIT', 'SIGTERM', 'SIGINT']) process.on(signal, shutdown);
 
 // スケジューラーを開始
 function startScheduler() {
@@ -237,12 +241,6 @@ function startScheduler() {
 
 		log('EXIT: node app-scheduler.js (pid=' + scheduler.pid + ')');
 
-		try {
-			process.removeListener('SIGINT', stopScheduler);
-			process.removeListener('SIGQUIT', stopScheduler);
-			process.removeListener('SIGTERM', stopScheduler);
-		} catch (e) {}
-
 		try { output.end(); } catch (ee) {}
 
 		scheduler = null;
@@ -258,15 +256,29 @@ function startScheduler() {
 	});
 
 	scheduler.once('exit', finalize);
-
-	process.once('SIGINT', stopScheduler);
-	process.once('SIGQUIT', stopScheduler);
-	process.once('SIGTERM', stopScheduler);
 }
 
 // 番組ログ用
 function printProgram(program) {
 	return `#${program.id} ${dateFormat(new Date(program.start), "isoDateTime")} [${program.channel.name}] ${program.title}`
+}
+
+// Retry against the current list so a delayed save cannot restore a finished recording.
+function persistRecording() {
+	if (recordingSaveRetry !== null) return;
+	try {
+		saveRecording(store, recording, startupRecordingRevision);
+		recordingPublished = true;
+		log('WRITE: recording');
+	} catch (error) {
+		log('ERROR: recording metadata save failed: ' + error.message);
+		recordingSaveRetry = setTimeout(() => {
+			recordingSaveRetry = null;
+			persistRecording();
+		}, 1000);
+		return;
+	}
+	exitWhenDrained();
 }
 
 // 録画準備
@@ -296,13 +308,13 @@ function prepRecord(program) {
 		signal: abortController.signal
 	})
 		.then(stream => {
+			if (shuttingDown) { stream.destroy(); return; }
 			try { doRecord(program, stream); }
 			catch (error) { stream.destroy(); throw error; }
 		})
 		.catch(err => {
 
-			if (program._stream) {
-				// 既に録画開始
+			if (shuttingDown || program._stream) {
 				return;
 			}
 
@@ -316,23 +328,24 @@ function prepRecord(program) {
 
 			// リトライ
 			setTimeout(() => {
+				if (shuttingDown) return;
 				const index = recording.indexOf(program);
 				if (index !== -1) {
 					recording.splice(index, 1);
 				}
 				delete program._abortController;
-				fs.writeFileSync(RECORDING_DATA_FILE, JSON.stringify(recording));
+				persistRecording();
 			}, 5000);
 		});
 
 	recording.push(program);
-	fs.writeFileSync(RECORDING_DATA_FILE, JSON.stringify(recording));
-	log('WRITE: ' + RECORDING_DATA_FILE);
+	persistRecording();
 }
 
 // 録画実行
 function doRecord(program, stream) {
 	const abortController = program._abortController;
+	let completedProgram;
 
 	log('RECORD: ' + printProgram(program));
 
@@ -372,14 +385,21 @@ function doRecord(program, stream) {
 		finalize();
 	});
 
-	// 終了シグナル時処理
-	process.on('SIGINT', finalize);
-	process.on('SIGQUIT', finalize);
-	process.on('SIGTERM', finalize);
+	// An input can end before buffered writes and the file descriptor have drained.
+	recFile.once('error', err => log('ERROR: ' + recPath, err));
+	recFile.once('close', () => {
+		finalize();
+		if (recFile.errored || !recFile.writableFinished) {
+			// Keep the reservation so an ongoing broadcast can resume on the next tick.
+			recording = recording.filter(item => item !== program);
+			persistRecording();
+			return;
+		}
+		persistCompletion(completedProgram, program);
+	});
 
 	// 状態更新
-	fs.writeFileSync(RECORDING_DATA_FILE, JSON.stringify(recording));
-	log('WRITE: ' + RECORDING_DATA_FILE);
+	persistRecording();
 
 	// Gotify
 	if (gotifyNotifier && config.operGotifyFormat.start) {
@@ -398,89 +418,66 @@ function doRecord(program, stream) {
 	}
 
 	// お片付け
-	let finalized = false;
 	function finalize() {
-		if (finalized) {
-			return;
-		}
-		finalized = true;
+		if (completedProgram) return;
+		delete program.pid;
+		delete program._stream;
+		delete program._abortController;
+		completedProgram = { ...program };
 
 		stream.unpipe();
 		if (!abortController.signal.aborted) {
 			abortController.abort();
 		}
 
-		process.removeListener('SIGINT', finalize);
-		process.removeListener('SIGQUIT', finalize);
-		process.removeListener('SIGTERM', finalize);
-
-		// 書き込みストリームを閉じる
-		recFile.end();
-
-		// 状態を更新
-		delete program.pid;
-		for (let i = 0, l = recorded.length; i < l; i++) {
-			if (recorded[i].id === program.id) {
-				if (recorded[i].recorded === program.recorded) {
-					recorded.splice(i, 1);
-				} else {
-					recorded[i].id += '-' + recorded[i].start.toString(36);
-				}
-				break;
-			}
-		}
-		recorded.push(program);
-		const recordingIndex = recording.indexOf(program);
-		if (recordingIndex !== -1) {
-			recording.splice(recordingIndex, 1);
-		}
-		delete program._stream;
-		delete program._abortController;
-		fs.writeFileSync(RECORDED_DATA_FILE, JSON.stringify(recorded));
-		fs.writeFileSync(RECORDING_DATA_FILE, JSON.stringify(recording));
-		log('WRITE: ' + RECORDED_DATA_FILE);
-		log('WRITE: ' + RECORDING_DATA_FILE);
-		if (program.isManualReserved) {
-			for (let i = 0, l = reserves.length; i < l; i++) {
-				if (reserves[i].id === program.id) {
-					reserves.splice(i, 1);
-					fs.writeFileSync(RESERVES_DATA_FILE, JSON.stringify(reserves));
-					log('WRITE: ' + RESERVES_DATA_FILE);
-					break;
-				}
-			}
-		}
-
-		// ポストプロセス
-		if (config.recordedCommand) {
-			const postProcess = child_process.spawn(config.recordedCommand, [recPath, JSON.stringify(program)]);
-			log('SPAWN: ' + config.recordedCommand + ' (pid=' + postProcess.pid + ')');
-		}
-
-		// Gotify
-		if (gotifyNotifier && config.operGotifyFormat.end) {
-			notifyGotify(
-				config.operGotifyFormat.end
-					.replace('<id>', program.id)
-					.replace('<type>', program.channel.type)
-					.replace('<channel>', ((program.channel.type === 'CS') ? program.channel.sid : program.channel.channel))
-					.replace('<title>', program.title)
-					.replace('<fullTitle>', program.fullTitle)
-					.replace('<channelname>', program.channel.name)
-					.replace('<date>', dateFormat(new Date(program.start), "mm/dd"))
-					.replace('<starttime>', dateFormat(new Date(program.start), "h:MM"))
-					.replace('<endtime>', dateFormat(new Date(program.end), "h:MM"))
-			);
-		}
-
-		log('FIN: ' + printProgram(program));
+		if (!recFile.destroyed) recFile.end();
 	}
 }
 
-// 録画中止
-function stopRecording(programId) {
+function persistCompletion(completedProgram, liveProgram, sequence) {
+	try {
+		sequence ??= journal.append(completedProgram);
+		const remainingReserves = journal.finish(sequence, () => finishRecording(store, completedProgram));
+		if (completedProgram.isManualReserved) reserves = remainingReserves;
+	} catch (error) {
+		log('ERROR: recording metadata save failed: ' + error.message);
+		setTimeout(() => persistCompletion(completedProgram, liveProgram, sequence), 1000);
+		return;
+	}
+	if (liveProgram) recording = recording.filter(item => item !== liveProgram);
+	else recovering = recovering.filter(entry => entry.sequence !== sequence);
+	log('WRITE: recorded, recording');
 
-	const program = recording.find(program => program.id === programId);
+	// ポストプロセス
+	if (config.recordedCommand) {
+		const postProcess = child_process.spawn(config.recordedCommand, [completedProgram.recorded, JSON.stringify(completedProgram)]);
+		log('SPAWN: ' + config.recordedCommand + ' (pid=' + postProcess.pid + ')');
+	}
+
+	// Gotify
+	if (gotifyNotifier && config.operGotifyFormat.end) {
+		notifyGotify(
+			config.operGotifyFormat.end
+				.replace('<id>', completedProgram.id)
+				.replace('<type>', completedProgram.channel.type)
+				.replace('<channel>', ((completedProgram.channel.type === 'CS') ? completedProgram.channel.sid : completedProgram.channel.channel))
+				.replace('<title>', completedProgram.title)
+				.replace('<fullTitle>', completedProgram.fullTitle)
+				.replace('<channelname>', completedProgram.channel.name)
+				.replace('<date>', dateFormat(new Date(completedProgram.start), "mm/dd"))
+				.replace('<starttime>', dateFormat(new Date(completedProgram.start), "h:MM"))
+				.replace('<endtime>', dateFormat(new Date(completedProgram.end), "h:MM"))
+		);
+	}
+
+	log('FIN: ' + printProgram(completedProgram));
+	exitWhenDrained();
+}
+
+// 録画中止
+function stopRecording(request) {
+
+	const program = recording.find(item => sameAiring(item, request));
 
 	if (program && program._abortController) {
 		program._abortController.abort();
@@ -509,25 +506,25 @@ function storageChecker() {
 			// 2. アクション
 			if (storageLowSpaceAction === "stop") {
 				// 録画停止
-				recording.forEach(program => stopRecording(program.id));
+				recording.forEach(stopRecording);
 			} else if (storageLowSpaceAction === "remove") {
 				// 削除
-				for (let index = 0; index < recorded.length; index++) {
-					const program = recorded[index];
-					try {
-						chinachu.removeRecordingFile(config.recordedDir, program.recorded);
-					} catch (error) {
-						log('ERROR: recording removal failed: ' + error.message);
-						continue;
-					}
-					recorded.splice(index, 1);
-					try {
-						fs.writeFileSync(RECORDED_DATA_FILE, JSON.stringify(recorded));
-						log('WRITE: ' + RECORDED_DATA_FILE);
-					} catch (error) { log('ERROR: recording metadata save failed: ' + error.message); }
-					// Recheck free space before removing another recording.
-					break;
-				}
+				try {
+					store.transaction(() => {
+						const history = store.read('recorded');
+						for (const [index, program] of history.entries()) {
+							try { chinachu.removeRecordingFile(config.recordedDir, program.recorded); }
+							catch (error) {
+								log('ERROR: recording removal failed: ' + error.message);
+								continue;
+							}
+							history.splice(index, 1);
+							store.replace('recorded', history);
+							log('WRITE: recorded');
+							break; // Check free space again before deleting another file.
+						}
+					});
+				} catch (error) { log('ERROR: recording metadata save failed: ' + error.message); }
 			}
 
 			// 3. メール通知
@@ -549,56 +546,45 @@ function storageChecker() {
 	});
 }
 
-// ファイル更新監視: ./data/reserves.json
-chinachu.jsonWatcher(
-	RESERVES_DATA_FILE,
-	(err, data, mes) => {
-		if (err) {
-			console.error(err);
-			return;
-		}
-
-		reserves = data;
-		log(mes);
-
+// データ更新監視
+function onStateChange(name) {
+	if (shuttingDown) return;
+	if (name === 'reserves') {
+		reserves = store.read('reserves');
 		if (recording.length > 0) {
 			reserves.forEach(recordingUpdater);
-
-			fs.writeFileSync(RECORDING_DATA_FILE, JSON.stringify(recording));
-			log('WRITE: ' + RECORDING_DATA_FILE);
+			persistRecording();
 		}
-	},
-	{ create: [], now: true }
-);
+	} else if (name === 'recording' && recordingPublished) {
+		store.read('recording').filter(program => program.abort).forEach(stopRecording);
+	}
+}
 
-// ファイル更新監視: ./data/recorded.json
-chinachu.jsonWatcher(
-	RECORDED_DATA_FILE,
-	(err, data, mes) => {
-		if (err) {
-			console.error(err);
+function startOperator() {
+	try {
+		store ??= new StateStore(__dirname);
+		store.db.exec('PRAGMA busy_timeout = 0');
+		journal ??= new RecordingJournal(store, __dirname);
+		store.transaction(() => {
+			reserves = store.read('reserves');
+			startupRecordingRevision = store.revision('recording').revision;
+			recovering = journal.pending();
+			store.watch(onStateChange);
+		}, false);
+	} catch (error) {
+		if ((error.errcode & 255) !== 5) {
+			console.error(error);
+			process.exit(1);
 			return;
 		}
+		log('Waiting to read reservations: ' + error.message);
+		setTimeout(startOperator, 1000);
+		return;
+	}
+	for (const { program, sequence } of recovering) persistCompletion(program, null, sequence);
+	persistRecording();
+	setInterval(checkReserves, 3000);
+	setInterval(checkServices, 6000);
+}
 
-		recorded = data;
-		log(mes);
-	},
-	{ create: [], now: true }
-);
-
-// ファイル更新監視: ./data/recording.json
-chinachu.jsonWatcher(
-	RECORDING_DATA_FILE,
-	(err, data, mes) => {
-		if (err) {
-			console.error(err);
-			return;
-		}
-
-		// 録画中止処理
-		data.filter(program => !!program.abort).forEach(program => {
-			stopRecording(program.id);
-		});
-	},
-	{ create: [], now: false }
-);
+startOperator();

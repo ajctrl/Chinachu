@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { runRuleApi } = require('./helpers/state');
 const { createRequestGuard } = require('../lib/http-security');
 const common = require('chinachu-common');
 
@@ -398,12 +399,11 @@ describe('common exclusion rule GUI', function () {
 			assert.equal(createRequestGuard({})({ headers }, true), null);
 			if (url.includes('exclusion-rules')) return;
 			let status, saved;
-			vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../api/', method === 'POST' ? 'script-rules.vm.js' : 'script-rules-rule.vm.js'), 'utf8'), {
-				chinachu: common, data: { rules: [{}] }, define: { RULES_FILE: 'mock-rules.json' },
+			saved = runRuleApi(fs.readFileSync(path.join(__dirname, '../api/', method === 'POST' ? 'script-rules.vm.js' : 'script-rules-rule.vm.js'), 'utf8'), {
+				chinachu: common,
 				request: { method, query: sent.body, param: { num: '0' }, headers },
 				response: { error(code) { status = code; }, head(code) { status = code; }, end() {} },
-				fs: { writeFileSync(file, body) { saved = JSON.parse(body); } }
-			});
+			}, [{}]);
 			assert.equal(status, method === 'POST' ? 201 : 200);
 			assert.ok(saved.every(rule => !Object.hasOwn(rule, 'recorded_format')));
 		});

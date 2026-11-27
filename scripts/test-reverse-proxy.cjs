@@ -16,6 +16,7 @@ const { once } = require('node:events');
 const { io } = require('socket.io-client');
 
 const repo = path.resolve(__dirname, '..');
+const { StateStore } = require('../lib/state-store');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chinachu-proxy-'));
 const nginxBin = process.env.NGINX_BIN || 'nginx';
 const children = [];
@@ -148,6 +149,8 @@ async function main() {
 	}
 	await ready(proxy, async () => (await request('/api/status.json')).status === 200);
 	await ready(backend, async () => JSON.parse((await request('/api/recorded.json')).body).length === 1);
+	const store = new StateStore(app);
+	closers.push(() => store.close());
 	const updates = { origin: publicOrigin, 'x-requested-with': 'XMLHttpRequest', 'content-type': 'application/json', 'sec-fetch-site': 'same-origin' };
 	await check('HTTPS certificate, authenticated page and status API', async () => {
 		assert.equal((await request('/')).status, 200);
@@ -171,31 +174,31 @@ async function main() {
 				assert.equal((await request('/api/rules.json', { method, body: '{}', headers: { ...updates, 'sec-fetch-site': site } })).status, 403);
 			}
 		}
-		assert.deepEqual(JSON.parse(fs.readFileSync(path.join(app, 'rules.json'))), []);
+		assert.deepEqual(store.read('rules'), []);
 	});
 	await check('same-origin rule creation and update persist in isolated data', async () => {
 		assert.equal((await request('/api/rules.json', { method: 'POST', headers: updates, body: '{"reserve_titles":["proxy-test"]}' })).status, 201);
 		assert.equal((await request('/api/rules/0.json', { method: 'PUT', headers: updates, body: '{"reserve_titles":["updated"]}' })).status, 200);
-		assert.deepEqual(JSON.parse(fs.readFileSync(path.join(app, 'rules.json'))), [{ reserve_titles: ['updated'] }]);
+		assert.deepEqual(store.read('rules'), [{ reserve_titles: ['updated'] }]);
 	});
 	await check('method overrides, malformed JSON and unsafe recording formats return 400 without writes', async () => {
-		const before = fs.readFileSync(path.join(app, 'rules.json'), 'utf8');
+		const before = store.revision('rules').revision;
 		for (const key of ['method', '_method']) assert.equal((await request('/api/rules.json?' + key + '=DELETE')).status, 400);
 		for (const body of ['{broken', '{"method":"DELETE"}', '{"recorded_format":"../escape.m2ts"}']) {
 			assert.equal((await request('/api/rules.json', { method: 'POST', headers: updates, body })).status, 400);
 		}
-		assert.equal(fs.readFileSync(path.join(app, 'rules.json'), 'utf8'), before);
+		assert.equal(store.revision('rules').revision, before);
 	});
 	await check('Nginx rejects oversized Content-Length and chunked bodies with 413', async () => {
-		const before = fs.readFileSync(path.join(app, 'rules.json'), 'utf8');
+		const before = store.revision('rules').revision;
 		const body = 'x'.repeat(1024 * 1024 + 1);
 		for (const headers of [{ ...updates, 'content-length': Buffer.byteLength(body) }, { ...updates, 'transfer-encoding': 'chunked' }]) {
 			assert.equal((await request('/api/rules.json', { method: 'POST', headers, body })).status, 413);
 		}
-		assert.equal(fs.readFileSync(path.join(app, 'rules.json'), 'utf8'), before);
+		assert.equal(store.revision('rules').revision, before);
 	});
 	await check('Nginx closes an incomplete request after the 15-second body timeout without writes', async () => {
-		const before = fs.readFileSync(path.join(app, 'rules.json'), 'utf8');
+		const before = store.revision('rules').revision;
 		const started = Date.now();
 		const status = await new Promise((resolve, reject) => {
 			const req = https.request({ hostname: '127.0.0.1', port: proxyPort, servername: 'proxy.chinachu.test', ca,
@@ -211,11 +214,11 @@ async function main() {
 		assert.ok(Date.now() - started >= 14000, 'Request closed before the body timeout');
 		await delay(50);
 		assert.match(fs.readFileSync(path.join(root, 'nginx-access.log'), 'utf8'), /"POST \/api\/rules\.json HTTP\/1\.1" 408 /);
-		assert.equal(fs.readFileSync(path.join(app, 'rules.json'), 'utf8'), before);
+		assert.equal(store.revision('rules').revision, before);
 	});
 	await check('same-origin DELETE removes only the isolated test rule', async () => {
 		assert.equal((await request('/api/rules/0.json', { method: 'DELETE', headers: updates })).status, 200);
-		assert.deepEqual(JSON.parse(fs.readFileSync(path.join(app, 'rules.json'))), []);
+		assert.deepEqual(store.read('rules'), []);
 	});
 	await check('static single-byte/suffix ranges, invalid ranges and HEAD complete correctly', async () => {
 		const content = fs.readFileSync(path.join(repo, 'web', 'index.html'));

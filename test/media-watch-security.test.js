@@ -41,7 +41,7 @@ async function watch(name, query, vaapiEnabled, type = 'mp4', exercise = () => {
 		vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../api/script-' + name + '-watch.vm.js'), 'utf8'), {
 			request, response, children: [], Buffer, URL, AbortController, path,
 			log: (...args) => logs.push(args.join(' ')), config: { vaapiEnabled, recordedDir: '/mock' },
-			data: { recorded: [program], recording: [program], schedule: [program], status: { feature: { streamer: true } } },
+			data: { channel: program, recorded: [program], recording: [program], status: { feature: { streamer: true } } },
 			chinachu: {
 				...common, openRecordingFile() { opened++; return 9; },
 				execFileWithFd(tool, args, fd, options, done) {

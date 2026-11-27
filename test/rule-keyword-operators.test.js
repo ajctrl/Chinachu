@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const { runRuleApi } = require('./helpers/state');
 const chinachu = require('chinachu-common');
 const keys = ['reserve_fields_operator', 'reserve_titles_operator', 'reserve_descriptions_operator'];
 const program = { title: '猫 映画', fullTitle: '猫 映画', detail: '猫 吹替', channel: { type: 'GR' }, flags: [] };
@@ -60,12 +61,10 @@ describe('recording rule API operators', function () {
 	for (const [file, method] of [['script-rules.vm.js', 'POST'], ['script-rules-rule.vm.js', 'PUT']]) {
 		function request(query) {
 			let status, saved;
-			vm.runInNewContext(fs.readFileSync(require.resolve('../api/' + file), 'utf8'), {
+			saved = runRuleApi(fs.readFileSync(require.resolve('../api/' + file), 'utf8'), {
 				request: { method, query, param: { num: '0' }, headers: { 'content-type': 'application/json' } },
-				data: { rules: [{}] }, define: { RULES_FILE: 'unused' },
-				fs: { writeFileSync(file, body) { saved = JSON.parse(body); } },
 				response: { head(code) { status = code; }, end() {}, error(code) { status = code; } }
-			});
+			}, [{}]);
 			return { status, saved };
 		}
 		it(method + ' persists operators and rejects invalid values before saving', function () {

@@ -1,38 +1,20 @@
-(function() {
-
-	var program = chinachu.getProgramById(request.param.id, data.recorded);
-
-	if (program === null) return response.error(404);
-
-	program.isRemoved = !fs.existsSync(program.recorded);
-
-	switch (request.method) {
-		case 'GET':
-			response.head(200);
-			response.end(JSON.stringify(program, null, '  '));
-			return;
-
-		case 'DELETE':
+(function () {
+	if (request.method === 'DELETE') {
+		store.transaction(() => {
+			const history = data.recorded;
+			const program = chinachu.getProgramById(request.param.id, history);
+			if (!program) throw Object.assign(new Error('番組が見つかりません'), { status: 404 });
 			try { chinachu.removeRecordingFile(config.recordedDir, program.recorded); }
-			catch (error) { log(error); return response.error(403); }
-
-			data.recorded = (function() {
-				var array = [];
-
-				data.recorded.forEach(function(a) {
-					if (a.id !== program.id) {
-						array.push(a);
-					}
-				});
-
-				return array;
-			})();
-
-			fs.writeFileSync(define.RECORDED_DATA_FILE, JSON.stringify(data.recorded));
-
-			response.head(200);
-			response.end('{}');
-			return;
+			catch (error) { throw Object.assign(error, { status: 403 }); }
+			store.replace('recorded', history.filter(item => item.id !== program.id));
+		});
+		response.head(200);
+		response.end('{}');
+		return;
 	}
-
+	const program = chinachu.getProgramById(request.param.id, data.recorded);
+	if (!program) return response.error(404);
+	program.isRemoved = !fs.existsSync(program.recorded);
+	response.head(200);
+	response.end(JSON.stringify(program, null, '  '));
 })();

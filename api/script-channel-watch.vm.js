@@ -3,13 +3,7 @@ Usushio では使わない
 */
 (function() {
 
-	var channel = null;
-
-	data.schedule.forEach(function(ch) {
-		if (ch.id === request.param.chid) {
-			channel = ch;
-		}
-	});
+	const channel = data.channel;
 
 	if (channel === null) return response.error(404);
 

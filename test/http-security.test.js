@@ -159,10 +159,11 @@ describe('WUI request security', function() {
 		const config = { wuiUsers: require('./helpers/auth').users, wuiHost: '0.0.0.0', wuiOpenServer: true, wuiOpenPort: 12345 };
 		let binding;
 		const server = vm.runInNewContext(source.slice(source.indexOf('// Basic Auth'), source.indexOf('// HTTP Server')) + '\nserver;', {
-			auth: require('http-auth'), createVerifier: require('../lib/password-auth').createVerifier, https: {}, tlsEnabled: false, config, listenAddress: security.listenAddress,
+			state: { ready: Promise.resolve() }, auth: require('http-auth'), createVerifier: require('../lib/password-auth').createVerifier, https: {}, tlsEnabled: false, config, listenAddress: security.listenAddress,
 			http: { createServer(handler) { const server = http.createServer(handler); server.listen = function(port, host) { binding = { port, host }; return this; }; return server; } },
 			httpServer: (req, res) => res.end('ok'), log() {}, util: {}
 		});
+		await Promise.resolve();
 		assert.deepEqual(binding, { port: 12345, host: '127.0.0.1' });
 		delete server.listen;
 		server.listen(0, '127.0.0.1'); await once(server, 'listening');

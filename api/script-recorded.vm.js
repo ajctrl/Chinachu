@@ -1,25 +1,12 @@
-switch (request.method) {
-case 'GET':
+if (request.method === 'PUT') {
+	const recorded = store.transaction(() => {
+		const kept = data.recorded.filter(item => fs.existsSync(item.recorded));
+		store.replace('recorded', kept);
+		return kept;
+	});
+	response.head(200);
+	response.end(JSON.stringify(recorded, null, '  '));
+} else {
 	response.head(200);
 	response.end(JSON.stringify(data.recorded));
-	break;
-
-case 'PUT':
-	data.recorded = (function() {
-		var array = [];
-		
-		data.recorded.forEach(function(a) {
-			if (fs.existsSync(a.recorded)) {
-				array.push(a);
-			}
-		});
-		
-		return array;
-	})();
-	
-	fs.writeFileSync(define.RECORDED_DATA_FILE, JSON.stringify(data.recorded));
-	
-	response.head(200);
-	response.end(JSON.stringify(data.recorded, null, '  '));
-	break;
 }

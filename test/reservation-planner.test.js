@@ -251,11 +251,11 @@ describe('reservation exclusion state', function () {
 	});
 });
 
-// Execute the real scheduler/CLI in fresh contexts backed by persisted JSON.
+// Execute the real scheduler/CLI against the same SQLite database across runs.
 // External EPG, process and filesystem services are replaced with in-memory stubs.
 describe('scheduler and CLI persistence', function () {
 	const root = path.resolve(__dirname, '..');
-	let files, config;
+	let fixture, store, config;
 	function run(entry, args = {}) {
 		const stopped = {};
 		const context = vm.createContext({
@@ -263,17 +263,8 @@ describe('scheduler and CLI persistence', function () {
 			process: { pid: 123, on() {}, exit(code) { assert.equal(code, 0); throw stopped; } },
 			require(name) {
 				if (name === root + '/config.json') { return JSON.parse(JSON.stringify(config)); }
-				if (name === 'fs') {
-					return {
-						existsSync(file) { return !file.endsWith('scheduler.pid'); },
-						readFileSync(file) {
-							const name = path.basename(file);
-							if (name === 'excludes.json' && !(name in files)) throw Object.assign(new Error('missing'), { code: 'ENOENT' });
-							return files[name] || '[]';
-						},
-						writeFileSync(file, value) { files[path.basename(file)] = value; }
-					};
-				}
+				if (name === './lib/state-store') return { StateStore: class { constructor() { return store; } } };
+				if (name === 'fs') return { existsSync: file => !file.endsWith('scheduler.pid'), writeFileSync() {} };
 				if (name === 'opts') { return { parse() {}, get(key) { return args[key]; } }; }
 				if (name === 'child_process') { return { execSync() {} }; }
 				if (name === './lib/logger') { return { log() {} }; }
@@ -285,32 +276,27 @@ describe('scheduler and CLI persistence', function () {
 		try {
 			vm.runInContext(fs.readFileSync(path.join(root, entry), 'utf8'), context);
 			if (entry === 'app-scheduler.js') {
-				vm.runInContext('tuners = [{ types: ["GR"] }]; scheduler();', context);
+				vm.runInContext('tuners = [{ types: ["GR"] }]; scheduler(store.read("schedule"));', context);
 			}
 		} catch (error) {
 			if (error !== stopped) { throw error; }
 		}
-		return JSON.parse(files['reserves.json']);
+		return store.read('reserves');
 	}
 
 	beforeEach(function () {
 		config = {};
-		files = { 'rules.json': JSON.stringify([{}]), 'excludes.json': JSON.stringify([{ reserve_titles: ['再放送'] }]), 'reserves.json': '[]' };
+		fixture = require('./helpers/state').stateFixture({
+			'rules.json': [{}], 'excludes.json': [{ reserve_titles: ['再放送'] }]
+		});
+		store = fixture.open();
 	});
-
-	it('reads legacy config rules only until excludes.json exists', function () {
-		config.autoExclusionRules = [{ reserve_titles: ['再放送'] }];
-		delete files['excludes.json'];
-		files['schedule.json'] = JSON.stringify([{ programs: [program()] }]);
-		assert.equal(run('app-scheduler.js')[0].isAutoSkip, true);
-		files['excludes.json'] = '[]';
-		assert.equal(run('app-scheduler.js')[0].isSkip, undefined);
-	});
+	afterEach(function () { fixture.close(); });
 
 	it('persists channel exclusion evidence through scheduler saves and CLI overrides', function() {
 		const p = program();
-		files['schedule.json'] = JSON.stringify([{ programs: [p] }]);
-		files['excludes.json'] = JSON.stringify([{ channels: ['27', 'GR_1'] }]);
+		store.replace('schedule', [{ programs: [p] }]);
+		store.replace('excludes', [{ channels: ['27', 'GR_1'] }]);
 		const first = run('app-scheduler.js')[0];
 		assert.equal(first.isAutoSkip, true);
 		assert.deepEqual(first.excludedChannels, ['gr1']);
@@ -319,28 +305,28 @@ describe('scheduler and CLI persistence', function () {
 		assert.equal(restored.autoSkipOverride, true);
 		assert.deepEqual(restored.excludedChannels, ['gr1']);
 		assert.deepEqual(run('app-scheduler.js')[0].excludedChannels, ['gr1']);
-		files['excludes.json'] = '[]';
+		store.replace('excludes', []);
 		assert.deepEqual(run('app-scheduler.js')[0].excludedChannels, []);
 	});
 
 	it('persists unskip and re-skip through fresh scheduler and CLI instances', function () {
 		const p = program();
-		files['schedule.json'] = JSON.stringify([{ programs: [p] }]);
+		store.replace('schedule', [{ programs: [p] }]);
 		assert.equal(run('app-scheduler.js')[0].isAutoSkip, true);
 		assert.equal(run('app-cli.js', { mode: 'unskip', id: p.id })[0].autoSkipOverride, true);
 		assert.equal(run('app-scheduler.js')[0].isSkip, undefined);
 		assert.equal(run('app-scheduler.js')[0].autoSkipOverride, true);
 		assert.equal(run('app-cli.js', { mode: 'skip', id: p.id })[0].isAutoSkip, true);
 		assert.equal(run('app-scheduler.js')[0].autoSkipOverride, undefined);
-		files['excludes.json'] = '[]';
+		store.replace('excludes', []);
 		assert.equal(run('app-scheduler.js')[0].isSkip, undefined);
 		assert.equal(run('app-cli.js', { mode: 'skip', id: p.id })[0].isSkip, true);
 		assert.equal(run('app-scheduler.js')[0].isSkip, true);
 	});
 	it('persists a manual skip and undo through real CLI and scheduler updates', function () {
 		const p = program();
-		files['schedule.json'] = JSON.stringify([{ programs: [p] }]);
-		files['reserves.json'] = JSON.stringify([Object.assign({}, p, { isManualReserved: true })]);
+		store.replace('schedule', [{ programs: [p] }]);
+		store.replace('reserves', [Object.assign({}, p, { isManualReserved: true })]);
 		assert.equal(run('app-cli.js', { mode: 'skip', id: p.id })[0].isSkip, true);
 		for (let update = 0; update < 2; update++) {
 			const [reserve] = run('app-scheduler.js');
@@ -360,7 +346,7 @@ describe('scheduler and CLI persistence', function () {
 		const p = program({ fullTitle: '再放送' });
 		const duplicate = program({ id: 'two', start: p.start, end: p.end, fullTitle: 'Live' });
 		p.channel.sid = 2;
-		files['schedule.json'] = JSON.stringify([{ programs: [p, duplicate] }]);
+		store.replace('schedule', [{ programs: [p, duplicate] }]);
 		const reserves = run('app-scheduler.js');
 		assert.equal(reserves.length, 2);
 		assert.equal(reserves.find(r => r.id === p.id).isSkip, true);
@@ -375,9 +361,9 @@ describe('scheduler and CLI persistence', function () {
 					const second = program({ id: 'second', start: first.start, end: first.end });
 					first.channel.sid = skippedSid;
 					second.channel.sid = skippedSid === 1 ? 2 : 1;
-					files['excludes.json'] = '[]';
-					files['reserves.json'] = JSON.stringify([first]);
-					files['schedule.json'] = JSON.stringify([{ programs: reversed ? [second, first] : [first, second] }]);
+					store.replace('excludes', []);
+					store.replace('reserves', [first]);
+					store.replace('schedule', [{ programs: reversed ? [second, first] : [first, second] }]);
 					assert.equal(run('app-cli.js', { mode: 'skip', id: first.id })[0].isSkip, true);
 					for (let update = 0; update < 3; update++) {
 						const reserves = run('app-scheduler.js');
@@ -402,9 +388,9 @@ describe('scheduler and CLI persistence', function () {
 				const second = program({ id: 'second', start: first.start, end: first.end });
 				first.channel.sid = skippedSid;
 				second.channel.sid = skippedSid === 1 ? 2 : 1;
-				files['excludes.json'] = '[]';
-				files['reserves.json'] = JSON.stringify([first]);
-				files['schedule.json'] = JSON.stringify([{ programs: reversed ? [second, first] : [first, second] }]);
+				store.replace('excludes', []);
+				store.replace('reserves', [first]);
+				store.replace('schedule', [{ programs: reversed ? [second, first] : [first, second] }]);
 				run('app-cli.js', { mode: 'skip', id: first.id });
 				assert.equal(run('app-scheduler.js').length, 1);
 				run('app-cli.js', { mode: 'reserve', id: second.id });
@@ -425,9 +411,9 @@ describe('scheduler and CLI persistence', function () {
 		const first = program({ id: 'first', isSkip: true });
 		const second = program({ id: 'second', start: first.start, end: first.end, isManualReserved: true, isSkip: true });
 		second.channel.sid = 2;
-		files['excludes.json'] = '[]';
-		files['reserves.json'] = JSON.stringify([first, second]);
-		files['schedule.json'] = JSON.stringify([{ programs: [first, second] }]);
+		store.replace('excludes', []);
+		store.replace('reserves', [first, second]);
+		store.replace('schedule', [{ programs: [first, second] }]);
 		run('app-cli.js', { mode: 'unskip', id: second.id });
 		for (let update = 0; update < 2; update++) {
 			const reserves = run('app-scheduler.js');
@@ -444,9 +430,9 @@ describe('scheduler and CLI persistence', function () {
 		automatic.channel.sid = 2;
 		manual.channel.sid = 3;
 		for (const order of permutations([skipped, automatic, manual])) {
-			files['excludes.json'] = '[]';
-			files['reserves.json'] = JSON.stringify([skipped, manual]);
-			files['schedule.json'] = JSON.stringify([{ programs: order }]);
+			store.replace('excludes', []);
+			store.replace('reserves', [skipped, manual]);
+			store.replace('schedule', [{ programs: order }]);
 			for (let update = 0; update < 3; update++) {
 				const reserves = run('app-scheduler.js');
 				assert.equal(reserves.length, 2);
@@ -463,8 +449,8 @@ describe('scheduler and CLI persistence', function () {
 		const first = program({ id: 'first' });
 		const second = program({ id: 'second', start: first.start, end: first.end });
 		second.channel.sid = 2;
-		files['excludes.json'] = JSON.stringify([{ sid: 2, reserve_titles: ['再放送'] }]);
-		files['schedule.json'] = JSON.stringify([{ programs: [first, second] }]);
+		store.replace('excludes', [{ sid: 2, reserve_titles: ['再放送'] }]);
+		store.replace('schedule', [{ programs: [first, second] }]);
 		run('app-scheduler.js');
 		run('app-cli.js', { mode: 'skip', id: first.id });
 		run('app-cli.js', { mode: 'unskip', id: second.id });
@@ -488,9 +474,9 @@ describe('scheduler and CLI persistence', function () {
 			else if (changed === 'channel') second.channel.channel = '28';
 			else if (changed === 'title') second.title = 'Other';
 			else second[changed] += 60000;
-			files['excludes.json'] = '[]';
-			files['reserves.json'] = JSON.stringify([first]);
-			files['schedule.json'] = JSON.stringify([{ programs: [first, second] }]);
+			store.replace('excludes', []);
+			store.replace('reserves', [first]);
+			store.replace('schedule', [{ programs: [first, second] }]);
 			const reserves = run('app-scheduler.js');
 			assert.equal(reserves.length, 2);
 			assert.equal(reserves.find(p => p.id === first.id).isSkip, true);
@@ -503,8 +489,8 @@ describe('scheduler and CLI persistence', function () {
 			const first = program({ id: 'first' });
 			const second = program({ id: 'second', start: first.start, end: first.end });
 			second.channel.sid = 2;
-			files['excludes.json'] = JSON.stringify([{ sid: 2, reserve_titles: ['再放送'] }]);
-			files['schedule.json'] = JSON.stringify([{ programs: reversed ? [second, first] : [first, second] }]);
+			store.replace('excludes', [{ sid: 2, reserve_titles: ['再放送'] }]);
+			store.replace('schedule', [{ programs: reversed ? [second, first] : [first, second] }]);
 			assert.equal(run('app-scheduler.js').find(p => p.id === second.id).isAutoSkip, true);
 			run('app-cli.js', { mode: 'unskip', id: second.id });
 
@@ -534,7 +520,7 @@ describe('scheduler and CLI persistence', function () {
 		const first = program({ id: 'first' });
 		const second = program({ id: 'second', start: first.start, end: first.end });
 		second.channel.sid = 2;
-		files['schedule.json'] = JSON.stringify([{ programs: [first, second] }]);
+		store.replace('schedule', [{ programs: [first, second] }]);
 		run('app-scheduler.js');
 		run('app-cli.js', { mode: 'unskip', id: first.id });
 		run('app-cli.js', { mode: 'unskip', id: second.id });

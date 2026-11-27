@@ -1,10 +1,8 @@
 (function() {
 	
-	var num = parseInt(request.param.num, 10).toString(10);
-	var rule = data.rules[num] || null;
-	
-	if (rule === null) return response.error(404);
-	
+	var num = parseInt(request.param.num, 10);
+	var rule = store.read('rules')[num];
+	if (!rule) return response.error(404);
 	switch (request.method) {
 		case 'GET':
 			response.head(200);
@@ -33,8 +31,7 @@
 				}
 				delete newRule.isEnabled;
 				
-				data.rules.splice(data.rules.indexOf(rule), 1, newRule);
-				fs.writeFileSync(define.RULES_FILE, JSON.stringify(data.rules, null, '  '));
+				editRule(store, 'rules', 'PUT', num, newRule);
 				
 				response.head(200);
 				response.end(JSON.stringify(newRule));
@@ -42,12 +39,9 @@
 			return;
 		
 		case 'DELETE':
-			child_process.exec('node app-cli.js -mode rule --remove -n ' + num, function(err, stdout, stderr) {
-				if (err) return response.error(500);
-				
-				response.head(200);
-				response.end('{}');
-			});
+			editRule(store, 'rules', 'DELETE', num);
+			response.head(200);
+			response.end('{}');
 			return;
 	}
 

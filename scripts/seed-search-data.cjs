@@ -5,9 +5,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
-const filename = path.join(root, 'data/schedule.json');
-const original = JSON.parse(fs.readFileSync(filename, 'utf8'));
-const reserves = JSON.parse(fs.readFileSync(path.join(root, 'data/reserves.json'), 'utf8'));
+const { StateStore } = require('../lib/state-store');
+const store = new StateStore(root);
+const { original, reserves, revision } = store.transaction(() => ({
+	original: store.read('schedule'), reserves: store.read('reserves'), revision: store.revision('schedule').revision
+}), false);
 const now = Date.now();
 const hour = 3600000;
 const start = Math.ceil(now / hour) * hour;
@@ -76,10 +78,12 @@ for (const reserve of reserves) {
 schedule.forEach(channel => channel.programs.sort((a, b) => a.start - b.start));
 const backupDir = path.join(root, 'data/dummy-backups', `search-${now}`);
 fs.mkdirSync(backupDir, { recursive: true });
-fs.copyFileSync(filename, path.join(backupDir, 'schedule.json'));
-const temporary = `${filename}.search-demo.tmp`;
-fs.writeFileSync(temporary, JSON.stringify(schedule, null, 2) + '\n');
-fs.renameSync(temporary, filename);
+fs.writeFileSync(path.join(backupDir, 'schedule.json'), JSON.stringify(original));
+store.transaction(() => {
+	if (store.revision('schedule').revision !== revision) throw new Error('生成中に番組表が更新されました。再実行してください。');
+	store.replace('schedule', schedule);
+});
+store.close();
 const all = schedule.flatMap(channel => channel.programs);
 console.log(`デモ番組: ${generated}件 / 追加した予約番組: ${addedReserves}件`);
 console.log(`番組表: ${schedule.length}チャンネル・${all.length}件 / 検索対象: ${all.filter(program => program.end >= now).length}件`);

@@ -47,7 +47,7 @@ main () {
   local cmd="$1"
   shift
   case $cmd in
-    installer | updater | service | update | search | \
+    installer | updater | service | migrate | update | search | \
     reserve | unreserve | skip | unskip | stop | \
     rule | enrule | disrule | rmrule | \
     rules | reserves | recording | recorded | \
@@ -279,88 +279,95 @@ chinachu_service_initscript () {
 ### END INIT INFO
 
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-DAEMON=${CHINACHU_DIR}/chinachu
-DAEMON_OPTS="service ${name} execute"
-NAME=chinachu-${name}
-USER=$USER
-PIDFILE=/var/run/\${NAME}.pid
+DAEMON=$(printf '%q' "$CHINACHU_DIR/chinachu")
+SERVICE=${name}
+USER=$(printf '%q' "$USER")
+EOF
+  cat <<'EOF'
+NAME=chinachu-${SERVICE}
+PIDFILE=/var/run/${NAME}.pid
 
-test -x \$DAEMON || exit 0
+test -x "$DAEMON" || exit 0
+
+running () {
+  [[ "$1" =~ ^[1-9][0-9]*$ ]] && ps -p "$1" -o stat= | grep -q '^[[:space:]]*[^Z[:space:]]'
+}
+
+service_kind () {
+  local pid=$1 args
+  [[ "$pid" =~ ^[1-9][0-9]*$ ]] || return 1
+  args=$(ps -ww -p "$pid" -o args=) || return 1
+  case "$args" in
+    "node ${DAEMON%/*}/app-$SERVICE.js") echo node ;;
+    "bash $DAEMON service $SERVICE execute"|"/bin/bash $DAEMON service $SERVICE execute") echo wrapper ;;
+    *) return 1 ;;
+  esac
+}
 
 start () {
-  echo -n "Starting \${NAME}: "
-
-  if [ -f \$PIDFILE ]; then
-    PID=\`cat \$PIDFILE\`
-    if [ -z "\`ps axf | grep \${PID} | grep -v grep\`" ]; then
-      rm -f \$PIDFILE
-    else
-      echo "\${NAME} is already running? (pid=\${PID})"
-      exit
-    fi
+  local pid
+  if [[ -f "$PIDFILE" ]] && service_kind "$(<"$PIDFILE")" >/dev/null; then
+    echo "$NAME is already running."
+    return 0
   fi
-
-  PID=\$(su \$USER -c "exec \$DAEMON \$DAEMON_OPTS < /dev/null > /dev/null 2>&1 & echo \\\$!")
-
-  if [ -z \$PID ]; then
-    echo "Failed!"
-    exit
-  else
-    echo \$PID > \$PIDFILE
-  fi
-
-  echo "OK."
+  # In a non-interactive shell the background child can become its own session leader.
+  pid=$(su "$USER" -s /bin/sh -c 'CHINACHU_INIT=1 setsid "$0" service "$1" execute </dev/null >/dev/null 2>&1 & echo $!' "$DAEMON" "$SERVICE" 9>&-) || return 1
+  [[ "$pid" =~ ^[1-9][0-9]*$ ]] || return 1
+  while running "$pid" && [[ $(service_kind "$pid") != node ]]; do sleep 0.1; done
+  [[ $(service_kind "$pid") == node ]] || { echo "Failed to start $NAME." >&2; return 1; }
+  echo "$pid" > "$PIDFILE" || return 1
+  echo "Started $NAME (pid=$pid)."
 }
 
 stop () {
-  echo -n "Stopping \${NAME}: "
-
-  if [ -f \$PIDFILE ]; then
-    PID=\`cat \$PIDFILE\`
-    PGID=\`ps -p \$PID -o pgrp | grep -v PGRP\`
-    kill -QUIT -\`echo \$PGID\`
-    echo "OK."
-    rm -f \$PIDFILE
-  else
-    echo "\${NAME} is not running? (\${PIDFILE} not found)."
-  fi
-}
-
-status () {
-  if [ -f \$PIDFILE ]; then
-    PID=\`cat \$PIDFILE\`
-    if [ -z "\`ps axf | grep \${PID} | grep -v grep\`" ]; then
-      echo "\${NAME} is dead but \${PIDFILE} exists."
+  local pid kind target node_pid signal=TERM
+  [[ -f "$PIDFILE" ]] || return 0
+  pid=$(<"$PIDFILE")
+  if kind=$(service_kind "$pid"); then
+    if [[ $kind == node ]]; then
+      target="$pid"
+      if [[ $(ps -p "$pid" -o pgid= | tr -d ' ') == "$pid" ]]; then target="-$pid"; fi
     else
-      echo "\${NAME} is running."
+      # An older init script recorded the shell running the node | tee pipeline.
+      node_pid=$(ps -ww --ppid "$pid" -o pid=,args= | awk -v app="app-$SERVICE.js" '$2 == "node" && $3 == app && NF == 3 {print $1}')
+      [[ "$node_pid" =~ ^[1-9][0-9]*$ ]] || {
+        echo "Cannot identify $NAME at pid $pid." >&2; return 1;
+      }
+      target="$node_pid"
+      signal=QUIT
     fi
-  else
-    echo "\${NAME} is NOT running."
+    kill -s "$signal" -- "$target" || { service_kind "$pid" >/dev/null && return 1; }
+    while service_kind "$pid" >/dev/null; do sleep 0.2; done
+    if [[ -n "$node_pid" ]]; then
+      while [[ $(ps -ww -p "$node_pid" -o args=) == "node app-$SERVICE.js" ]]; do sleep 0.2; done
+    fi
   fi
+  rm -f "$PIDFILE"
 }
 
-case "\$1" in
-  start )
-    start "\$@"
+case "$1" in
+  start|stop|restart)
+    # Keep simultaneous init commands from starting a second operator during shutdown.
+    exec 9>"$PIDFILE.lock" || exit 1
+    flock -x 9 || exit 1
+    case "$1" in
+      start) start ;;
+      stop) stop ;;
+      restart) stop && start ;;
+    esac
     ;;
-  stop )
-    stop "\$@"
-    ;;
-  restart )
-    stop "\$@"
-    sleep 3
-    start "\$@"
-    ;;
-  status )
-    status "\$@"
+  status)
+    if [[ -f "$PIDFILE" ]] && service_kind "$(<"$PIDFILE")" >/dev/null; then
+      echo "$NAME is running."
+    else
+      echo "$NAME is not running."
+    fi
     ;;
   *)
-    echo "Usage: \$NAME {start|stop|restart|status}" >&2
+    echo "Usage: $NAME {start|stop|restart|status}" >&2
     exit 1
     ;;
 esac
-
-exit 0
 
 EOF
 
@@ -374,13 +381,13 @@ chinachu_service_execute () {
     cp -v config.sample.json config.json
   fi
 
-  if ! [ -f "rules.json" ]; then
-    cp -v rules.sample.json rules.json
-  fi
-
   ensure_dir log
   ensure_dir data
 
+  if [[ ${CHINACHU_INIT:-} == 1 ]]; then
+    # The init PID belongs to Node throughout recording shutdown.
+    exec node "$CHINACHU_DIR/app-${name}.js" >> "./log/${name}" 2>&1
+  fi
   node app-${name}.js > /dev/stdout 2>&1 | tee -a ./log/${name}
   return ${PIPESTATUS[0]}
 }
@@ -412,6 +419,11 @@ sudo mv /tmp/chinachu-operator /tmp/chinachu-wui /etc/init.d/
 EOF
 
   return 0
+}
+
+chinachu_migrate () {
+  ensure_dir data
+  node lib/state-store.js
 }
 
 chinachu_update () {
@@ -561,6 +573,7 @@ installer               Run a Installer.
 updater                 Run a Updater.
 service <name> <action> Service-utility.
 
+migrate                 Import legacy JSON into SQLite and show stored counts.
 update                  Run a Scheduler.
 search [options]        Search for programs.
 

@@ -3,7 +3,7 @@
 	switch (request.method) {
 		case 'GET':
 			response.head(200);
-			response.end(JSON.stringify(data.rules, null, '  '));
+			response.end(JSON.stringify(store.read('rules'), null, '  '));
 			return;
 		
 		case 'POST':
@@ -33,8 +33,7 @@
 				}
 				delete newRule.isEnabled;
 				
-				data.rules.push(newRule);
-				fs.writeFileSync(define.RULES_FILE, JSON.stringify(data.rules, null, '  '));
+				editRule(store, 'rules', 'POST', undefined, newRule);
 				
 				response.head(201);
 				response.end(JSON.stringify(newRule));

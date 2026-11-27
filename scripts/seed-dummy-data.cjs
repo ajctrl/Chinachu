@@ -5,9 +5,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const dataDir = path.join(root, 'data');
-const schedule = JSON.parse(fs.readFileSync(path.join(dataDir, 'schedule.json'), 'utf8'));
+const { StateStore } = require('../lib/state-store');
+const store = new StateStore(root);
+const schedule = store.read('schedule');
 const templates = schedule.flatMap(channel => channel.programs || []);
-if (!templates.length) throw new Error('data/schedule.json に番組が必要です。');
+if (!templates.length) throw new Error('番組表に番組が必要です。');
 const config = JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'));
 const now = Date.now();
 const minute = 60000;
@@ -54,13 +56,13 @@ function program(kind, index) {
 const counts = { reserves: 400, recorded: 300, recording: 2 };
 const backupDir = path.join(dataDir, 'dummy-backups', `${now}`);
 fs.mkdirSync(backupDir, { recursive: true });
-for (const [kind, count] of Object.entries(counts)) {
-	const filename = path.join(dataDir, `${kind}.json`);
-	if (fs.existsSync(filename)) fs.copyFileSync(filename, path.join(backupDir, `${kind}.json`));
-	const entries = Array.from({ length: count }, (_, index) => program(kind, index));
-	const temporary = `${filename}.dummy.tmp`;
-	fs.writeFileSync(temporary, JSON.stringify(entries, null, 2) + '\n');
-	fs.renameSync(temporary, filename);
-	console.log(`${kind}: ${entries.length}件`);
-}
+store.transaction(() => {
+	for (const [kind, count] of Object.entries(counts)) {
+		fs.writeFileSync(path.join(backupDir, kind + '.json'), JSON.stringify(store.read(kind)));
+		const entries = Array.from({ length: count }, (_, index) => program(kind, index));
+		store.replace(kind, entries);
+		console.log(`${kind}: ${entries.length}件`);
+	}
+});
+store.close();
 console.log(`元データのバックアップ: ${path.relative(root, backupDir)}`);

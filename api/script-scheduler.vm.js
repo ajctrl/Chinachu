@@ -9,7 +9,7 @@
 			child_process.exec('./chinachu update', function(err, stdout, stderr) {
 				if (err) return response.error(500);
 				
-				res();
+				try { res(); } catch (error) { log(error); response.error(500); }
 			});
 			return;
 	}
@@ -35,38 +35,17 @@
 				encoding: 'utf8'
 			});
 			
-			var lines = schedulerLog.split('\n');
-			
-			for (var k = 0; k < lines.length; k++) {
-				var line = lines[k] || '';
-				
-				if ((line.match('CONFLICT:') !== null) || (line.match('RESERVE:') !== null)) {
-					var id = line.match(/(RESERVE|CONFLICT): ([a-z0-9-]+)/)[2];
-					var t  = line.match(/(RESERVE|CONFLICT): ([a-z0-9-]+)/)[1];
-					var f  = null;
-					
-					for (var i = 0; i < data.schedule.length; i++) {
-						for (var j = 0; j < data.schedule[i].programs.length; j++) {
-							if (data.schedule[i].programs[j].id === id) {
-								f = data.schedule[i].programs[j];
-								break;
-							}
-						}
-						if (f !== null) { break; }
-					}
-					
-					if (t === 'CONFLICT') {
-						result.conflicts.push(f);
-					}
-					if (t === 'RESERVE') {
-						result.reserves.push(f);
-					}
-				}
+			const entries = [];
+			for (const line of schedulerLog.split('\n').reverse()) {
+				const match = line.match(/(RESERVE|CONFLICT): ([a-z0-9-]+)/);
+				if (match) entries.push({ type: match[1], id: match[2] });
 			}
-			
-			result.conflicts.reverse();
-			result.reserves.reverse();
-			
+			const programs = store.firstProgramsById(entries.map(entry => entry.id));
+			for (const { type, id } of entries) {
+				const list = type === 'CONFLICT' ? result.conflicts : result.reserves;
+				list.push(programs.get(id) ?? null);
+			}
+
 			response.head(200);
 			response.end(JSON.stringify(result, null, '  '));
 			

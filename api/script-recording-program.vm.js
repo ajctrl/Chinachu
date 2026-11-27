@@ -1,30 +1,12 @@
-(function() {
-
-	var program = chinachu.getProgramById(request.param.id, data.recording);
-
-	if (program === null) return response.error(404);
-
-	switch (request.method) {
-		case 'GET':
-			response.head(200);
-			response.end(JSON.stringify(program, null, '  '));
-			return;
-
-		case 'DELETE':
-			if (!program.isManualReserved) {
-				const rp  = chinachu.getProgramById(program.id, data.reserves);
-				if (rp) {
-					rp.isSkip = true;
-					fs.writeFileSync(define.RESERVES_DATA_FILE, JSON.stringify(data.reserves));
-				}
-			}
-
-			program.abort = true;
-			fs.writeFileSync(define.RECORDING_DATA_FILE, JSON.stringify(data.recording));
-
-			response.head(200);
-			response.end('{}');
-			return;
+if (request.method === 'DELETE') {
+	requestStop(store, request.param.id);
+	response.head(200);
+	response.end('{}');
+} else {
+	const program = chinachu.getProgramById(request.param.id, data.recording);
+	if (program === null) response.error(404);
+	else {
+		response.head(200);
+		response.end(JSON.stringify(program, null, '  '));
 	}
-
-})();
+}

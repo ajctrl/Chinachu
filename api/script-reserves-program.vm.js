@@ -1,27 +1,12 @@
-(function() {
-	
-	var program = chinachu.getProgramById(request.param.id, data.reserves);
-	
-	if (program === null) return response.error(404);
-	
-	switch (request.method) {
-		case 'GET':
-			response.head(200);
-			response.end(JSON.stringify(program, null, '  '));
-			return;
-		
-		case 'DELETE':
-			if (!program.isManualReserved) {
-				return response.error(409);
-			}
-			
-			child_process.exec('node app-cli.js -mode unreserve -id ' + program.id, function(err, stdout, stderr) {
-				if (err) return response.error(500);
-				
-				response.head(200);
-				response.end('{}');
-			});
-			return;
+if (request.method === 'DELETE') {
+	changeReservation(store, 'unreserve', request.param.id);
+	response.head(200);
+	response.end('{}');
+} else {
+	const program = chinachu.getProgramById(request.param.id, data.reserves);
+	if (program === null) response.error(404);
+	else {
+		response.head(200);
+		response.end(JSON.stringify(program, null, '  '));
 	}
-
-})();
+}

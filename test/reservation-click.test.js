@@ -1,7 +1,6 @@
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const vm = require('node:vm');
 const planner = require('../lib/reservation-planner');
@@ -390,26 +389,28 @@ describe('reservation click actions', function() {
 
 describe('reservation action API response', function() {
 	it('returns persisted automatic and manual skip states and rejects changed programs or invalid actions', function() {
-		const dir=fs.mkdtempSync(path.join(os.tmpdir(),'chinachu-action-'));
-		const file=path.join(dir,'reserves.json');
-		const program={id:'one',title:'番組',start:100};
-		let executions=0;
+		const fixture = require('./helpers/state').stateFixture();
+		const store = fixture.open();
+		const program = { id: 'one', title: '番組', start: 100 };
 		function request(action, start, manual) {
 			let status, body;
-			vm.runInNewContext(read('api/script-reserves-program-action.vm.js'), {
-				fs, define:{RESERVES_DATA_FILE:file}, data:{reserves:[{...program,isManualReserved:manual}]},
-				request:{method:'PUT',param:{id:'one',action},query:{start}},
-				chinachu:{getProgramById:(id,programs)=>programs.find(p=>p.id===id)||null},
-				child_process:{exec(cmd,cb) { executions++; const updated={...program,isManualReserved:manual,isSkip:action==='unskip'};planner[action](updated);fs.writeFileSync(file,JSON.stringify([updated]));cb(null); }},
-				response:{head(code){status=code;},end(text){body=JSON.parse(text);},error(code){status=code;}}
-			});
-			return {status,body};
+			store.replace('reserves', [{ ...program, isManualReserved: manual, isSkip: action === 'unskip' }]);
+			const before = store.revision('reserves').revision;
+			try {
+				vm.runInNewContext(read('api/script-reserves-program-action.vm.js'), {
+					store, changeReservation: require('../lib/program-state').changeReservation,
+					request: { method: 'PUT', param: { id: 'one', action }, query: { start } },
+					response: { head(code) { status = code; }, end(text) { body = JSON.parse(text); }, error(code) { status = code; } }
+				});
+			} catch (error) { status = error.status; }
+			if (status === 200) assert.deepEqual(body.program, store.read('reserves')[0]);
+			else assert.equal(store.revision('reserves').revision, before);
+			return { status, body };
 		}
 		try {
 			assert.equal(request('skip',999,true).status,409);
 			assert.equal(request('skip',999,false).status,409);
 			assert.equal(request('invalid',100,false).status,400);
-			assert.equal(executions,0);
 			const result=request('skip',100,false);
 			assert.equal(result.status,200);
 			assert.equal(result.body.program.isSkip,true);
@@ -421,6 +422,6 @@ describe('reservation action API response', function() {
 			assert.equal(restored.status,200);
 			assert.ok(!restored.body.program.isSkip);
 			assert.equal(restored.body.program.isManualReserved,true);
-		} finally {fs.rmSync(dir,{recursive:true,force:true});}
+		} finally { fixture.close(); }
 	});
 });

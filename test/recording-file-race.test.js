@@ -2,7 +2,6 @@
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const vm = require('node:vm');
 const { PassThrough } = require('node:stream');
@@ -11,9 +10,11 @@ const files = require('../common/lib/recording-path');
 
 // Swap real directories at deterministic I/O boundaries; no live DVR data.
 describe('recording file directory replacement', function() {
-	let base, root, outside, filename, outsideFile;
+	let base, root, outside, filename, outsideFile, fixture, store;
 	beforeEach(function() {
-		base = fs.mkdtempSync(path.join(os.tmpdir(), 'chinachu-race-'));
+		fixture = require('./helpers/state').stateFixture();
+		base = fixture.root;
+		store = fixture.open();
 		root = path.join(base, 'recorded');
 		outside = path.join(base, 'outside');
 		for (const directory of [root, outside]) fs.mkdirSync(path.join(directory, 'series', 'season'), { recursive: true });
@@ -22,7 +23,7 @@ describe('recording file directory replacement', function() {
 		fs.writeFileSync(filename, 'inside');
 		fs.writeFileSync(outsideFile, 'outside');
 	});
-	afterEach(function() { fs.rmSync(base, { recursive: true, force: true }); });
+	afterEach(function() { fixture.close(); });
 
 	function swap() {
 		fs.renameSync(path.join(root, 'series'), path.join(root, 'original'));
@@ -118,11 +119,16 @@ describe('recording file directory replacement', function() {
 		response.error = code => { response.status = code; response.end(); };
 		const program = { id: 'one', pid: 1, recorded: filename };
 		const data = { recorded: [program], recording: [program], status: { feature: { filer: true, streamer: true, previewer: true } } };
-		vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../api/', script), 'utf8'), {
-			fs, path, chinachu, response, data, config: { recordedDir: root }, log() {},
-			request: { method, param: { id: 'one' }, query: {}, type: 'm2ts', headers: {} },
-			define: { RECORDED_DATA_FILE: path.join(base, 'recorded.json') }
-		});
+		store.replace('recorded', [program]);
+		try {
+			vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../api/', script), 'utf8'), {
+				fs, path, chinachu, response, data, store, config: { recordedDir: root }, log() {},
+				request: { method, param: { id: 'one' }, query: {}, type: 'm2ts', headers: {} }
+			});
+		} catch (error) {
+			if (!error.status) throw error;
+			response.error(error.status);
+		}
 		return { response, data };
 	}
 
@@ -148,7 +154,7 @@ describe('recording file directory replacement', function() {
 			assert.equal(response.status, 403);
 			assert.equal(data.recorded.length, 1);
 			assert.equal(fs.readFileSync(outsideFile, 'utf8'), 'outside');
-			assert.equal(fs.existsSync(path.join(base, 'recorded.json')), false);
+			assert.equal(store.read('recorded').length, 1);
 			response.destroy();
 		});
 	}
@@ -168,13 +174,13 @@ describe('recording file directory replacement', function() {
 		response.destroy();
 	});
 	function storageCleanup(recorded, io = fs) {
+		store.replace('recorded', recorded);
 		const source = fs.readFileSync(path.join(__dirname, '../app-operator.js'), 'utf8');
-		return vm.runInNewContext(source.slice(source.indexOf('function storageChecker()'), source.indexOf('// ファイル更新監視')) + '\nstorageChecker;', {
+		return vm.runInNewContext(source.slice(source.indexOf('function storageChecker()'), source.indexOf('// データ更新監視')) + '\nstorageChecker;', {
 			fs: { ...io, statfs(dir, callback) { callback(null, { bavail: 0, bsize: 4096 }); } },
 			chinachu: { ...common, removeRecordingFile(dir, name) { return files.removeRecordingFile(dir, name, io); } },
-			config: { recordedDir: root }, recorded, log() {},
-			storageLowSpaceThresholdMB: 10, storageLowSpaceCommand: '', storageLowSpaceAction: 'remove', storageLowSpaceNotifyTo: '',
-			RECORDED_DATA_FILE: path.join(base, 'recorded.json')
+			config: { recordedDir: root }, store, log() {},
+			storageLowSpaceThresholdMB: 10, storageLowSpaceCommand: '', storageLowSpaceAction: 'remove', storageLowSpaceNotifyTo: ''
 		});
 	}
 	it('keeps automatic cleanup from deleting outside files or dropping their recording entries', function() {
@@ -183,7 +189,7 @@ describe('recording file directory replacement', function() {
 		storageCleanup(recorded)();
 		assert.equal(recorded.length, 1);
 		assert.equal(fs.readFileSync(outsideFile, 'utf8'), 'outside');
-		assert.equal(fs.existsSync(path.join(base, 'recorded.json')), false);
+		assert.equal(store.read('recorded').length, 1);
 	});
 	for (const reason of ['outside root', 'replaced directory', 'permission denied']) {
 		it('skips ' + reason + ' entries and removes only one eligible recording per cleanup', function() {
@@ -205,14 +211,12 @@ describe('recording file directory replacement', function() {
 			cleanup();
 			assert.equal(fs.existsSync(first), false);
 			assert.equal(fs.readFileSync(second, 'utf8'), 'second');
-			assert.deepEqual(recorded, [protectedEntry, { recorded: second }]);
-			assert.deepEqual(JSON.parse(fs.readFileSync(path.join(base, 'recorded.json'), 'utf8')), recorded);
+			assert.deepEqual(store.read('recorded'), [protectedEntry, { recorded: second }]);
 			cleanup();
 			assert.equal(fs.existsSync(second), false);
-			assert.deepEqual(recorded, [protectedEntry]);
-			assert.deepEqual(JSON.parse(fs.readFileSync(path.join(base, 'recorded.json'), 'utf8')), recorded);
+			assert.deepEqual(store.read('recorded'), [protectedEntry]);
 			cleanup();
-			assert.deepEqual(recorded, [protectedEntry]);
+			assert.deepEqual(store.read('recorded'), [protectedEntry]);
 			assert.ok(fs.existsSync(blocked));
 			assert.equal(fs.readFileSync(outsideFile, 'utf8'), 'outside');
 		});
@@ -221,9 +225,11 @@ describe('recording file directory replacement', function() {
 		const second = path.join(root, 'second.ts');
 		fs.writeFileSync(second, 'second');
 		const recorded = [{ recorded: filename }, { recorded: second }];
-		storageCleanup(recorded, { ...fs, writeFileSync() { throw Object.assign(new Error('full'), { code: 'ENOSPC' }); } })();
+		const cleanup = storageCleanup(recorded);
+		store.db.exec("CREATE TRIGGER full BEFORE DELETE ON items BEGIN SELECT RAISE(ABORT, 'full'); END");
+		cleanup();
 		assert.equal(fs.existsSync(filename), false);
 		assert.equal(fs.readFileSync(second, 'utf8'), 'second');
-		assert.deepEqual(recorded, [{ recorded: second }]);
+		assert.deepEqual(store.read('recorded'), recorded);
 	});
 });

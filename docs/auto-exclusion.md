@@ -12,10 +12,9 @@
 保存後にすぐ予約へ反映したい場合は「スケジューラー実行」を使います。
 ほかの画面で変更した内容は「更新」で読み込み直せます。
 
-保存先は `excludes.json` です。`rules.json` と同じくルールの配列を保存します。
-GUIのほか、ファイルを直接編集することもできます。空配列 `[]` では無効です。
-たとえば、タイトルまたは説明文に「再放送」が含まれる自動予約をスキップする
-`excludes.json` は次のとおりです。
+共通除外ルールは `data/chinachu.sqlite` に表示順で保存します。
+Web UIまたは `/api/exclusion-rules.json` で管理でき、空配列 `[]` で無効になります。
+タイトルまたは説明文に「再放送」が含まれる自動予約をスキップする場合、APIで取得する配列は次のようになります。
 
 ```json
 [
@@ -24,23 +23,12 @@ GUIのほか、ファイルを直接編集することもできます。空配�
 ]
 ```
 
-`excludes.json` がない場合だけ、旧 `config.json` の `autoExclusionRules` を読み込みます。
-旧設定もなければ共通除外は無効です。GUIで初めて追加・編集・削除すると、
-旧ルールを引き継いだ `excludes.json` を作成します。`config.json` 自体は変更しません。
-新ファイルが存在すれば、空配列の場合も含めて旧設定より優先します。
-移行後は `config.json` の `autoExclusionRules` を削除できます。
-手動で移行する場合は、その配列を `excludes.json` に保存してください。
-旧ルールがない新規環境では `excludes.sample.json` をコピーして使えます。
-サンプルには、タイトルまたは説明文の「再放送」、タイトルと説明文の両方に
-条件が一致する総集編・ダイジェスト、再放送フラグ「再」の3つの除外例があります。
-すべて `isDisabled: true` なので、使いたい例をGUIで有効にするか、
-ファイルの `isDisabled` を `false` に変更してください。
+初回移行では `excludes.json` を優先し、存在しない場合に限り `config.json` の `autoExclusionRules` を取り込みます。
+新規環境でサンプルを使う場合は、初回起動前に `excludes.sample.json` を `excludes.json` にコピーしてください。
+サンプルの3件はすべて無効で、使いたいものをWeb UIから有効にできます。
 
-GUIでの更新は一時ファイルからのアトミックな置き換えで行い、直前の内容を
-`excludes.json.bak` に1世代保存します。初回作成時は `config.json` の所有者・
-グループ・アクセス権を引き継ぎ、以後は `excludes.json` のものを維持します。
-読み取り専用の表示ではファイルを作成しません。不正な新ファイルがある場合は
-旧設定には戻らずエラーにするため、ファイルを修正してください。
+編集前の一覧は、同じトランザクションでDBの `previous_excludes` に1世代保存します。
+SQLiteで `SELECT value FROM previous_excludes ORDER BY position` を実行すると、直前のルールを順に確認できます。
 
 各要素は既存の予約ルールと同じ形式です。キーワードは正規表現で、
 `normalizationForm` も適用します。タイトル・説明文それぞれの配列内は
@@ -87,7 +75,7 @@ SID の大小より優先して残します。複数の予約を手動解除し�
 終了した前の予約と放送時間が重ならない番組には引き継ぎません。
 終了前の予約は、同じ番組 ID の放送時間変更後も状態を維持します。
 
-判定情報は `data/reserves.json` に保存します。`matchedKeywords` は一致キーワード、
+判定情報はSQLiteの予約データに保存します。`matchedKeywords` は一致キーワード、
 `excludedKeywords` は除外キーワード、`isExcluded` は共通除外の一致、
 `isAutoSkip` は自動スキップ、`autoSkipOverride` は手動解除を表します。
 録画のスキップには既存の `isSkip` を使います。旧データの `isSkip` は

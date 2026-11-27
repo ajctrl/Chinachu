@@ -7,12 +7,6 @@
 'use strict';
 
 const CONFIG_FILE = __dirname + '/config.json';
-const RULES_FILE = __dirname + '/rules.json';
-const EXCLUDES_FILE = __dirname + '/excludes.json';
-const RESERVES_DATA_FILE = __dirname + '/data/reserves.json';
-const SCHEDULE_DATA_FILE = __dirname + '/data/schedule.json';
-const RECORDING_DATA_FILE = __dirname + '/data/recording.json';
-const RECORDED_DATA_FILE = __dirname + '/data/recorded.json';
 const SCHEDULER_LOG_FILE = __dirname + '/log/scheduler';
 
 // Load Config
@@ -36,8 +30,7 @@ const { Server } = require('socket.io');
 const chinachu = require('chinachu-common');
 const mirakurun = new (require("mirakurun").default)();
 const configStore = require('./lib/config-store');
-const excludesStore = require('./lib/excludes-store');
-const { watchExclusionRules } = require('./lib/exclusion-rule-watcher');
+const { openWuiState, stateScripts, mediaCollections } = require('./lib/wui-state');
 const { log } = require('./lib/logger');
 const { configureMirakurunClient } = require('./lib/mirakurun-client');
 const { createBasicAuthMiddleware } = require('./lib/socket-auth');
@@ -64,20 +57,6 @@ const OPERATOR_PID_FILE = (() => {
 		return "/var/run/chinachu-operator.pid";
 	}
 })();
-
-// SIGQUIT
-process.on('SIGQUIT', () => { setTimeout(() => process.exit(0), 0); });
-
-// Uncaught Exception
-process.on('uncaughtException', err => {
-
-	if (err.toString() === 'Error: read ECONNRESET') {
-		log('ECONNRESET');
-		return;
-	}
-
-	console.error('uncaughtException: ' + err);
-});
 
 // setuid
 if (process.platform !== "win32") {
@@ -135,6 +114,28 @@ const status = {
 	}
 };
 
+const state = openWuiState(__dirname, notifyStateChange, error => {
+	console.error(error);
+	process.exit(1);
+});
+
+// A shutdown signal must not terminate the worker in the middle of a commit.
+function shutdown() {
+	state.drainWrites().then(() => process.exit(0), error => { console.error(error); process.exit(1); });
+}
+for (const signal of ['SIGQUIT', 'SIGTERM', 'SIGINT']) process.on(signal, shutdown);
+
+// Uncaught Exception
+process.on('uncaughtException', err => {
+
+	if (err.toString() === 'Error: read ECONNRESET') {
+		log('ECONNRESET');
+		return;
+	}
+
+	console.error('uncaughtException: ' + err);
+});
+
 // HTTPS
 var tlsOption = null;
 var tlsEnabled = !!config.wuiTlsKeyPath && !!config.wuiTlsCertPath;
@@ -173,12 +174,6 @@ if (basicAuthEnabled) {
 // Keep the old port as a migration fallback, using the same authenticated server.
 const legacyPort = config.wuiOpenServer === true ? (config.wuiOpenPort || 20772) : null;
 
-var rules     = [];
-var schedule  = [];
-var reserves  = [];
-var recording = [];
-var recorded  = [];
-
 // Init HTTP Server
 let server;
 
@@ -199,9 +194,11 @@ if (tlsEnabled) {
 if (config.wuiPort || legacyPort) {
 	server.requestTimeout = 15000;
 	server.headersTimeout = 10000;
-	server.listen(config.wuiPort || legacyPort, listenAddress(config), function () {
-		log((tlsEnabled ? 'HTTPS' : 'HTTP') + ' proxy backend listening on ' + util.inspect(server.address()));
-	});
+	state.ready.then(() => {
+		server.listen(config.wuiPort || legacyPort, listenAddress(config), function () {
+			log((tlsEnabled ? 'HTTPS' : 'HTTP') + ' proxy backend listening on ' + util.inspect(server.address()));
+		});
+	}).catch(error => { console.error(error); process.exit(1); });
 }
 
 // HTTP Server
@@ -482,7 +479,7 @@ function httpServerMain(req, res, query) {
 
 		if (fs.existsSync(resourceFile) === false) { return resErr(404); }
 
-		fs.readFile(resourceFile, function (err, json) {
+		fs.readFile(resourceFile, async function (err, json) {
 			if (err) { return resErr(500); }
 
 			var r;
@@ -545,6 +542,33 @@ function httpServerMain(req, res, query) {
 				encoding = '';
 			}
 
+			let mediaData;
+			if (stateScripts.has(target.script) || mediaCollections.has(target.script)) {
+				try {
+					const result = await state.request(target.script, {
+						method: req.method, param, query, type: ext, encoding,
+						headers: {
+							'content-type': req.headers['content-type'],
+							'if-none-match': req.headers['if-none-match'],
+							'if-modified-since': req.headers['if-modified-since']
+						}
+					});
+					if (res.destroyed) return;
+					if (stateScripts.has(target.script)) {
+						if (result.error) return resErr(result.error);
+						for (const [name, value] of Object.entries(result.headers)) res.setHeader(name, value);
+						writeHead(result.status);
+						logRequest(result.status);
+						return res.end(result.body);
+					}
+					mediaData = result;
+				} catch (error) {
+					log(error);
+					if (!res.destroyed) resErr(error.status || 500);
+					return;
+				}
+			}
+
 			var sandbox = {
 				request      : req,
 				response     : res,
@@ -561,28 +585,14 @@ function httpServerMain(req, res, query) {
 				mirakurun    : mirakurun,
 				config       : config,
 				configStore  : configStore,
-				excludesStore: excludesStore,
 				define: {
 					CONFIG_FILE        : CONFIG_FILE,
-					RULES_FILE         : RULES_FILE,
-					EXCLUDES_FILE      : EXCLUDES_FILE,
-					RESERVES_DATA_FILE : RESERVES_DATA_FILE,
-					SCHEDULE_DATA_FILE : SCHEDULE_DATA_FILE,
-					RECORDING_DATA_FILE: RECORDING_DATA_FILE,
-					RECORDED_DATA_FILE : RECORDED_DATA_FILE,
 					OPERATOR_LOG_FILE  : OPERATOR_LOG_FILE,
 					WUI_LOG_FILE       : WUI_LOG_FILE,
 					SCHEDULER_LOG_FILE : SCHEDULER_LOG_FILE,
 					OPERATOR_PID_FILE  : OPERATOR_PID_FILE
 				},
-				data: {
-					rules    : rules,
-					schedule : schedule,
-					reserves : reserves,
-					recording: recording,
-					recorded : recorded,
-					status   : status
-				},
+				data: { status, ...mediaData },
 				setInterval: setInterval,
 				setTimeout : setTimeout,
 				clearInterval: clearInterval,
@@ -662,7 +672,7 @@ function httpServerMain(req, res, query) {
 				vm.runInNewContext(fs.readFileSync(scriptFile), sandbox, scriptFile);
 			} catch (ee) {
 				if (!isClosed) {
-					resErr(500);
+					resErr(ee.status || 500);
 					isClosed = true;
 				}
 
@@ -751,90 +761,9 @@ function ioServerSocketOnDisconnect(socket) {
 	ios.emit('status', status);
 }
 
-// ファイル更新監視: ./data/rules.json
-chinachu.jsonWatcher(
-	RULES_FILE,
-	function _onUpdated(err, data, mes) {
-		if (err) {
-			console.error(err);
-			return;
-		}
-
-		rules = data;
-		ios.emit('notify-rules');
-		log(mes);
-	},
-	{ create: [], now: true }
-);
-
-// Common exclusions include legacy config rules until excludes.json exists.
-watchExclusionRules(EXCLUDES_FILE, CONFIG_FILE, function () {
-	ios.emit('notify-exclusion-rules');
-});
-
-// ファイル更新監視: ./data/schedule.json
-chinachu.jsonWatcher(
-	SCHEDULE_DATA_FILE,
-	function _onUpdated(err, data, mes) {
-		if (err) {
-			console.error(err);
-			return;
-		}
-
-		schedule = data;
-		ios.emit('notify-schedule');
-		log(mes);
-	},
-	{ create: [], now: true }
-);
-
-// ファイル更新監視: ./data/reserves.json
-chinachu.jsonWatcher(
-	RESERVES_DATA_FILE,
-	function _onUpdated(err, data, mes) {
-		if (err) {
-			console.error(err);
-			return;
-		}
-
-		reserves = data;
-		ios.emit('notify-reserves');
-		log(mes);
-	},
-	{ create: [], now: true }
-);
-
-// ファイル更新監視: ./data/recording.json
-chinachu.jsonWatcher(
-	RECORDING_DATA_FILE,
-	function _onUpdated(err, data, mes) {
-		if (err) {
-			console.error(err);
-			return;
-		}
-
-		recording = data;
-		ios.emit('notify-recording');
-		log(mes);
-	},
-	{ create: [], now: true }
-);
-
-// ファイル更新監視: ./data/recorded.json
-chinachu.jsonWatcher(
-	RECORDED_DATA_FILE,
-	function _onUpdated(err, data, mes) {
-		if (err) {
-			console.error(err);
-			return;
-		}
-
-		recorded = data;
-		ios.emit('notify-recorded');
-		log(mes);
-	},
-	{ create: [], now: true }
-);
+function notifyStateChange(name) {
+	ios.emit('notify-' + (name === 'excludes' ? 'exclusion-rules' : name));
+}
 
 // プロセス監視
 function processChecker() {

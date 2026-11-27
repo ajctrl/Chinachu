@@ -18,6 +18,7 @@
     },
     {
       "name": "chinachu-operator",
+      "kill_timeout": 30000,
       "script": "app-operator.js",
       "node_args" : "",
       "error_file": "/usr/local/var/log/chinachu-operator.stderr.log",

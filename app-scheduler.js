@@ -9,11 +9,6 @@
 const PID_FILE = __dirname + '/data/scheduler.pid';
 
 const CONFIG_FILE = __dirname + '/config.json';
-const RULES_FILE = __dirname + '/rules.json';
-const EXCLUDES_FILE = __dirname + '/excludes.json';
-const RESERVES_DATA_FILE = __dirname + '/data/reserves.json';
-const SCHEDULE_DATA_FILE = __dirname + '/data/schedule.json';
-
 // 標準モジュールのロード
 const fs = require('fs');
 const child_process = require('child_process');
@@ -31,7 +26,8 @@ const opts = require('opts');
 const { default: dateFormat } = require('dateformat');
 const chinachu = require('chinachu-common');
 const { buildCandidates, markDuplicates } = require('./lib/reservation-planner');
-const excludesStore = require('./lib/excludes-store');
+const { StateStore } = require('./lib/state-store');
+const { runSchedulerHook } = require('./lib/scheduler-hook');
 const mirakurun = new (require("mirakurun").default)();
 
 // 引数
@@ -48,9 +44,8 @@ opts.parse([
 // 設定の読み込み
 const pkg = require("./package.json");
 const config = require(CONFIG_FILE);
-const rules = JSON.parse(fs.readFileSync(RULES_FILE, { encoding: 'utf8' }) || '[]');
-const excludes = excludesStore.read(EXCLUDES_FILE, config, fs).rules;
-let reserves = null;//まだ読み込まない
+const simulation = !!opts.get('s');
+const store = new StateStore(__dirname, { simulation });
 let tuners = null;
 
 // Mirakurun Client
@@ -60,22 +55,6 @@ configureMirakurunClient(mirakurun, mirakurunPath);
 mirakurun.userAgent = `Chinachu/${pkg.version} (scheduler)`;
 
 console.info(mirakurun);
-
-// スケジュール
-var schedule = [];
-if (fs.existsSync(SCHEDULE_DATA_FILE)) {
-	try {
-		schedule = JSON.parse(fs.readFileSync(SCHEDULE_DATA_FILE, { encoding: 'utf8' }));
-
-		if (schedule instanceof Array === false) {
-			log('WARNING: `' + SCHEDULE_DATA_FILE + '`の内容が不正です');
-			schedule = [];
-		}
-	} catch (e) {
-		log('WARNING: `' + SCHEDULE_DATA_FILE + '`のロードに失敗しました');
-		schedule = [];
-	}
-}
 
 // PID file operation
 function createPidFile() {
@@ -109,37 +88,37 @@ function isRunning(callback) {
 	return void 0;
 }
 
-// (function) remake reserves
-function outputReserves() {
-	log('WRITE: ' + RESERVES_DATA_FILE);
-
-	var array = [];
-
-	reserves.forEach(function (reserve) {
-		if (reserve.end < new Date().getTime()) { return; }
-
-		array.push(reserve);
-	});
-
-	fs.writeFileSync(RESERVES_DATA_FILE, JSON.stringify(array));
-}
-
-// scheduler
-function scheduler() {
-
-	var i, j, k, l, a;
-	var commandProcess;
-
+// Run user hooks outside the write transaction; they may invoke the CLI.
+function scheduler(schedule) {
 	log('RUNNING SCHEDULER.');
-
-	// schedulerStartフック
-	if (!opts.get('s')) {
-		if (config.schedulerStartCommand) {
-			commandProcess = child_process.spawnSync(config.schedulerStartCommand, [process.pid, RULES_FILE, RESERVES_DATA_FILE, SCHEDULE_DATA_FILE]);
-			log('SPAWN: ' + config.schedulerStartCommand + ' (pid=' + commandProcess.pid + ')');
+	const hasStartHook = !simulation && Boolean(config.schedulerStartCommand);
+	if (hasStartHook) {
+		// The hook can reserve newly fetched programs through a separate CLI or API connection.
+		store.replace('schedule', schedule);
+		runSchedulerHook(store, config.schedulerStartCommand, { sync: true, schedule });
+	}
+	const { counts, conflicts } = store.transaction(() => {
+		if (!simulation && !hasStartHook) store.replace('schedule', schedule);
+		return planReservations(schedule);
+	}, !simulation);
+	if (!simulation) log('WRITE: schedule, reserves');
+	if (config.conflictCommand) {
+		for (const program of conflicts) {
+			const child = child_process.spawn(config.conflictCommand, [process.pid, program.id, dateFormat(new Date(program.start), 'isoDateTime'), program.channel.name, program.title, JSON.stringify(program)], { stdio: 'ignore' });
+			child.once('error', error => log('ERROR: ' + config.conflictCommand + ': ' + error.message));
+			child.unref();
+			log('SPAWN: ' + config.conflictCommand + ' (pid=' + child.pid + ')');
 		}
 	}
+	if (!simulation && config.schedulerEndCommand) {
+		runSchedulerHook(store, config.schedulerEndCommand, { counts });
+	}
+}
 
+function planReservations(schedule) {
+	var i, j, k, l, a;
+	const rules = store.read('rules');
+	const excludes = store.read('excludes');
 	// IDが重複しているかチェックするだけ
 	var idMap = {};
 	schedule.forEach(function (ch) {
@@ -153,7 +132,7 @@ function scheduler() {
 		});
 	});
 
-	reserves = JSON.parse(fs.readFileSync(RESERVES_DATA_FILE, { encoding: 'utf8' }) || '[]');//読み込む
+	const previousReserves = store.read('reserves');
 
 	var typeNum = {};
 
@@ -170,7 +149,7 @@ function scheduler() {
 	log('TUNERS: ' + JSON.stringify(typeNum));
 
 	// 予約対象を集めてから共通除外を判定し、保存済みの操作状態を引き継ぐ。
-	var matches = buildCandidates(schedule, rules, reserves, config, excludes);
+	var matches = buildCandidates(schedule, rules, previousReserves, config, excludes);
 
 	// sort
 	matches.sort(function (a, b) {
@@ -186,7 +165,7 @@ function scheduler() {
 	}
 
 	// check conflict
-	var conflictCount = 0;
+	const conflicts = [];
 	var tunerThreads  = [];
 	for (i = 0; i < tuners.length; i++) {
 		tunerThreads.push([]);
@@ -223,17 +202,12 @@ function scheduler() {
 		} else {
 			log('!CONFLICT: ' + a.id + ' ' + dateFormat(new Date(a.start), 'isoDateTime') + ' [' + a.channel.name + '] ' + a.title);
 
-			++conflictCount;
-			// conflict フック
-			if (config.conflictCommand) {
-				commandProcess = child_process.spawn(config.conflictCommand, [process.pid, a.id, dateFormat(new Date(a.start), 'isoDateTime'), a.channel.name, a.title, JSON.stringify(a)]);
-				log('SPAWN: ' + config.conflictCommand + ' (pid=' + commandProcess.pid + ')');
-			}
+			conflicts.push(a);
 		}
 	}
 
 	// reserve
-	reserves = [];
+	const reserves = [];
 	var reservedCount = 0;
 	var skipCount     = 0;
 	for (i = 0; i < matches.length; i++) {
@@ -266,21 +240,14 @@ function scheduler() {
 	// results
 	log('MATCHES: ' + matches.length.toString(10));
 	log('DUPLICATES: ' + duplicateCount.toString(10));
-	log('CONFLICTS: ' + conflictCount.toString(10));
+	log('CONFLICTS: ' + conflicts.length.toString(10));
 	log('SKIPS: ' + skipCount.toString(10));
 	log('RESERVES: ' + reservedCount.toString(10));
 
-	if (!opts.get('s')) {
-		outputReserves();
-		// schedulerEnd フック
-		if (config.schedulerEndCommand) {
-			commandProcess = child_process.spawn(config.schedulerEndCommand, [process.pid, RULES_FILE, RESERVES_DATA_FILE, SCHEDULE_DATA_FILE, matches.length.toString(10), duplicateCount.toString(10), conflictCount.toString(10), skipCount.toString(10), reservedCount.toString(10)]);
-			log('SPAWN: ' + config.schedulerEndCommand + ' (pid=' + commandProcess.pid + ')');
-		}
+	if (!simulation) {
+		store.replace('reserves', reserves.filter(reserve => reserve.end >= Date.now()));
 	}
-
-	// プロセス終了
-	process.exit(0);
+	return { counts: [matches.length, duplicateCount, conflicts.length, skipCount, reservedCount].map(String), conflicts };
 }
 
 // (function) program converter
@@ -428,9 +395,7 @@ function convertPrograms(p, ch) {
 	return programs;
 }
 
-function writeOut(s, callback) {
-
-	schedule = s;
+function scheduleChannels(schedule) {
 
 	schedule.sort(function (a, b) {
 		if (a.n === b.n) {
@@ -440,12 +405,7 @@ function writeOut(s, callback) {
 		}
 	});
 
-	if (!opts.get('s')) {
-		fs.writeFileSync(SCHEDULE_DATA_FILE, JSON.stringify(schedule));
-		log('WRITE: ' + SCHEDULE_DATA_FILE);
-	}
-
-	callback();
+	scheduler(schedule);
 }
 
 // experimental
@@ -523,12 +483,13 @@ function getEpgFromMirakurun(path) {
 
 			log('Mirakurun -> tuners: ' + tuners.length);
 
-			writeOut(channels, scheduler);
+			scheduleChannels(channels);
 		})
 		.catch(e => {
 
 			log('Mirakurun -> Error:');
 			console.error(e);
+			process.exitCode = 1;
 		});
 }
 
@@ -598,15 +559,13 @@ isRunning(running => {
 
 		// EPGデータを取得または番組表を読み込む
 		if (config.epgStartCommand) {
-			const commandProcess = child_process.spawnSync(config.epgStartCommand, [process.pid, RULES_FILE, RESERVES_DATA_FILE, SCHEDULE_DATA_FILE]);
-			log('SPAWN: ' + config.epgStartCommand + ' (pid=' + commandProcess.pid + ')');
+			runSchedulerHook(store, config.epgStartCommand, { sync: true });
 		}
 
 		getEpgFromMirakurun(mirakurunPath);
 
 		if (config.epgEndCommand) {
-			const commandProcess = child_process.spawn(config.epgEndCommand, [process.pid, RULES_FILE, RESERVES_DATA_FILE, SCHEDULE_DATA_FILE]);
-			log('SPAWN: ' + config.epgEndCommand + ' (pid=' + commandProcess.pid + ')');
+			runSchedulerHook(store, config.epgEndCommand);
 		}
 	}
 });

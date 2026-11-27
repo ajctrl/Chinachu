@@ -11,6 +11,7 @@ const { execFileSync } = require('node:child_process');
 const { EventEmitter, once } = require('node:events');
 const { Writable } = require('node:stream');
 const { format } = require('node:util');
+const { stateFixture } = require('./helpers/state');
 const root = path.resolve(__dirname, '..');
 const read = name => fs.readFileSync(path.join(root, name), 'utf8');
 
@@ -60,14 +61,18 @@ function runCLI(args, rules = []) {
 	const messages = [], written = [];
 	const program = { id: 'fixture-1', title: '日本語の番組', detail: '番組説明', flags: [], category: 'anime', start: Date.now() + 3600000,
 		end: Date.now() + 5400000, seconds: 1800, channel: { id: 'channel-1', type: 'GR', channel: '27', sid: 1, name: '放送局' } };
-	const data = { 'rules.json': rules, 'schedule.json': [{ programs: [program] }], 'reserves.json': [], 'recording.json': [], 'recorded.json': [program] };
+	const fixture = stateFixture({ 'rules.json': rules, 'data/schedule.json': [{ programs: [program] }], 'data/recorded.json': [program] });
+	const store = fixture.open();
+	const versions = () => store.db.prepare('SELECT name, revision FROM revisions ORDER BY name').all();
+	const before = versions();
 	const process = { argv: ['node', 'app-cli.js', ...args], cwd: () => root, exit(code) { throw Object.assign(new Error('CLI exit'), { exitCode: code }); } };
 	const console = { log(...args) { messages.push(format(...args)); }, error(...args) { messages.push(format(...args)); } };
 	const module = { exports: {} };
 	vm.runInNewContext(fs.readFileSync(require.resolve('opts'), 'utf8'), { module, exports: module.exports, process, console, require });
 	const ctx = { __dirname: root, Buffer, process, console, require(name) {
 		if (name === 'opts') return module.exports;
-		if (name === 'fs') return { existsSync: () => true, readFileSync: name => JSON.stringify(data[path.basename(name)]), writeFileSync(name, value) { written.push({ name, value }); } };
+		if (name === 'fs') return { existsSync: () => true };
+		if (name === './lib/state-store') return { StateStore: class { constructor() { return store; } } };
 		if (name === path.join(root, 'config.json')) return {};
 		if (name === './lib/logger') return { log: console.log };
 		if (name.startsWith('./')) return require(path.join(root, name));
@@ -76,6 +81,10 @@ function runCLI(args, rules = []) {
 	let exitCode = 0;
 	try { vm.runInNewContext(read('app-cli.js'), ctx); }
 	catch (error) { if (error.exitCode === undefined) throw error; exitCode = error.exitCode; }
+	finally {
+		for (const [i, row] of versions().entries()) if (before[i].revision !== row.revision) written.push(row.name);
+		fixture.close();
+	}
 	return { output: messages.join('\n'), written, exitCode };
 }
 
@@ -166,7 +175,7 @@ describe('native operator disk space checks', function() {
 	function check(error, info) {
 		const source = read('app-operator.js');
 		const messages = [];
-		vm.runInNewContext(source.slice(source.indexOf('function storageChecker()'), source.indexOf('// ファイル更新監視')) + '\nstorageChecker();', {
+		vm.runInNewContext(source.slice(source.indexOf('function storageChecker()'), source.indexOf('// データ更新監視')) + '\nstorageChecker();', {
 			fs: { statfs(directory, callback) { assert.equal(directory, '/fixture'); callback(error, info); } }, config: { recordedDir: '/fixture' },
 			storageLowSpaceThresholdMB: 10, storageLowSpaceCommand: '', storageLowSpaceAction: 'none', storageLowSpaceNotifyTo: 'test@example.invalid',
 			clock: 1000, stNotified: 0, notifyIntervalTime: 0, log() {}, console,
