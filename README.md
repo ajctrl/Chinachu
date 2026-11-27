@@ -174,6 +174,13 @@ APIは引き続きJSONを返します。録画先の動画ファイルと `confi
 npm test
 ```
 
+JSON版とSQLite版のAPIは、Linux上でFFmpeg・ffprobeを用意して次のコマンドで比較できます。
+一時ディレクトリに移行前のコミット `f03e945` と現在のコードを展開し、同じ番組・録画・ルールからHTTP応答と更新通知を照合します。
+
+```sh
+npm run test:api-parity
+```
+
 リバースプロキシを含む統合テストは、Nginx・OpenSSL・FFmpeg・ffprobeを用意して実行します。
 
 ```sh

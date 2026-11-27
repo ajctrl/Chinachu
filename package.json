@@ -38,6 +38,7 @@
   "scripts": {
     "password": "node ./scripts/set-wui-password.cjs",
     "test": "npm run test:syntax && npm run test:unit",
+    "test:api-parity": "node ./scripts/test-api-parity.cjs",
     "test:proxy": "node ./scripts/test-reverse-proxy.cjs",
     "test:syntax": "bash ./scripts/check-syntax.sh",
     "test:unit": "mocha -R spec"
